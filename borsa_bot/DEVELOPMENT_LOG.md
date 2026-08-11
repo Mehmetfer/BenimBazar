@@ -110,3 +110,22 @@ Trade plan ≠ order. Flow: AI TRADE PLAN → RISK → NOTIFICATION → USER APP
 ### Test gate
 `pytest borsa_bot/tests -q` → **44 passed**
 
+---
+
+## 2026-08-11 — Favorites / Priority Watchlist Engine (§103)
+
+### Principle
+`FAVORITE ≠ BUY` · `FAVORITE = PRIORITY ANALYSIS` · Favorites ≠ Portfolio
+
+### Delivered
+- SQLite favorites store (notes, groups, strategy prefs, price alerts, timeline, perf)
+- Priority score (weighted, not average) + main-page bucket ordering
+- Scan queue: favorites first, then full market (nothing skipped)
+- Deeper analysis pass for favorites only
+- Favorite signal / AI-change / price alerts + TTS
+- Dashboard tabs: Favorilerim → Fırsatlar → Portföy → Piyasa
+- APIs under `/api/favorites*`
+
+### Test gate
+`pytest borsa_bot/tests -q` → **50 passed**
+

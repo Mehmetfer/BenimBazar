@@ -54,6 +54,17 @@ from technical.price_action import analyze_price_action
 from technical.sector import liquidity_score, sector_relative_strength
 from universe.engine import select_universe
 from engines.orchestrator import MultiHorizonOrchestrator
+from favorites import (
+    FavoritesStore,
+    FavoriteSort,
+    check_favorite_price_alerts,
+    classify_scanner,
+    compute_priority_score,
+    display_priority_bucket,
+    emit_favorite_signal_alerts,
+    run_deeper_analysis,
+    sort_rank_key,
+)
 
 
 def _to_exec_signal(decision: SignalAction) -> SignalAction:
@@ -74,6 +85,7 @@ class TradingService:
         self.broker = PaperBroker(self.ledger)
         self.safety = SafetyGate()
         self.alerts = AlertManager()
+        self.favorites = FavoritesStore()
         self.system_status = "OK"
         self.last_error = ""
         self.pending_approvals: dict[str, dict] = {}
@@ -82,6 +94,8 @@ class TradingService:
         self._last_risk_alert_reason = ""
         self._kill_switch_alerted = False
         self._emit_signal_alerts = True  # dashboard/scan may publish SIGNAL alerts (not fills)
+        self._last_favorite_scan_ts = 0.0
+        self._favorite_deeper_cache: dict[str, dict] = {}
 
     def multi_horizon(self) -> dict:
         self.multi.equity = self.ledger.equity()
@@ -193,7 +207,12 @@ class TradingService:
             ]
         corr_matrix = build_correlation_matrix(ret_series)
 
-        for symbol in self.provider.list_symbols():
+        # Priority queue: FAVORITES → rest of market (does not skip non-favorites)
+        fav_set = self.favorites.symbols()
+        all_syms = [s for s in self.provider.list_symbols() if s != "XU100"]
+        ordered = [s for s in all_syms if s in fav_set] + [s for s in all_syms if s not in fav_set]
+
+        for symbol in ordered:
             quote = self.provider.get_quote(symbol)
             marks[symbol] = quote.price
             uni = universe_map.get(symbol)
@@ -562,6 +581,24 @@ class TradingService:
                 ai_trade_plan=ai_plan,
                 final_decision=final_decision_str,
             )
+            # Deeper analysis for favorites only (FAVORITE ≠ BUY boost)
+            if symbol in fav_set:
+                try:
+                    deeper = run_deeper_analysis(
+                        symbol=symbol,
+                        bars=bars,
+                        ind=ind,
+                        price=quote.price,
+                        volume=quote.volume,
+                        sector=quote.sector,
+                        provider=self.provider,
+                        user_note=(self.favorites.get(symbol).notes if self.favorites.get(symbol) else ""),
+                        corr_with_book=corr_book,
+                        regime=regime,
+                    )
+                    self._favorite_deeper_cache[symbol] = deeper.to_dict()
+                except Exception:  # noqa: BLE001
+                    pass
             decisions.append(d)
             self.ledger.log_decision(
                 {
@@ -578,16 +615,50 @@ class TradingService:
                 }
             )
         self.ledger.set_marks(marks)
-        order = {
-            SignalAction.AL: 0,
-            SignalAction.SAT: 1,
-            SignalAction.BEKLE: 2,
-            SignalAction.ALMA: 3,
-        }
-        decisions.sort(key=lambda x: (order.get(x.signal, 9), -x.buy_score))
+        # Favorites-aware ranking: FAVORITE + signal buckets, then priority score
+        # FAVORITE ≠ automatic BUY — only ordering / visibility
+        def _sort_key(x: SymbolDecision):
+            fav = x.symbol in fav_set
+            rec = self.favorites.get(x.symbol) if fav else None
+            pa = x.price_action or {}
+            ps = compute_priority_score(
+                is_favorite=fav,
+                decision=x.decision.value,
+                signal=x.signal.value,
+                ai_confidence=x.ai_confidence,
+                expected_value=x.opportunity.expected_value if x.opportunity else None,
+                risk_reward=x.trade_plan.risk_reward if x.trade_plan else None,
+                momentum=(x.factors or {}).get("momentum"),
+                regime=x.regime,
+                watchlist_priority=rec.priority if rec else 50,
+                breakout=bool((pa.get("pattern") or "").upper().find("BREAK") >= 0),
+            )
+            # stash for serialize via explanation side-channel: use dynamic attr
+            setattr(x, "_priority_score", ps)
+            setattr(x, "_is_favorite", fav)
+            bucket = display_priority_bucket(
+                {
+                    "is_favorite": fav,
+                    "decision": x.decision.value,
+                    "signal": x.signal.value,
+                    "priority_score": ps,
+                    "price_action": pa,
+                }
+            )
+            return (bucket, -ps, -x.buy_score)
+
+        decisions.sort(key=_sort_key)
         if self._emit_signal_alerts:
             try:
                 emit_signal_alerts(self.alerts, decisions)
+                emit_favorite_signal_alerts(
+                    self.alerts,
+                    self.favorites,
+                    decisions,
+                    favorite_voice=settings.favorite_voice_alert,
+                )
+                plans = {d.symbol: d.ai_trade_plan for d in decisions if d.ai_trade_plan}
+                check_favorite_price_alerts(self.alerts, self.favorites, marks, plans)
             except Exception:  # noqa: BLE001 — alerts never break scan
                 pass
         return decisions
@@ -602,8 +673,26 @@ class TradingService:
         def bucket(name: str):
             return [self._serialize(d) for d in decisions if d.decision.value == name or d.signal.value == name]
 
+        universe = [self._serialize(d) for d in decisions]
+        favorites = [u for u in universe if u.get("is_favorite")]
+        favorites_sorted = sorted(favorites, key=lambda x: sort_rank_key(x, FavoriteSort.PRIORITY), reverse=True)
+        top_ops = [u for u in universe if u.get("scanner_class") in {"STRONG_OPPORTUNITY", "OPPORTUNITY"}][:8]
+
         return {
             "health": health,
+            "principle": "FAVORITE ≠ BUY · FAVORITE = PRIORITY ANALYSIS",
+            "favorites": favorites_sorted,
+            "favorites_summary": [
+                {
+                    "symbol": f["symbol"],
+                    "decision": f.get("final_decision") or f.get("decision"),
+                    "confidence": f.get("ai_confidence"),
+                    "priority_score": f.get("priority_score"),
+                    "badge": "FAVORİ + PORTFÖYDE" if f.get("favorite_portfolio_badge") else "FAVORİ",
+                }
+                for f in favorites_sorted[:12]
+            ],
+            "top_opportunities": top_ops,
             "portfolio": {
                 "equity": round(self.ledger.equity(), 2),
                 "cash": round(self.ledger.cash, 2),
@@ -620,6 +709,7 @@ class TradingService:
                         "price": self.ledger.mark_prices.get(p.symbol, p.avg_cost),
                         "stop_price": p.stop_price,
                         "target_price": p.target_price,
+                        "is_favorite": self.favorites.is_favorite(p.symbol),
                     }
                     for p in self.ledger.positions()
                 ],
@@ -637,15 +727,44 @@ class TradingService:
                 "BEKLE": [self._serialize(d) for d in decisions if d.signal == SignalAction.BEKLE],
                 "ALMA": [self._serialize(d) for d in decisions if d.signal == SignalAction.ALMA],
             },
-            "universe": [self._serialize(d) for d in decisions],
+            "universe": universe,
+            "favorite_performance": self.favorites.performance(),
         }
 
     def _serialize(self, d: SymbolDecision) -> dict:
+        fav = bool(getattr(d, "_is_favorite", self.favorites.is_favorite(d.symbol)))
+        fav_rec = self.favorites.get(d.symbol) if fav else None
+        in_portfolio = self.ledger.get_position(d.symbol) is not None
+        pos = self.ledger.get_position(d.symbol)
+        change_pct = 0.0
+        try:
+            bars = self.provider.get_bars(d.symbol, 3)
+            if len(bars) >= 2 and bars[-2].close:
+                change_pct = (bars[-1].close / bars[-2].close - 1) * 100
+        except Exception:  # noqa: BLE001
+            change_pct = 0.0
+        ps = float(
+            getattr(d, "_priority_score", None)
+            or compute_priority_score(
+                is_favorite=fav,
+                decision=d.decision.value,
+                signal=d.signal.value,
+                ai_confidence=d.ai_confidence,
+                expected_value=d.opportunity.expected_value if d.opportunity else None,
+                risk_reward=d.trade_plan.risk_reward if d.trade_plan else None,
+                momentum=(d.factors or {}).get("momentum"),
+                regime=d.regime,
+                watchlist_priority=fav_rec.priority if fav_rec else 50,
+            )
+        )
+        chase = bool(d.ai_trade_plan.chase_warning) if d.ai_trade_plan else False
+        scan_class = classify_scanner(d.decision.value, d.risk_verdict, ps, chase).value
         base = {
             "symbol": d.symbol,
             "name": d.name,
             "sector": d.sector,
             "price": d.price,
+            "change_pct": round(change_pct, 2),
             "trend": d.trend,
             "buy_score": d.buy_score,
             "sell_score": d.sell_score,
@@ -672,7 +791,25 @@ class TradingService:
             "universe_reason": d.universe_reason,
             "risk_verdict": d.risk_verdict,
             "final_decision": d.final_decision,
+            "is_favorite": fav,
+            "in_portfolio": in_portfolio,
+            "favorite_portfolio_badge": fav and in_portfolio,
+            "priority_score": ps,
+            "scanner_class": scan_class,
+            "user_note": fav_rec.notes if fav_rec else "",
+            "strategy_preference": fav_rec.strategy_preference if fav_rec else [],
+            "favorite_groups": fav_rec.groups if fav_rec else [],
+            "watchlist_priority": fav_rec.priority if fav_rec else None,
         }
+        if pos:
+            mark = self.ledger.mark_prices.get(pos.symbol, pos.avg_cost)
+            base["position"] = {
+                "quantity": pos.quantity,
+                "avg_cost": round(pos.avg_cost, 2),
+                "unrealized_pnl": round((mark - pos.avg_cost) * pos.quantity, 2),
+                "stop_price": pos.stop_price,
+                "target_price": pos.target_price,
+            }
         if d.scores:
             base["scores"] = asdict(d.scores)
         if d.trade_plan:
@@ -681,7 +818,54 @@ class TradingService:
             base["opportunity"] = asdict(d.opportunity)
         if d.ai_trade_plan is not None:
             base["ai_trade_plan"] = ai_plan_to_dict(d.ai_trade_plan)
+        if fav and d.symbol in self._favorite_deeper_cache:
+            base["deeper"] = self._favorite_deeper_cache[d.symbol]
         return base
+
+    def favorites_view(self, sort: str = "PRIORITY", group: str | None = None) -> dict:
+        dash = self.dashboard()
+        items = list(dash.get("favorites") or [])
+        if group:
+            items = [x for x in items if group in (x.get("favorite_groups") or [])]
+        try:
+            sort_e = FavoriteSort(sort.upper())
+        except ValueError:
+            sort_e = FavoriteSort.PRIORITY
+        reverse = sort_e != FavoriteSort.ALPHABETICAL
+        items.sort(key=lambda x: sort_rank_key(x, sort_e), reverse=reverse)
+        scanner = {
+            "STRONG_OPPORTUNITY": [],
+            "OPPORTUNITY": [],
+            "WAIT": [],
+            "RISK": [],
+            "NO_TRADE": [],
+        }
+        for x in items:
+            scanner.setdefault(x.get("scanner_class") or "WAIT", []).append(x["symbol"])
+        return {
+            "favorites": items,
+            "sort": sort_e.value,
+            "groups": self.favorites.list_groups(),
+            "scanner": scanner,
+            "performance": self.favorites.performance(),
+            "principle": "FAVORITE ≠ BUY · FAVORITE = PRIORITY ANALYSIS",
+        }
+
+    def favorite_detail(self, symbol: str) -> dict:
+        symbol = symbol.upper()
+        decisions = {d.symbol: d for d in self.scan()}
+        d = decisions.get(symbol)
+        if not d:
+            return {"ok": False, "message": "symbol not found"}
+        ser = self._serialize(d)
+        return {
+            "ok": True,
+            "detail": ser,
+            "timeline": self.favorites.timeline(symbol),
+            "price_alerts": [a.__dict__ for a in self.favorites.list_price_alerts(symbol)],
+            "is_favorite": self.favorites.is_favorite(symbol),
+            "principle": "FAVORITE ≠ BUY",
+        }
 
     def execute_signal(self, symbol: str, approved: bool = False) -> dict:
         if settings.is_live:

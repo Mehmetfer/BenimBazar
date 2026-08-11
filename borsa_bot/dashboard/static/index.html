@@ -30,12 +30,48 @@
     .alert-item{padding:10px 0;border-bottom:1px solid var(--line)}
     .alert-item .t{font-weight:700;font-size:.9rem}
     .alert-item .m{color:var(--mute);font-size:.78rem;margin-top:4px;line-height:1.35}
+    .tabs{display:flex;gap:6px;overflow:auto;margin:0 0 12px;padding-bottom:2px}
+    .tab{flex:0 0 auto;padding:10px 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--mute);font-size:.8rem;min-height:40px}
+    .tab.on{background:rgba(61,214,140,.15);color:var(--up);border-color:rgba(61,214,140,.35)}
+    .star{background:transparent;border:0;color:var(--mute);font-size:1.35rem;min-height:40px;min-width:40px;padding:0;line-height:1}
+    .star.on{color:#f5c542}
+    .panel{display:none}.panel.on{display:block}
+    .favchip{display:inline-block;margin:4px 6px 4px 0;padding:8px 10px;border-radius:12px;border:1px solid var(--line);font-size:.8rem}
   </style>
 </head>
 <body>
   <h1>Borsa Bot</h1>
-  <p class="sub">LONG · SWING · DAY. Bildirimler karar değiştirmez (SIGNAL ≠ EXECUTION). LIVE kapalı. Kâr garantisi yok.</p>
-  <div class="card status" id="sys">Sistem: …</div>
+  <p class="sub">FAVORİ ≠ AL · öncelikli analiz. Bildirimler karar değiştirmez. LIVE kapalı. Kâr garantisi yok.</p>
+  <div class="tabs" id="tabs">
+    <button class="tab on" data-tab="fav" type="button">Favorilerim</button>
+    <button class="tab" data-tab="ops" type="button">Fırsatlar</button>
+    <button class="tab" data-tab="port" type="button">Portföy</button>
+    <button class="tab" data-tab="mkt" type="button">Piyasa</button>
+    <button class="tab" data-tab="sys" type="button">Sistem</button>
+  </div>
+  <div class="card status" id="sysline">Sistem: …</div>
+  <div class="panel on" id="panel-fav">
+    <div class="card">
+      <h2>★ Favorilerim</h2>
+      <p class="why">Favori = öncelikli analiz. Otomatik AL değildir.</p>
+      <div id="favSummary" class="why">Yükleniyor…</div>
+      <label class="sw" style="margin:8px 0">Sırala
+        <select id="favSort" style="margin-left:8px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px">
+          <option value="PRIORITY">AI Opportunity</option>
+          <option value="CONFIDENCE">Confidence</option>
+          <option value="SIGNAL_STRENGTH">Signal</option>
+          <option value="RISK_REWARD">R/R</option>
+          <option value="MOMENTUM">Momentum</option>
+          <option value="PRICE_CHANGE">Price change</option>
+          <option value="ALPHABETICAL">A-Z</option>
+        </select>
+      </label>
+      <div id="favList"></div>
+      <div class="why" id="favScanner">Scanner: …</div>
+      <div class="why" id="favPerf"></div>
+    </div>
+  </div>
+  <div class="panel" id="panel-ops">
   <div class="card">
     <div class="grid">
       <div class="kpi"><span>Portföy</span><b id="equity">—</b></div>
@@ -53,6 +89,26 @@
     </div>
   </div>
   <div class="card">
+    <h2>Bugünün en güçlü fırsatları</h2>
+    <div id="tops" class="why">Yükleniyor…</div>
+  </div>
+  </div>
+  <div class="panel" id="panel-port">
+  <div class="card">
+    <h2>Portföyüm (FAVORİ ≠ PORTFÖY)</h2>
+    <div id="pos"></div>
+  </div>
+  </div>
+  <div class="panel" id="panel-mkt">
+  <div class="card">
+    <h2>Tüm piyasa / sinyaller</h2>
+    <div id="list"></div>
+    <button class="btn ghost" id="refresh" type="button">Yenile</button>
+    <button class="btn ghost" id="reset" type="button">Portföyü Sıfırla</button>
+  </div>
+  </div>
+  <div class="panel" id="panel-sys">
+  <div class="card">
     <h2>Bildirimler (uygulama içi)</h2>
     <div id="alerts" class="why">Yükleniyor…</div>
     <button class="btn ghost" id="markRead" type="button">Tümünü okundu işaretle</button>
@@ -68,21 +124,8 @@
     <div class="tog"><span>Quiet hours</span><label class="sw"><input type="checkbox" id="quietOn"/> ON</label></div>
     <div class="tog"><span>Ses seviyesi</span><input id="vol" type="range" min="0" max="1" step="0.05" style="width:50%"/></div>
     <button class="btn ghost" id="saveSettings" type="button">Ayarları kaydet</button>
-    <div class="why" id="settingsNote">Kritik alarmlar (STOP / KILL / RISK) quiet hours’ta da gider.</div>
+    <div class="why" id="settingsNote">Kritik alarmlar (STOP / KILL / RISK) quiet hours’ta da gider. Favori ≠ AL.</div>
   </div>
-  <div class="card">
-    <h2>Top opportunities (risk-adjusted)</h2>
-    <div id="tops" class="why">Yükleniyor…</div>
-  </div>
-  <div class="card">
-    <h2>Sinyaller</h2>
-    <div id="list"></div>
-    <button class="btn ghost" id="refresh" type="button">Yenile</button>
-    <button class="btn ghost" id="reset" type="button">Portföyü Sıfırla</button>
-  </div>
-  <div class="card">
-    <h2>Açık pozisyonlar</h2>
-    <div id="pos"></div>
   </div>
   <script>
     const money = n => Number(n).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' TL';
@@ -173,13 +216,81 @@
       }
     }
 
+    async function loadFavorites(){
+      const sort = document.getElementById('favSort').value || 'PRIORITY';
+      const view = await (await fetch('/api/favorites?sort='+encodeURIComponent(sort))).json();
+      const scan = await (await fetch('/api/favorites/scanner')).json();
+      const favs = view.favorites || [];
+      document.getElementById('favSummary').innerHTML = favs.length
+        ? favs.slice(0,8).map(f => `<span class="favchip">★ ${f.symbol} — <b>${f.final_decision||f.decision}</b> · pri ${f.priority_score??'—'} ${f.favorite_portfolio_badge?'· PORTFÖY':''}</span>`).join('')
+        : '<span style="color:var(--mute)">Henüz favori yok — piyasadan ★ ile ekleyin</span>';
+      document.getElementById('favScanner').textContent = 'Scanner: ' + JSON.stringify(scan.scanner||{});
+      const perf = view.performance || {};
+      document.getElementById('favPerf').textContent = perf.signals
+        ? `Favori sinyal performansı: ${perf.signals} · WR %${perf.win_rate} · Exp ${perf.expectancy} (${perf.note||''})`
+        : (perf.note || '');
+      document.getElementById('favList').innerHTML = favs.map(renderCard).join('') || '<div class="why">Favori listesi boş</div>';
+      bindStars();
+      bindExec();
+    }
+
+    function renderCard(u){
+      const s = u.scores || {};
+      const tp = u.trade_plan || {};
+      const o = u.opportunity || {};
+      const ap = u.ai_trade_plan || {};
+      const z = ap.entry_zone || {};
+      const dec = u.final_decision || u.decision || u.signal;
+      const star = u.is_favorite ? '★' : '☆';
+      const badge = u.favorite_portfolio_badge ? '★ FAVORİ + PORTFÖYDE' : (u.is_favorite ? '★ FAVORİ' : '');
+      return `<div class="row">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="star ${u.is_favorite?'on':''}" data-fav="${u.symbol}" type="button" aria-label="Favori">${star}</button>
+            <div><b>${u.symbol}</b> <span style="color:var(--mute)">${u.price}</span>
+              <div style="color:var(--mute);font-size:.78rem">${badge} · ${u.regime} · Δ%${u.change_pct??'—'} · Pri ${u.priority_score??'—'} · ${u.scanner_class||''}</div>
+            </div>
+          </div>
+          <span class="badge ${dec}">${dec}</span>
+        </div>
+        <div class="scores">
+          <div>AI <b>${u.ai_confidence??'—'}</b></div><div>ENTRY <b>${z.low?`${z.low}–${z.high}`:(tp.entry??u.price)}</b></div>
+          <div>STOP <b>${ap.stop_loss??tp.stop??u.stop_price??'—'}</b></div><div>T1 <b>${(ap.target1&&ap.target1.price)||tp.target1||u.target_price||'—'}</b></div>
+          <div>R/R <b>${ap.risk_reward??tp.risk_reward??'—'}</b></div><div>SEKTÖR <b>${u.sector||'—'}</b></div>
+        </div>
+        ${u.user_note?`<div class="why">Not: ${u.user_note}</div>`:''}
+        <div class="why"><b>NEDEN:</b> ${(u.reasons||[]).slice(0,4).join(' · ') || '—'}</div>
+        ${(u.signal==='AL'||u.signal==='SAT') ? `<button class="btn" data-sym="${u.symbol}">Paper ${u.signal} (Onaylı)</button>`:''}
+      </div>`;
+    }
+
+    function bindStars(){
+      document.querySelectorAll('button[data-fav]').forEach(btn=>{
+        btn.onclick = async ()=>{
+          await fetch('/api/favorites/'+btn.dataset.fav+'/toggle',{method:'POST'});
+          load();
+        };
+      });
+    }
+    function bindExec(){
+      document.querySelectorAll('button[data-sym]').forEach(btn=>{
+        btn.onclick = async ()=>{
+          btn.disabled = true;
+          const r = await fetch('/api/execute',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:btn.dataset.sym, approved:true})});
+          const j = await r.json();
+          alert(j.ok ? 'Emir OK (ORDER event; SIGNAL ayrı)' : (j.message||j.result?.message||'Red'));
+          load();
+        };
+      });
+    }
+
     async function load(){
       const res = await fetch('/api/dashboard');
       const data = await res.json();
       let mh = {};
       try { mh = await (await fetch('/api/multi-horizon')).json(); } catch (e) { mh = {}; }
       const h = data.health || {};
-      document.getElementById('sys').textContent = `Sistem: ${h.status} · Mod: ${h.mode} · Capital: ${h.capital_mode||'—'} · Primary: ${(mh.mode||{}).primary||'—'} · Veri: ${h.data_fresh?'taze':'eski'}`;
+      document.getElementById('sysline').textContent = `Sistem: ${h.status} · Mod: ${h.mode} · Capital: ${h.capital_mode||'—'} · Primary: ${(mh.mode||{}).primary||'—'} · Veri: ${h.data_fresh?'taze':'eski'} · ${data.principle||''}`;
       const p = data.portfolio || {};
       document.getElementById('equity').textContent = money(p.equity||0);
       const d = document.getElementById('daily'); d.textContent = money(p.daily_pnl||0); d.className=(p.daily_pnl||0)>=0?'up':'down';
@@ -194,80 +305,31 @@
       const sl = mh.sleeves || {};
       document.getElementById('sleeves').textContent = sl.long_term!=null ? `${Math.round(sl.long_term)} / ${Math.round(sl.swing)} / ${Math.round(sl.day_trading)}` : '—';
       document.getElementById('primary').textContent = (mh.mode||{}).primary || '—';
+      const topOps = data.top_opportunities || [];
       const tops = mh.top || {};
       const fmtTop = (arr) => (arr||[]).slice(0,5).map(x => `${x.symbol} ${x.decision} EV=${x.expected_value} conf=${x.confidence}`).join('<br>') || '—';
-      document.getElementById('tops').innerHTML = `<b>LONG:</b><br>${fmtTop(tops.LONG_TERM)}<br><br><b>SWING:</b><br>${fmtTop(tops.SWING)}<br><br><b>DAY:</b><br>${fmtTop(tops.DAY_TRADING)}`;
-      document.getElementById('list').innerHTML = (data.universe||[]).map(u => {
-        const s = u.scores || {};
-        const tp = u.trade_plan || {};
-        const o = u.opportunity || {};
-        const dec = u.decision || u.signal;
-        return `<div class="row">
-          <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
-            <div><b>${u.symbol}</b> <span style="color:var(--mute)">${u.price}</span>
-              <div style="color:var(--mute);font-size:.78rem">${u.regime} · ${u.capital_mode||''} · Risk ${u.risk}${u.conflict?' · CONFLICT':''}</div>
-            </div>
-            <span class="badge ${dec}">${dec}</span>
-          </div>
-          <div class="scores">
-            <div>TECH <b>${s.technical??'—'}</b></div><div>FUND <b>${s.fundamental??'—'}</b></div>
-            <div>MKT <b>${s.market??'—'}</b></div><div>SECT <b>${s.sector??'—'}</b></div>
-            <div>MOM <b>${(u.factors||{}).momentum??s.momentum??'—'}</b></div><div>QUAL <b>${(u.factors||{}).quality??'—'}</b></div>
-            <div>VAL <b>${(u.factors||{}).value??'—'}</b></div><div>GROW <b>${(u.factors||{}).growth??'—'}</b></div>
-            <div>NEWS <b>${s.news??'—'}</b></div><div>AI <b>${s.ai_confidence??u.ai_confidence}</b></div>
-            <div>RISK <b>${s.risk??'—'}</b></div><div>FINAL <b>${s.final??u.buy_score}</b></div>
-          </div>
-          <div class="scores">
-            <div>P(win) <b>${o.p_win!=null?o.p_win:'—'}</b></div><div>EV <b>${o.expected_value!=null?o.expected_value:'—'}</b></div>
-            <div>E[+%] <b>${o.expected_return_pct??'—'}</b></div><div>E[-%] <b>${o.expected_loss_pct??'—'}</b></div>
-            <div>Size× <b>${o.position_size_mult??'—'}</b></div><div>DDimp <b>${o.drawdown_impact??'—'}</b></div>
-          </div>
-          <div class="scores">
-            <div>ENTRY <b>${tp.entry??u.price}</b></div><div>STOP <b>${tp.stop??u.stop_price??'—'}</b></div>
-            <div>T1 <b>${tp.target1??u.target_price??'—'}</b></div><div>T2 <b>${tp.target2??'—'}</b></div>
-            <div>T3 <b>${tp.target3??'—'}</b></div><div>R/R <b>${tp.risk_reward??'—'}</b></div>
-          </div>
-          ${(() => {
-            const ap = u.ai_trade_plan;
-            if(!ap) return '';
-            const z = ap.entry_zone || {};
-            const pa = ap.plan_a || {};
-            const pb = ap.plan_b || {};
-            return `<div class="why" style="margin-top:8px;padding:8px;border:1px solid var(--line);border-radius:10px">
-              <b>FULL TRADE PLAN</b> · ${ap.final_decision||''} · ${ap.state||''} · ${ap.preferred_plan||''}
-              <div class="scores">
-                <div>ZONE <b>${z.low??'—'}–${z.high??'—'}</b></div>
-                <div>HORIZON <b>${ap.time_horizon||'—'}</b></div>
-                <div>SIZE <b>${ap.position_size??'—'}</b></div>
-                <div>MAX RİSK <b>${ap.max_risk_tl??'—'} TL</b></div>
-                <div>P(win) <b>${ap.win_probability!=null?Math.round(ap.win_probability*100)+'%':'—'}</b></div>
-                <div>VALID <b>${(ap.valid_until||'').slice(0,16)||'—'}</b></div>
-              </div>
-              <div class="why">Stop gerekçe: ${ap.stop_reason||'—'}</div>
-              <div class="why">A PULLBACK EV=${pa.expected_value??'—'} · B BREAKOUT EV=${pb.expected_value??'—'} trigger=${pb.trigger??'—'}</div>
-              ${ap.chase_warning?`<div class="why" style="color:var(--down)">${ap.chase_warning}</div>`:''}
-              <div class="why">${ap.disclaimer||''}</div>
-            </div>`;
-          })()}
-          <div class="why"><b>NEDEN:</b> ${(u.reasons||[]).slice(0,5).join(' · ') || u.explanation}</div>
-          <div class="why"><b>RİSKLER:</b> ${(u.risks||[]).join(' · ') || '—'}</div>
-          ${(u.signal==='AL'||u.signal==='SAT') ? `<button class="btn" data-sym="${u.symbol}">Paper ${u.signal} (Onaylı)</button>`:''}
-        </div>`;
-      }).join('');
-      document.querySelectorAll('button[data-sym]').forEach(btn=>{
-        btn.onclick = async ()=>{
-          btn.disabled = true;
-          const r = await fetch('/api/execute',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:btn.dataset.sym, approved:true})});
-          const j = await r.json();
-          alert(j.ok ? 'Emir OK (ORDER event; SIGNAL ayrı)' : (j.message||j.result?.message||'Red'));
-          load();
-        };
-      });
+      document.getElementById('tops').innerHTML =
+        `<b>TOP (dashboard):</b><br>${topOps.slice(0,5).map(x=>`${x.symbol} ${x.final_decision||x.decision} pri=${x.priority_score}`).join('<br>')||'—'}<br><br>`+
+        `<b>LONG:</b><br>${fmtTop(tops.LONG_TERM)}<br><br><b>SWING:</b><br>${fmtTop(tops.SWING)}<br><br><b>DAY:</b><br>${fmtTop(tops.DAY_TRADING)}`;
+      document.getElementById('list').innerHTML = (data.universe||[]).map(renderCard).join('');
+      bindStars();
+      bindExec();
       document.getElementById('pos').innerHTML = (p.open_positions||[]).length
-        ? p.open_positions.map(x=>`<div class="row"><b>${x.symbol}</b><div style="color:var(--mute)">${x.quantity} lot · maliyet ${x.avg_cost} · stop ${x.stop_price??'—'}</div></div>`).join('')
+        ? p.open_positions.map(x=>`<div class="row"><b>${x.symbol}</b> ${x.is_favorite?'★':''}<div style="color:var(--mute)">${x.quantity} lot · maliyet ${x.avg_cost} · stop ${x.stop_price??'—'}</div></div>`).join('')
         : '<div style="color:var(--mute)">Pozisyon yok — BEKLE normaldir</div>';
+      await loadFavorites();
       await loadAlerts();
     }
+
+    document.querySelectorAll('.tab').forEach(tab=>{
+      tab.onclick = ()=>{
+        document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+        tab.classList.add('on');
+        document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));
+        document.getElementById('panel-'+tab.dataset.tab).classList.add('on');
+      };
+    });
+    document.getElementById('favSort').onchange = loadFavorites;
     document.getElementById('refresh').onclick = load;
     document.getElementById('reset').onclick = async ()=>{ await fetch('/api/reset',{method:'POST'}); load(); };
     document.getElementById('markRead').onclick = async ()=>{ await fetch('/api/notifications/read',{method:'POST'}); loadAlerts(); };
@@ -286,7 +348,7 @@
         sound_volume: Number(document.getElementById('vol').value)
       };
       settingsCache = await (await fetch('/api/notifications/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
-      document.getElementById('settingsNote').textContent = 'Kaydedildi. SMS gerçek provider yoksa gönderilmez; trading etkilenmez.';
+      document.getElementById('settingsNote').textContent = 'Kaydedildi. Favori ≠ AL. SMS provider yoksa trading etkilenmez.';
       document.getElementById('audioFlags').textContent = `${settingsCache.sound_on?'ON':'OFF'} / ${settingsCache.tts_on?'ON':'OFF'}`;
     };
     loadSettings().then(load);

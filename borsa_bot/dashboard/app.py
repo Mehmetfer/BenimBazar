@@ -219,6 +219,92 @@ def trade_plan(symbol: str) -> dict:
     }
 
 
+# --- Favorites / Watchlist (FAVORITE ≠ BUY · FAVORITE = PRIORITY ANALYSIS) ---
+
+
+class FavoriteUpdateBody(BaseModel):
+    notes: str | None = None
+    priority: int | None = None
+    strategy_preference: list[str] | None = None
+    groups: list[str] | None = None
+    notification_preferences: dict | None = None
+
+
+class PriceAlertBody(BaseModel):
+    symbol: str
+    kind: str  # ABOVE|BELOW|ENTRY_ZONE|STOP|TARGET
+    threshold: float | None = None
+
+
+@app.get("/api/favorites")
+def favorites(sort: str = "PRIORITY", group: str | None = None) -> dict:
+    return service.favorites_view(sort=sort, group=group)
+
+
+@app.get("/api/favorites/scanner")
+def favorites_scanner() -> dict:
+    view = service.favorites_view()
+    return {
+        "question": "Favorilerimde bugün işlem fırsatı var mı?",
+        "scanner": view.get("scanner"),
+        "count": len(view.get("favorites") or []),
+        "principle": "FAVORITE ≠ BUY",
+    }
+
+
+@app.get("/api/favorites/groups")
+def favorites_groups() -> dict:
+    return {"groups": service.favorites.list_groups()}
+
+
+@app.get("/api/favorites/performance")
+def favorites_performance() -> dict:
+    return service.favorites.performance()
+
+
+@app.post("/api/favorites/price-alert")
+def favorites_price_alert(body: PriceAlertBody) -> dict:
+    if not service.favorites.is_favorite(body.symbol.upper()):
+        service.favorites.add(body.symbol.upper())
+    rule = service.favorites.add_price_alert(body.symbol.upper(), body.kind, body.threshold)
+    return {"ok": True, "alert": rule.__dict__}
+
+
+@app.post("/api/favorites/{symbol}/toggle")
+def favorites_toggle(symbol: str) -> dict:
+    fav = service.favorites.toggle(symbol.upper())
+    return {
+        "ok": True,
+        "symbol": fav.symbol,
+        "is_favorite": fav.active,
+        "record": fav.to_dict(),
+        "principle": "FAVORITE ≠ BUY · FAVORITE = PRIORITY ANALYSIS",
+    }
+
+
+@app.put("/api/favorites/{symbol}")
+def favorites_update(symbol: str, body: FavoriteUpdateBody) -> dict:
+    try:
+        fav = service.favorites.update(
+            symbol.upper(),
+            notes=body.notes,
+            priority=body.priority,
+            strategy_preference=body.strategy_preference,
+            notification_preferences=body.notification_preferences,
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    if body.groups is not None:
+        service.favorites.set_groups(symbol.upper(), body.groups)
+        fav = service.favorites.get(symbol.upper())
+    return {"ok": True, "record": fav.to_dict() if fav else None}
+
+
+@app.get("/api/favorites/{symbol}")
+def favorites_detail(symbol: str) -> dict:
+    return service.favorite_detail(symbol.upper())
+
+
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})

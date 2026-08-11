@@ -86,6 +86,8 @@ class Settings:
     alert_cooldown_seconds: int = _i("ALERT_COOLDOWN_SECONDS", 300)
     push_enabled: bool = _b("PUSH_ENABLED", False)
     sms_provider: str = os.getenv("SMS_PROVIDER", "null")
+    favorite_voice_alert: bool = _b("FAVORITE_VOICE_ALERT", True)
+    favorite_scan_boost: bool = _b("FAVORITE_SCAN_BOOST", True)
 
     @property
     def is_live(self) -> bool:
