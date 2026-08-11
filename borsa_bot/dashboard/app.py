@@ -729,6 +729,47 @@ def autonomy_self() -> dict:
     return engine.self_awareness()
 
 
+@app.get("/api/ai/status")
+def ai_status() -> dict:
+    """AI Decision Engine status — proposals only; risk bypass forbidden."""
+    return engine.ai.status()
+
+
+@app.get("/api/ai/watchlist")
+def ai_watchlist() -> dict:
+    return {
+        "ok": True,
+        "items": engine.ai.watchlist.list_items(),
+        "note": "AI watchlist ≠ trading permission / risk bypass",
+    }
+
+
+@app.get("/api/ai/decisions")
+def ai_decisions(limit: int = 20, symbol: str | None = None) -> dict:
+    lim = max(1, min(100, int(limit)))
+    return {
+        "ok": True,
+        "decisions": engine.ai.memory.recent(symbol=symbol, limit=lim),
+        "note": "confidence ≠ calibrated probability · RiskEngine is final",
+    }
+
+
+@app.post("/api/ai/cycle")
+def ai_cycle(body: AutonomyCycleBody | None = None) -> dict:
+    """Run autonomy cycle and return AI decision packet (BIST). Still gated by risk."""
+    payload = body or AutonomyCycleBody()
+    if (payload.market or "BIST").upper() != "BIST":
+        raise HTTPException(400, "AI cycle via this endpoint is BIST; use crypto plane separately")
+    report = engine.run_cycle("BIST", force=bool(payload.force))
+    return {
+        "ok": True,
+        "cycle": report,
+        "ai": report.get("ai_decision") or {},
+        "risk_bypass": False,
+        "broker_direct": False,
+    }
+
+
 @app.get("/api/models")
 def list_models() -> dict:
     from ai.model_registry import model_registry

@@ -198,6 +198,11 @@
       <div id="autonomyMeta" class="meta" style="margin-top:8px">—</div>
       <button class="more" id="autonomyCycleBtn" type="button" style="margin-top:8px">Engine cycle (BIST)</button>
     </div>
+    <div class="card" style="cursor:default" id="aiDecisionCard">
+      <div class="why"><b>AI STATUS</b> ● <span id="aiStatusDot">—</span></div>
+      <div id="aiDecisionBody" class="meta" style="margin-top:8px">Yükleniyor…</div>
+      <div class="meta" style="margin-top:6px">confidence ≠ probability · RiskEngine final · broker direct: HAYIR</div>
+    </div>
     <div class="card" style="cursor:default">
       <div class="why"><b>AI PERFORMANCE</b> — ana sayfada gösterilmez.</div>
       <div id="aiPerf" class="why" style="margin-top:8px">Yükleniyor…</div>
@@ -883,12 +888,24 @@
       document.querySelectorAll('#execModes .filter').forEach(b=>{
         b.classList.toggle('on', b.dataset.emode===em);
       });
-      const last = st.last_cycle||{};
-      const acc = st.account||{};
       document.getElementById('autonomyMeta').textContent =
         `L${(st.autonomy_level||{}).level??'?'} ${(st.autonomy_level||{}).label||''} · ${st.autonomous_status||'—'} · User ${mode} · Exec ${em} · blocked=${st.blocked} · gov ${(st.governor||{}).state||'—'} · LIVE ${st.live_broker||'DISABLED'}`;
     }catch(e){
       document.getElementById('autonomyMeta').textContent = 'Autonomy API yok';
+    }
+    try{
+      const ai = await (await fetch('/api/ai/status')).json();
+      const last = (ai.last_cycle||{});
+      const card = last.top_card||{};
+      document.getElementById('aiStatusDot').textContent = ai.ai_status||last.ai_status||'IDLE';
+      document.getElementById('aiDecisionBody').innerHTML =
+        `<b>${card.symbol||'—'}</b> · ${card.ai_decision||'NO_TRADE'} · conf ${card.confidence??'—'} (${card.confidence_label||'score≠P'})<br>`+
+        `EV ${card.expected_value??'—'} · risk ${card.risk_pct??'—'} · RR ${card.risk_reward??'—'} · regime ${card.regime||'—'} · ${card.strategy||''}<br>`+
+        `Reasons: ${(card.reason_codes||[]).slice(0,6).join(', ')||'—'}<br>`+
+        `Counter: ${card.counter_argument||'—'}<br>`+
+        `Watchlist: ${(ai.watchlist||[]).slice(0,5).map(x=>x.symbol).join(', ')||'—'}`;
+    }catch(e){
+      document.getElementById('aiDecisionBody').textContent = 'AI API yok';
     }
   }
 
@@ -919,6 +936,7 @@
     const f = r.filter_stats||{};
     document.getElementById('autonomyMeta').textContent =
       `${r.status} · exec=${r.execution_mode} · UNIVERSE=${f.UNIVERSE??'—'} DEEP=${f.DEEP_ANALYSIS??r.symbols_scanned??'—'} orders=${r.orders_submitted??0} shadow=${(r.shadow_intents||[]).length} · LIVE=${r.live_broker||'DISABLED'}`;
+    await loadAutonomy();
   };
   document.getElementById('moreBtn').onclick=()=>{showAll=true; renderHome();};
   document.getElementById('refresh').onclick=load;

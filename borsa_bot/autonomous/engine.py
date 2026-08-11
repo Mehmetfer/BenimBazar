@@ -34,6 +34,7 @@ from autonomous.scheduler import CycleSchedulerGuard, scheduler_guard
 from autonomous.self_awareness import self_awareness as build_self_awareness
 from config.models import OrderRequest, SignalAction, utc_now
 from config.settings import settings
+from decision.engine import AIDecisionEngine
 from execution.broker_adapter import ExecutionRouter, LiveBrokerDisabled
 from strategy.service import TradingService
 
@@ -63,6 +64,7 @@ class EngineCycleReport:
     exits: list[dict[str, Any]] = field(default_factory=list)
     reconcile: dict[str, Any] = field(default_factory=dict)
     explainable: list[dict[str, Any]] = field(default_factory=list)
+    ai_decision: dict[str, Any] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
     live_broker: str = "DISABLED"
     note: str = "SIGNAL ≠ ORDER · model_score ≠ calibrated probability · LIVE default locked"
@@ -90,6 +92,7 @@ class AutonomousTradingEngine:
         self.scheduler = scheduler or scheduler_guard
         self.modes = modes or mode_store
         self.router = router or ExecutionRouter(paper=self.trading.broker, live=LiveBrokerDisabled())
+        self.ai = AIDecisionEngine(self.trading)
         self._last: Optional[EngineCycleReport] = None
         self._halted: bool = False
         self._halt_reason: str = ""
@@ -143,6 +146,7 @@ class AutonomousTradingEngine:
                 "open_positions": self.trading.ledger.open_position_count(),
             },
             "last_cycle": self._last.to_dict() if self._last else None,
+            "ai": self.ai.status(),
             "note": self._last.note if self._last else "AUTONOMOUS ENGINE ready · LIVE locked · no guaranteed profit",
         }
 
@@ -350,6 +354,26 @@ class AutonomousTradingEngine:
         report.ranked = ranked_rows[:40]
         report.signals = signal_counts
         report.signals_generated = sum(signal_counts.values())
+
+        # 4b) AI Decision Engine — observe/rank/reason/propose (never bypasses risk)
+        try:
+            ser_all = [self.trading._serialize(d) for d in decisions]
+            ai_report = self.ai.run_from_scan_rows(
+                ser_all,
+                market_type="BIST",
+                top_n=8,
+                cycle_id=report.cycle_id,
+            )
+            report.ai_decision = ai_report
+            self.events.emit(
+                AutonomyEventType.SCAN_COMPLETED,
+                cycle_id=report.cycle_id,
+                market="BIST",
+                payload={"ai_top": (ai_report.get("top_card") or {}).get("symbol"), "ai_status": ai_report.get("ai_status")},
+            )
+        except Exception as exc:  # noqa: BLE001
+            report.errors.append(f"AI_DECISION:{exc}")
+            report.ai_decision = {"status": "ERROR", "error": str(exc), "risk_bypass": False}
 
         self.events.emit(
             AutonomyEventType.SCAN_COMPLETED,
