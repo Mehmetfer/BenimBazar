@@ -122,6 +122,8 @@ class IndicatorSet:
     obv: float
     mfi14: float
     cmf20: float
+    cci20: float
+    williams_r: float
     support: float
     resistance: float
     pivot: float
@@ -199,6 +201,12 @@ class SymbolDecision:
     strategy_weights: dict[str, float] = field(default_factory=dict)
     mtf: dict[str, str] = field(default_factory=dict)
     conflict: bool = False
+    factors: dict[str, float] = field(default_factory=dict)
+    alpha_summary: dict = field(default_factory=dict)
+    price_action: dict = field(default_factory=dict)
+    universe_ok: bool = True
+    universe_reason: str = "ok"
+    risk_verdict: str = ""
 
 
 @dataclass

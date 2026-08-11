@@ -253,6 +253,27 @@ def roc(values: Sequence[float], period: int = 12) -> list[float | None]:
     return out
 
 
+def cci(bars: Sequence[Bar], period: int = 20) -> list[float | None]:
+    out: list[float | None] = [None] * len(bars)
+    tp = [(b.high + b.low + b.close) / 3 for b in bars]
+    for i in range(period - 1, len(bars)):
+        window = tp[i - period + 1 : i + 1]
+        mean = sum(window) / period
+        mad = sum(abs(x - mean) for x in window) / period
+        out[i] = 0.0 if mad == 0 else (tp[i] - mean) / (0.015 * mad)
+    return out
+
+
+def williams_r(bars: Sequence[Bar], period: int = 14) -> list[float | None]:
+    out: list[float | None] = [None] * len(bars)
+    for i in range(period - 1, len(bars)):
+        window = bars[i - period + 1 : i + 1]
+        hh = max(b.high for b in window)
+        ll = min(b.low for b in window)
+        out[i] = -50.0 if hh == ll else (hh - bars[i].close) / (hh - ll) * -100
+    return out
+
+
 def support_resistance(bars: Sequence[Bar], lookback: int = 40) -> tuple[float, float, float]:
     window = bars[-lookback:] if len(bars) >= lookback else list(bars)
     support = min(b.low for b in window)
@@ -306,6 +327,8 @@ def compute_indicators(bars: Sequence[Bar]) -> IndicatorSet | None:
     obv_v = obv(bars)
     mfi_v = mfi(bars, 14)
     cmf_v = cmf(bars, 20)
+    cci_v = cci(bars, 20)
+    will_v = williams_r(bars, 14)
     support, resistance, pivot = support_resistance(bars)
     structure = structure_label(bars)
 
@@ -314,7 +337,7 @@ def compute_indicators(bars: Sequence[Bar]) -> IndicatorSet | None:
         e9[i], e21[i], e50[i], e100[i], e200[i], s20[i], s50[i], r[i],
         macd_line[i], macd_sig[i], macd_hist[i], bb_u[i], bb_m[i], bb_l[i],
         a[i], adx_v[i], k[i], d[i], srk[i], srd[i], vw[i], vol_sma[i],
-        mom[i], roc12[i], mfi_v[i], cmf_v[i],
+        mom[i], roc12[i], mfi_v[i], cmf_v[i], cci_v[i], will_v[i],
     ]
     if any(v is None for v in required):
         return None
@@ -346,6 +369,8 @@ def compute_indicators(bars: Sequence[Bar]) -> IndicatorSet | None:
         obv=obv_v[i],
         mfi14=mfi_v[i],
         cmf20=cmf_v[i],
+        cci20=cci_v[i],
+        williams_r=will_v[i],
         support=support,
         resistance=resistance,
         pivot=pivot,

@@ -27,7 +27,7 @@
 </head>
 <body>
   <h1>Borsa Bot</h1>
-  <p class="sub">Önce sermaye koru. Emin değilsen BEKLE. Risk Engine &gt; Sinyal. AI emir vermez.</p>
+  <p class="sub">Önce hayatta kal → sonra kâr → sonra kârı büyüt. Risk Engine &gt; Alpha &gt; AI. NO_TRADE birinci sınıf. Kâr garantisi yok.</p>
   <div class="card status" id="sys">Sistem: …</div>
   <div class="card">
     <div class="grid">
@@ -84,7 +84,8 @@
           <div class="scores">
             <div>TECH <b>${s.technical??'—'}</b></div><div>FUND <b>${s.fundamental??'—'}</b></div>
             <div>MKT <b>${s.market??'—'}</b></div><div>SECT <b>${s.sector??'—'}</b></div>
-            <div>VOL <b>${s.volume??'—'}</b></div><div>LIQ <b>${s.liquidity??'—'}</b></div>
+            <div>MOM <b>${(u.factors||{}).momentum??s.momentum??'—'}</b></div><div>QUAL <b>${(u.factors||{}).quality??'—'}</b></div>
+            <div>VAL <b>${(u.factors||{}).value??'—'}</b></div><div>GROW <b>${(u.factors||{}).growth??'—'}</b></div>
             <div>NEWS <b>${s.news??'—'}</b></div><div>AI <b>${s.ai_confidence??u.ai_confidence}</b></div>
             <div>RISK <b>${s.risk??'—'}</b></div><div>FINAL <b>${s.final??u.buy_score}</b></div>
           </div>

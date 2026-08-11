@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 
 from ai.quality import assess_signal_quality, classify_volatility_regime
+from alpha.engine import aggregate_alpha, run_alpha_ensemble
 from config.models import (
     CapitalMode,
     MarketRegime,
@@ -16,10 +17,12 @@ from config.settings import SYSTEM_OBJECTIVES, settings
 from data.providers import MarketDataProvider, create_provider
 from execution.paper import PaperBroker
 from execution.safety import SafetyGate
+from factors.engine import compute_factors
 from fundamental.provider import get_fundamentals, score_fundamentals
 from indicators.engine import compute_indicators
 from market_regime.engine import detect_regime, trend_label
 from news.analyzer import classify_headline, latest_stub_headline, score_news
+from portfolio.construction import build_correlation_matrix, size_position
 from portfolio.ledger import PortfolioLedger
 from profit.ev import compute_opportunity, decide_matrix, dynamic_size_multiplier
 from profit.modes import select_capital_mode
@@ -36,7 +39,9 @@ from signals.engine import (
 from strategy.modules import ensemble_votes, regime_weights, weighted_ensemble_bias
 from strategy.ranking import example_ranking_report
 from technical.mtf import analyze_mtf, mtf_conflict_risk
+from technical.price_action import analyze_price_action
 from technical.sector import liquidity_score, sector_relative_strength
+from universe.engine import select_universe
 
 
 def _to_exec_signal(decision: SignalAction) -> SignalAction:
@@ -121,7 +126,6 @@ class TradingService:
 
         marks = {}
         decisions: list[SymbolDecision] = []
-        # Capital mode from portfolio + market (recomputed each scan)
         self.capital_mode = select_capital_mode(
             self.ledger,
             regime=regime,
@@ -129,10 +133,21 @@ class TradingService:
             liquidity_ok=True,
         )
         self.risk.capital_mode = self.capital_mode
+        universe_map = {m.symbol: m for m in select_universe(self.provider)}
+        # Correlation series for book awareness
+        ret_series: dict[str, list[float]] = {}
+        for symbol in self.provider.list_symbols():
+            bars_c = self.provider.get_bars(symbol, 40)
+            closes = [b.close for b in bars_c]
+            ret_series[symbol] = [
+                closes[i] / closes[i - 1] - 1 for i in range(1, len(closes)) if closes[i - 1]
+            ]
+        corr_matrix = build_correlation_matrix(ret_series)
 
         for symbol in self.provider.list_symbols():
             quote = self.provider.get_quote(symbol)
             marks[symbol] = quote.price
+            uni = universe_map.get(symbol)
             bars = self.provider.get_bars(symbol, 240)
             ind = compute_indicators(bars)
             if ind is None:
@@ -142,12 +157,29 @@ class TradingService:
             mtf_conflict, mtf_penalty, mtf_note = mtf_conflict_risk(mtf)
             mtf_aligned = (not mtf_conflict) and sum(1 for v in mtf.values() if v == "BULL") >= 3
             rs, sector_sc, sector_notes = sector_relative_strength(self.provider, symbol, quote.sector)
+            xu = self.provider.get_bars("XU100", 40)
+            xu_closes = [b.close for b in xu]
+            sym_closes = [b.close for b in bars]
+            rs_idx = 0.0
+            if len(sym_closes) > 20 and len(xu_closes) > 20 and xu_closes[-20]:
+                rs_idx = (sym_closes[-1] / sym_closes[-20] - 1) - (xu_closes[-1] / xu_closes[-20] - 1)
+            factors = compute_factors(symbol, sym_closes, ind, quote.price, rs_idx)
+            pa = analyze_price_action(bars, ind, quote.volume)
+            alphas = run_alpha_ensemble(ind, quote.price, quote.volume, factors, regime)
+            alpha_bias, alpha_label, alpha_notes = aggregate_alpha(alphas)
             liq, liq_notes = liquidity_score(quote, ind)
             news = classify_headline(symbol, latest_stub_headline(symbol))
             news_sc, news_notes, news_block = score_news(news)
             tech, tech_reasons = technical_score(ind, quote.price)
+            # Soft blend CCI/Williams as confirmation only (not independent)
+            if ind.cci20 > 100:
+                tech = min(100, tech + 2)
+            if ind.williams_r < -80:
+                tech = min(100, tech + 1)
             fund, fund_notes = score_fundamentals(get_fundamentals(symbol))
-            mom = momentum_score(ind)
+            # Prefer factor quality over raw fund stub if available
+            fund = round(0.5 * fund + 0.5 * factors.quality, 1)
+            mom = round(0.5 * momentum_score(ind) + 0.5 * factors.momentum, 1)
             vol, vol_notes = volume_score(ind, quote.volume)
             mkt = market_score(regime, index_bullish)
             plan = build_trade_plan(quote.price, ind)
@@ -176,6 +208,12 @@ class TradingService:
                 safety -= 20
             if vol_regime == "EXTREME":
                 safety -= 25
+            if uni and not uni.eligible:
+                safety -= 20
+            if pa.false_breakout:
+                safety -= 15
+            if pa.breakout and not pa.volume_confirmed:
+                safety -= 10
             bundle = ScoreBundle(
                 technical=round(tech, 1),
                 fundamental=round(fund, 1),
@@ -184,38 +222,51 @@ class TradingService:
                 momentum=round(mom, 1),
                 volume=round(vol, 1),
                 news=round(news_sc, 1),
-                liquidity=round(liq, 1),
+                liquidity=round(liq if not uni else min(liq, uni.liquidity_score), 1),
                 risk=round(max(0, 100 - safety), 1),
                 ai_confidence=round(ai_conf, 1),
                 final=0.0,
             )
             votes = ensemble_votes(ind, quote.price, quote.volume)
             bias = weighted_ensemble_bias(votes, weights)
+            # Regime-aware factor weights (not simple average)
+            if regime in {MarketRegime.STRONG_BULL, MarketRegime.BULL}:
+                factor_blend = factors.momentum * 0.35 + factors.quality * 0.2 + factors.growth * 0.2 + factors.value * 0.1 + factors.volatility * 0.15
+            elif regime == MarketRegime.NEUTRAL:
+                factor_blend = factors.value * 0.25 + factors.quality * 0.25 + factors.volatility * 0.2 + factors.momentum * 0.15 + factors.growth * 0.15
+            else:
+                factor_blend = factors.quality * 0.35 + factors.volatility * 0.3 + factors.value * 0.2 + factors.momentum * 0.1 + factors.growth * 0.05
             final = (
-                bundle.technical * 0.25
-                + bundle.fundamental * 0.10
-                + bundle.market * 0.15
-                + bundle.sector * 0.12
-                + bundle.momentum * 0.10
-                + bundle.volume * 0.10
-                + bundle.news * 0.05
-                + bundle.liquidity * 0.08
+                bundle.technical * 0.18
+                + factor_blend * 0.18
+                + bundle.fundamental * 0.08
+                + bundle.market * 0.14
+                + bundle.sector * 0.10
+                + bundle.momentum * 0.08
+                + bundle.volume * 0.08
+                + bundle.news * 0.04
+                + bundle.liquidity * 0.07
                 + (100 - bundle.risk) * 0.05
             )
-            final = final * 0.9 + ai_conf * 0.1
-            final += max(-5, min(5, bias))  # soft regime-weighted ensemble nudge
+            final = final * 0.88 + ai_conf * 0.08 + max(-4, min(4, alpha_bias * 8))
+            final += max(-5, min(5, bias))
             if regime == MarketRegime.STRONG_BEAR:
                 final *= 0.75
             elif regime == MarketRegime.BEAR:
                 final *= 0.85
             if mtf_conflict:
                 final *= 0.8
+            if uni and not uni.eligible:
+                final *= 0.7
             bundle.final = round(max(0, min(100, final)), 1)
 
             conflict, conflict_why = detect_conflict(bundle, bundle.risk >= 55)
             if mtf_conflict:
                 conflict = True
                 conflict_why = conflict_why or mtf_note
+            if pa.false_breakout:
+                conflict = True
+                conflict_why = "false_breakout"
 
             opp = compute_opportunity(
                 scores=bundle,
@@ -243,6 +294,10 @@ class TradingService:
                 capital_mode=self.capital_mode,
                 regime=regime,
             )
+            if uni and not uni.eligible and decision in {SignalAction.BUY, SignalAction.STRONG_BUY}:
+                decision = SignalAction.NO_TRADE
+            if pa.breakout and not pa.volume_confirmed and decision in {SignalAction.BUY, SignalAction.STRONG_BUY}:
+                decision = SignalAction.WATCH
             signal = _to_exec_signal(decision)
 
             ai_conf, ai_notes = assess_signal_quality(
@@ -259,7 +314,10 @@ class TradingService:
 
             reasons = tech_reasons + vol_notes + fund_notes + sector_notes + news_notes + liq_notes
             reasons.append(f"ensemble_bias={bias}")
+            reasons.append(f"alpha_bias={alpha_bias}/{alpha_label}")
             reasons.append(f"capital_mode={self.capital_mode.value}")
+            reasons.append(f"price_action={pa.pattern}")
+            reasons.extend(alpha_notes[:2])
             if opp:
                 reasons.append(f"EV={opp.expected_value:.3f} P(win)={opp.p_win:.2f}")
             risks = []
@@ -271,13 +329,33 @@ class TradingService:
                 risks.append(f"Conflict: {conflict_why}")
             if opp and opp.expected_value <= 0:
                 risks.append("Non-positive expected value")
+            if uni and uni.pump_dump_flag:
+                risks.append("pump_dump_heuristic")
             if mtf_note:
                 risks.append(mtf_note)
 
             stop = plan.stop if plan else None
             target = plan.target1 if plan else None
             risk_level = RiskLevel.LOW
+            risk_verdict = ""
             if signal in ENTRY_ACTIONS:
+                # Max correlation vs open book
+                open_syms = [p.symbol for p in self.ledger.positions()]
+                corr_book = 0.0
+                if open_syms:
+                    corr_book = max(corr_matrix.get(symbol, {}).get(s, 0.0) for s in open_syms)
+                tgt = None
+                if plan and opp:
+                    tgt = size_position(
+                        equity=self.ledger.equity(),
+                        price=quote.price,
+                        stop=plan.stop,
+                        opp=opp,
+                        capital_mode=self.capital_mode,
+                        regime=regime,
+                        sector_count=self.ledger.sector_position_count(quote.sector),
+                        corr_with_book=corr_book,
+                    )
                 rd = self.risk.evaluate_entry(
                     symbol=symbol,
                     sector=quote.sector,
@@ -292,13 +370,21 @@ class TradingService:
                     size_mult=size_mult,
                 )
                 risk_level = rd.risk
+                risk_verdict = rd.verdict.value
                 if not rd.allowed:
-                    decision = SignalAction.NO_TRADE if rd.reason.startswith(("KILL", "capital", "negative")) else SignalAction.WAIT
+                    decision = SignalAction.NO_TRADE if rd.verdict.value == "REJECT" else SignalAction.WAIT
                     signal = _to_exec_signal(decision)
-                    reasons.append(f"RiskEngine veto: {rd.reason}")
+                    reasons.append(f"RiskEngine {rd.verdict.value}: {rd.reason}")
                     stop, target = rd.stop_price, rd.target_price
-                elif plan:
-                    plan.quantity = rd.quantity
+                else:
+                    if tgt and tgt.quantity > 0:
+                        rd_qty = min(rd.quantity, tgt.quantity)
+                        if plan:
+                            plan.quantity = rd_qty
+                    elif plan:
+                        plan.quantity = rd.quantity
+                    if rd.verdict.value == "REDUCE":
+                        reasons.append("RiskEngine REDUCE size")
 
             explanation = (
                 f"DECISION={decision.value} FINAL={bundle.final:.0f} EV={(opp.expected_value if opp else 0):.3f} "
@@ -332,6 +418,8 @@ class TradingService:
                     "rsi": round(ind.rsi14, 2),
                     "atr": round(ind.atr14, 2),
                     "adx": round(ind.adx14, 2),
+                    "cci": round(ind.cci20, 2),
+                    "williams_r": round(ind.williams_r, 2),
                     "ema9": round(ind.ema9, 2),
                     "ema21": round(ind.ema21, 2),
                     "ema50": round(ind.ema50, 2),
@@ -344,6 +432,21 @@ class TradingService:
                 strategy_weights=weights,
                 mtf=mtf,
                 conflict=conflict,
+                factors=factors.as_dict(),
+                alpha_summary={
+                    "bias": alpha_bias,
+                    "label": alpha_label,
+                    "signals": [{"name": a.name, "signal": a.signal, "confidence": a.confidence, "regime_fit": a.regime_fit} for a in alphas],
+                },
+                price_action={
+                    "pattern": pa.pattern,
+                    "volume_confirmed": pa.volume_confirmed,
+                    "false_breakout": pa.false_breakout,
+                    "notes": pa.notes,
+                },
+                universe_ok=bool(uni.eligible) if uni else True,
+                universe_reason=uni.reason if uni else "ok",
+                risk_verdict=risk_verdict,
             )
             decisions.append(d)
             self.ledger.log_decision(
@@ -443,6 +546,12 @@ class TradingService:
             "strategy_votes": d.strategy_votes,
             "strategy_weights": d.strategy_weights,
             "indicators": d.indicators,
+            "factors": d.factors,
+            "alpha_summary": d.alpha_summary,
+            "price_action": d.price_action,
+            "universe_ok": d.universe_ok,
+            "universe_reason": d.universe_reason,
+            "risk_verdict": d.risk_verdict,
         }
         if d.scores:
             base["scores"] = asdict(d.scores)

@@ -10,6 +10,9 @@ from pydantic import BaseModel
 from config.settings import settings
 from strategy.service import TradingService
 from backtest.runner import run_simple_backtest
+from analytics.reports import daily_market_report, top_opportunities
+from walk_forward.runner import run_walk_forward
+from monte_carlo.simulator import run_monte_carlo
 
 STATIC = Path(__file__).resolve().parent / "static"
 STATIC.mkdir(parents=True, exist_ok=True)
@@ -50,6 +53,37 @@ def reset() -> dict:
 def backtest(symbol: str = "THYAO") -> dict:
     m = run_simple_backtest(symbol.upper())
     return m.__dict__
+
+
+@app.get("/api/opportunities")
+def opportunities() -> dict:
+    dash = service.dashboard()
+    return top_opportunities(dash.get("universe") or [])
+
+
+@app.get("/api/daily-report")
+def daily_report() -> dict:
+    return daily_market_report(service.dashboard())
+
+
+@app.get("/api/walk-forward")
+def walk_forward(symbol: str = "THYAO") -> dict:
+    rep = run_walk_forward(symbol.upper())
+    return {
+        "symbol": rep.symbol,
+        "oos_pass_rate": rep.oos_pass_rate,
+        "gate_ok": rep.gate_ok,
+        "note": rep.note,
+        "folds": [f.__dict__ for f in rep.folds],
+        "live_allowed": False,  # hard rule: never auto-enable LIVE
+    }
+
+
+@app.get("/api/monte-carlo")
+def monte_carlo() -> dict:
+    # Illustrative trade PnL sample until real trade history wired
+    sample = [1200, -800, 900, -500, 1500, -700, 400, -1100, 2000, -300]
+    return run_monte_carlo(sample).__dict__
 
 
 @app.get("/")
