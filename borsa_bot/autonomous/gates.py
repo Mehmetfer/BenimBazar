@@ -8,6 +8,10 @@ from typing import Any
 from config.models import SignalAction, utc_now
 from config.settings import settings
 from data.integrity import MarketSession, bist_session_now
+from autonomous.anomaly import inspect_symbol
+from autonomous.governors import evaluate_governors
+from autonomous.reason_codes import ReasonCode, reasons_from_gate
+from autonomous.signal_lifecycle import build_lifecycle, evaluate_invalidation
 
 
 ENTRY_OK = {SignalAction.BUY, SignalAction.STRONG_BUY, SignalAction.AL}
@@ -67,25 +71,84 @@ def evaluate_pretrade_gates(
             if not quote.price or quote.price <= 0:
                 gates.append(GateResult("DATA", False, "MISSING_PRICE"))
             else:
-                gates.append(
-                    GateResult(
-                        "DATA",
-                        True,
-                        "ok",
-                        {"kind": kind, "price": quote.price, "spread_pct": quote.spread_pct},
+                try:
+                    bars = trading.provider.get_bars(decision.symbol, 80)
+                except Exception:  # noqa: BLE001
+                    bars = []
+                anom = inspect_symbol(quote, bars, max_spread_pct=float(settings.max_spread_pct))
+                if not anom.trade_allowed:
+                    codes = [f.code for f in anom.findings]
+                    gates.append(
+                        GateResult(
+                            "DATA",
+                            False,
+                            "DATA_ANOMALY",
+                            {"findings": anom.to_dict(), "reason_codes": codes},
+                        )
                     )
-                )
+                else:
+                    gates.append(
+                        GateResult(
+                            "DATA",
+                            True,
+                            "ok",
+                            {
+                                "kind": kind,
+                                "price": quote.price,
+                                "spread_pct": quote.spread_pct,
+                                "anomaly": anom.to_dict(),
+                                "reason_codes": [ReasonCode.DATA_FRESH.value],
+                            },
+                        )
+                    )
     except Exception as exc:  # noqa: BLE001
         gates.append(GateResult("DATA", False, f"DATA_ERROR:{exc}"))
 
-    # SIGNAL GATE
+    # SIGNAL GATE (+ lifecycle expiration)
     decision_v = getattr(decision, "decision", None) or getattr(decision, "signal", None)
     signal_v = getattr(decision, "signal", None)
     final = str(getattr(decision, "final_decision", "") or "")
+    life = build_lifecycle(
+        getattr(decision, "symbol", "?"),
+        getattr(decision_v, "value", str(decision_v or "")),
+    )
+    age = signal_age_sec if signal_age_sec is not None else 0.0
+    if age > max_age:
+        life = evaluate_invalidation(life)  # will expire if past; also force
+        from autonomous.signal_lifecycle import invalidate
+
+        life = invalidate(life, "SIGNAL_EXPIRED", ReasonCode.SIGNAL_EXPIRED.value)
+    mtf = getattr(decision, "mtf", None) or {}
+    mtf_conflict = False
+    if isinstance(mtf, dict) and mtf:
+        vals = {str(v).upper() for v in mtf.values()}
+        buys = any(v in {"BUY", "BULL", "BULLISH", "UP", "LONG"} for v in vals)
+        sells = any(v in {"SELL", "BEAR", "BEARISH", "DOWN", "SHORT"} for v in vals)
+        mtf_conflict = buys and sells
+        if mtf_conflict:
+            life = evaluate_invalidation(life, mtf_conflict=True)
     if decision_v not in ENTRY_OK and signal_v not in ENTRY_OK:
         gates.append(GateResult("SIGNAL", False, f"NOT_ENTRY:{decision_v}"))
     elif final.upper() in {"NO_TRADE", "WAIT", "WATCH", "ALMA", "BEKLE"}:
         gates.append(GateResult("SIGNAL", False, f"FINAL_{final}"))
+    elif not life.valid:
+        gates.append(
+            GateResult(
+                "SIGNAL",
+                False,
+                life.invalidation_reason or "SIGNAL_INVALIDATED",
+                life.to_dict(),
+            )
+        )
+    elif mtf_conflict and str(getattr(decision_v, "value", decision_v)).upper() == "STRONG_BUY":
+        gates.append(
+            GateResult(
+                "SIGNAL",
+                False,
+                "MTF_CONFLICT_BLOCKS_STRONG_BUY",
+                {"mtf": mtf, "reason_codes": [ReasonCode.MTF_CONFLICT.value]},
+            )
+        )
     else:
         gates.append(
             GateResult(
@@ -97,6 +160,10 @@ def evaluate_pretrade_gates(
                     "model_score": getattr(decision, "ai_confidence", None),
                     "calibrated_probability": None,
                     "note": "model_score ≠ calibrated probability",
+                    "lifecycle": life.to_dict(),
+                    "reason_codes": (
+                        [ReasonCode.MTF_ALIGNMENT.value] if not mtf_conflict else []
+                    ),
                 },
             )
         )
@@ -117,16 +184,42 @@ def evaluate_pretrade_gates(
             )
         )
 
-    # RISK GATE (soft read of prior verdict + kill/pause; sizing rechecked at execution)
+    # RISK GATE (+ loss/drawdown governor — never increases risk)
     risk_verdict = str(getattr(decision, "risk_verdict", "") or "").upper()
+    gov = evaluate_governors(
+        daily_loss_pct=float(trading.ledger.daily_loss_pct()),
+        drawdown_pct=float(trading.ledger.drawdown_pct()),
+        kill_switch=bool(settings.kill_switch),
+    )
     if settings.kill_switch:
-        gates.append(GateResult("RISK", False, "KILL_SWITCH"))
+        gates.append(GateResult("RISK", False, "KILL_SWITCH", {"reason_codes": [ReasonCode.KILL_SWITCH.value]}))
+    elif not gov.new_trades_allowed:
+        gates.append(
+            GateResult(
+                "RISK",
+                False,
+                f"GOVERNOR_{gov.state.value}",
+                {**gov.to_dict(), "reason_codes": [ReasonCode.LOSS_GOVERNOR.value, ReasonCode.DRAWDOWN_GOVERNOR.value]},
+            )
+        )
     elif trading.risk.paused:
         gates.append(GateResult("RISK", False, f"PAUSED:{trading.risk.pause_reason}"))
     elif risk_verdict in {"REJECT", "BLOCKED"}:
-        gates.append(GateResult("RISK", False, risk_verdict))
+        gates.append(GateResult("RISK", False, risk_verdict, {"reason_codes": [ReasonCode.RISK_REJECTED.value]}))
     else:
-        gates.append(GateResult("RISK", True, "ok", {"risk_verdict": risk_verdict or "PASS"}))
+        gates.append(
+            GateResult(
+                "RISK",
+                True,
+                "ok",
+                {
+                    "risk_verdict": risk_verdict or "PASS",
+                    "governor": gov.to_dict(),
+                    "size_mult_cap": gov.size_mult,
+                    "reason_codes": [ReasonCode.RISK_ACCEPTABLE.value],
+                },
+            )
+        )
 
     # POSITION GATE — duplicate open position
     if trading.ledger.get_position(decision.symbol) is not None:
@@ -137,9 +230,9 @@ def evaluate_pretrade_gates(
         gates.append(GateResult("POSITION", True, "ok"))
 
     # EXECUTION GATE — signal age + safety snapshot + market session
-    age = signal_age_sec if signal_age_sec is not None else 0.0
-    if age > max_age:
-        gates.append(GateResult("EXECUTION", False, "SIGNAL_STALE", {"age_sec": age, "max": max_age}))
+    # (age already applied to lifecycle above; re-check safety)
+    if signal_age_sec is not None and signal_age_sec > max_age:
+        gates.append(GateResult("EXECUTION", False, "SIGNAL_STALE", {"age_sec": signal_age_sec, "max": max_age}))
     else:
         try:
             session = bist_session_now()

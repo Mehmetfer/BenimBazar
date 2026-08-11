@@ -880,7 +880,7 @@
       const last = st.last_cycle||{};
       const acc = st.account||{};
       document.getElementById('autonomyMeta').textContent =
-        `User ${mode} · Exec ${em} · blocked=${st.blocked} · equity ${acc.equity??'—'} · cash ${acc.cash??'—'} · LIVE ${st.live_broker||'DISABLED'} · last ${last.status||'—'}`;
+        `L${(st.autonomy_level||{}).level??'?'} ${(st.autonomy_level||{}).label||''} · ${st.autonomous_status||'—'} · User ${mode} · Exec ${em} · blocked=${st.blocked} · gov ${(st.governor||{}).state||'—'} · LIVE ${st.live_broker||'DISABLED'}`;
     }catch(e){
       document.getElementById('autonomyMeta').textContent = 'Autonomy API yok';
     }

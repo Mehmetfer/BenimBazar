@@ -19,14 +19,19 @@ from autonomous.execution_modes import ExecutionMode, parse_execution_mode
 from autonomous.explain import explain_decision
 from autonomous.fast_filter import fast_filter_bist
 from autonomous.gates import evaluate_pretrade_gates
+from autonomous.governors import evaluate_governors
 from autonomous.health import HealthCheckResult, run_health_check
+from autonomous.levels import resolve_autonomy_level
 from autonomous.mode_store import AutonomyModeStore, mode_store
 from autonomous.modes import UserTradingMode, analysis_allowed, auto_paper_allowed
 from autonomous.monitor import monitor_and_exit
 from autonomous.orders import OrderState, make_client_order_id, order_record
+from autonomous.rate_limit import order_rate_limiter
+from autonomous.reason_codes import ReasonCode, explain_packet, reasons_from_gate
 from autonomous.reconcile import reconcile_live, reconcile_paper
 from autonomous.recovery import attempt_provider_recover
 from autonomous.scheduler import CycleSchedulerGuard, scheduler_guard
+from autonomous.self_awareness import self_awareness as build_self_awareness
 from config.models import OrderRequest, SignalAction, utc_now
 from config.settings import settings
 from execution.broker_adapter import ExecutionRouter, LiveBrokerDisabled
@@ -109,11 +114,24 @@ class AutonomousTradingEngine:
         um = self.user_mode()
         em = self.execution_mode()
         health = run_health_check(self.trading, execution_mode=em.value)
+        blocked = self._halted or health.blocked
+        level = resolve_autonomy_level(um, em, blocked=blocked)
+        gov = evaluate_governors(
+            daily_loss_pct=float(self.trading.ledger.daily_loss_pct()),
+            drawdown_pct=float(self.trading.ledger.drawdown_pct()),
+            kill_switch=bool(settings.kill_switch),
+        )
+        if not gov.new_trades_allowed:
+            blocked = True
         return {
             "autonomous_mode": bool(getattr(settings, "autonomy_enabled", True)) and not self._halted,
+            "autonomy_level": level.to_dict(),
+            "autonomous_status": "BLOCKED" if blocked else "ACTIVE",
+            "blocked_reason": self._halt_reason or (None if gov.new_trades_allowed else gov.reason),
+            "governor": gov.to_dict(),
             "user_trading_mode": um.value,
             "execution_mode": em.value,
-            "blocked": self._halted or health.blocked,
+            "blocked": blocked,
             "halt_reason": self._halt_reason,
             "health": health.to_dict(),
             "live_broker": "DISABLED" if not getattr(settings, "live_broker_enabled", False) else "ENABLED_FLAG_ONLY",
@@ -125,8 +143,11 @@ class AutonomousTradingEngine:
                 "open_positions": self.trading.ledger.open_position_count(),
             },
             "last_cycle": self._last.to_dict() if self._last else None,
-            "note": self._last.note if self._last else "AUTONOMOUS ENGINE ready · LIVE locked",
+            "note": self._last.note if self._last else "AUTONOMOUS ENGINE ready · LIVE locked · no guaranteed profit",
         }
+
+    def self_awareness(self) -> dict[str, Any]:
+        return build_self_awareness(self.trading, self)
 
     def halt(self, reason: str) -> None:
         self._halted = True
@@ -397,18 +418,47 @@ class AutonomousTradingEngine:
     ) -> None:
         gate = evaluate_pretrade_gates(self.trading, decision)
         if not gate.passed:
+            codes: list[str] = []
+            for g in gate.gates:
+                if not g.passed:
+                    codes.extend(reasons_from_gate(g.name, g.reason))
             self.events.emit(
                 AutonomyEventType.GATE_FAIL,
                 cycle_id=report.cycle_id,
                 market="BIST",
                 symbol=decision.symbol,
-                payload=gate.to_dict(),
+                payload={**gate.to_dict(), "reason_codes": codes, "explain": explain_packet(signal=str(decision.decision), reason_codes=codes)},
             )
             self.events.emit(
                 AutonomyEventType.RISK_REJECTED,
                 cycle_id=report.cycle_id,
                 symbol=decision.symbol,
-                payload={"reason": gate.reason},
+                payload={"reason": gate.reason, "reason_codes": codes},
+            )
+            return
+
+        # Governor size cap (never increases risk)
+        gov = evaluate_governors(
+            daily_loss_pct=float(self.trading.ledger.daily_loss_pct()),
+            drawdown_pct=float(self.trading.ledger.drawdown_pct()),
+            kill_switch=bool(settings.kill_switch),
+        )
+        if not gov.new_trades_allowed:
+            self.events.emit(
+                AutonomyEventType.RISK_REJECTED,
+                cycle_id=report.cycle_id,
+                symbol=decision.symbol,
+                payload=gov.to_dict(),
+            )
+            return
+
+        rl = order_rate_limiter.allow_order(decision.symbol)
+        if not rl.allowed:
+            self.events.emit(
+                AutonomyEventType.ORDER_BLOCKED,
+                cycle_id=report.cycle_id,
+                symbol=decision.symbol,
+                payload={"reason": rl.reason, "reason_codes": [ReasonCode.RATE_LIMIT.value]},
             )
             return
 
@@ -420,6 +470,7 @@ class AutonomousTradingEngine:
                 "stop": decision.stop_price,
                 "target": decision.target_price,
                 "ai_plan": bool(decision.ai_trade_plan),
+                "governor_size_mult": gov.size_mult,
             },
         )
         self.events.emit(
@@ -456,7 +507,7 @@ class AutonomousTradingEngine:
                 from indicators.engine import compute_indicators
 
                 ind = compute_indicators(bars)
-                size_mult = decision.opportunity.position_size_mult if decision.opportunity else 0.5
+                size_mult = (decision.opportunity.position_size_mult if decision.opportunity else 0.5) * gov.size_mult
                 rd = self.trading.risk.evaluate_entry(
                     symbol=decision.symbol,
                     sector=quote.sector,
@@ -471,6 +522,7 @@ class AutonomousTradingEngine:
                     size_mult=size_mult,
                 )
                 intent["quantity"] = rd.quantity if rd.allowed else 0
+                intent["governor_size_mult"] = gov.size_mult
                 intent["risk_pct"] = getattr(settings, "max_position_risk_pct", None)
                 intent["risk_allowed"] = rd.allowed
                 intent["risk_reason"] = rd.reason
@@ -514,7 +566,7 @@ class AutonomousTradingEngine:
         from indicators.engine import compute_indicators
 
         ind = compute_indicators(bars)
-        size_mult = decision.opportunity.position_size_mult if decision.opportunity else 0.5
+        size_mult = (decision.opportunity.position_size_mult if decision.opportunity else 0.5) * gov.size_mult
         rd = self.trading.risk.evaluate_entry(
             symbol=decision.symbol,
             sector=quote.sector,

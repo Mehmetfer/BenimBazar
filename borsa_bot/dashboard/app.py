@@ -85,6 +85,10 @@ class LiveConfirmBody(BaseModel):
     phrase: str = ""
 
 
+class ModelPromoteBody(BaseModel):
+    approved_by: str = "dashboard"
+
+
 @app.get("/api/health")
 def health() -> dict:
     return service.health()
@@ -697,6 +701,37 @@ def autonomy_status() -> dict:
     legacy = autonomy.status()
     st["user_trading_mode"] = legacy.get("user_trading_mode") or st.get("user_trading_mode")
     return st
+
+
+@app.get("/api/autonomy/self")
+def autonomy_self() -> dict:
+    """Self-awareness snapshot (signals, risk, data, model sample tier)."""
+    return engine.self_awareness()
+
+
+@app.get("/api/models")
+def list_models() -> dict:
+    from ai.model_registry import model_registry
+
+    return {
+        "ok": True,
+        "models": model_registry.list_models(),
+        "active": model_registry.active(),
+        "note": "Heuristic default. No auto LIVE promote. confidence ≠ probability.",
+    }
+
+
+@app.post("/api/models/{model_id}/promote")
+def promote_model(model_id: str, body: ModelPromoteBody | None = None) -> dict:
+    """Human-gated model promotion — never auto-called by the trading loop."""
+    from ai.model_registry import model_registry
+
+    payload = body or ModelPromoteBody()
+    approved_by = str(payload.approved_by or "dashboard").strip() or "dashboard"
+    out = model_registry.promote(model_id, approved_by=approved_by)
+    if not out.get("ok"):
+        raise HTTPException(404, out.get("reason") or "model_not_found")
+    return out
 
 
 @app.post("/api/autonomy/mode")
