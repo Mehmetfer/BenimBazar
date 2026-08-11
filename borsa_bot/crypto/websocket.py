@@ -132,8 +132,8 @@ class ParibuPublicStream:
             on_error=on_error,
             on_close=on_close,
         )
-        # ping_interval aligns with ~20s server ping guidance
-        self._ws.run_forever(ping_interval=20, ping_timeout=25)
+        # docs: server ping ~20s; library requires ping_interval > ping_timeout
+        self._ws.run_forever(ping_interval=25, ping_timeout=20)
         done.wait(timeout=0.1)
 
     def _handle_message(self, message: str) -> None:
