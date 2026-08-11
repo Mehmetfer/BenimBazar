@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -7,12 +8,20 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+# Companion uses an independent simulated market. Isolate from PRODUCTION.
+_APP_ENV = (os.getenv("APP_ENV") or os.getenv("ENV") or "DEVELOPMENT").strip().upper()
+if _APP_ENV in {"PRODUCTION", "PROD"}:
+    raise RuntimeError(
+        "PRODUCTION_MARKET_DATA_VIOLATION: companion mock market cannot run in PRODUCTION. "
+        "Use borsa_bot with a verified live data provider instead."
+    )
+
 from .market import get_quote, list_quotes
 from .portfolio import Portfolio
 
 STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
 
-app = FastAPI(title="Borsa", version="0.3.0", description="Al-sat paper trading")
+app = FastAPI(title="Borsa", version="0.3.0", description="Al-sat paper trading (DEV/TEST only)")
 portfolio = Portfolio()
 
 
@@ -23,7 +32,14 @@ class OrderRequest(BaseModel):
 
 @app.get("/api/health")
 async def health() -> dict:
-    return {"status": "ok", "mode": "paper", "ai": False}
+    return {
+        "status": "ok",
+        "mode": "paper",
+        "ai": False,
+        "app_env": _APP_ENV,
+        "data": "SIMULATED",
+        "note": "Companion mock market — not for PRODUCTION",
+    }
 
 
 @app.get("/api/market")

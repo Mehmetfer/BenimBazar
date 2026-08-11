@@ -264,9 +264,41 @@ class HttpLiveProviderStub:
 
 
 def create_provider(name: str = "simulated") -> MarketDataProvider:
-    """Factory. Unknown/live without credentials → RequiredLiveProvider (no fake prices)."""
+    """Factory. Unknown/live without credentials → RequiredLiveProvider (no fake prices).
+
+    PRODUCTION: mock/simulated/demo/fake provider names are HARD BLOCKED
+    (PRODUCTION_MARKET_DATA_VIOLATION) — fail closed to RequiredLiveProvider.
+    """
+    from data.validation import (
+        AppEnvironment,
+        ProductionMarketDataViolation,
+        gate_provider_selection,
+        normalize_app_env,
+    )
+    from config.settings import settings as _settings
+
+    env = normalize_app_env(getattr(_settings, "app_env", "DEVELOPMENT"))
     key = (name or "simulated").strip().lower()
-    if key in {"simulated", "sim", "paper"}:
+
+    gate = gate_provider_selection(key, env)
+    if not gate.ok:
+        # Fail closed — never construct SimulatedProvider in PRODUCTION
+        import logging
+
+        logging.getLogger("borsa_bot.market_data").error(
+            "Production market data rejected: simulated source name=%s code=%s",
+            key,
+            gate.code.value,
+        )
+        return RequiredLiveProvider(
+            f"{gate.code.value}: Production rejects provider={key!r}. NO MARKET DATA."
+        )
+
+    if key in {"simulated", "sim", "paper", "mock", "demo", "fake", "synthetic", "dummy"}:
+        if env == AppEnvironment.PRODUCTION:
+            raise ProductionMarketDataViolation(
+                f"PRODUCTION_MARKET_DATA_VIOLATION: provider={key}"
+            )
         return SimulatedProvider()
     if key in {"required", "none", "off"}:
         return RequiredLiveProvider("DATA_PROVIDER=required — canlı kaynak bekleniyor")
@@ -278,6 +310,15 @@ def create_provider(name: str = "simulated") -> MarketDataProvider:
                 "DATA_PROVIDER=live ancak MARKET_DATA_URL / MARKET_DATA_TOKEN yok"
             )
         return HttpLiveProviderStub(url, token)
+    if env == AppEnvironment.PRODUCTION:
+        import logging
+
+        logging.getLogger("borsa_bot.market_data").error(
+            "Production market data rejected: unknown source name=%s", key
+        )
+        return RequiredLiveProvider(
+            f"PRODUCTION_MARKET_DATA_VIOLATION / UNKNOWN_SOURCE: provider={key!r}"
+        )
     raise ValueError(
         f"Unknown data provider: {name}. "
         "Use simulated | required | live (needs MARKET_DATA_URL + MARKET_DATA_TOKEN)."

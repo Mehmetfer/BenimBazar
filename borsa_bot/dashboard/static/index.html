@@ -166,7 +166,9 @@
       dot.className='dot sim';
     } else if(kind==='REQUIRED' || kind==='UNAVAILABLE' || !(m&&m.connected)){
       banner.className='banner bad';
-      banner.textContent='⚠ DATA SOURCE REQUIRED — Canlı veri alınamıyor. Uydurma fiyat gösterilmez.';
+      const gateMsg = (daily&&daily.market_data_gate&&daily.market_data_gate.ui_message) || 'MARKET DATA UNAVAILABLE';
+      const code = (daily&&daily.market_data_gate&&daily.market_data_gate.code) || '';
+      banner.textContent = `⚠ ${gateMsg}${code?(' — '+code):''}. Uydurma/eski fiyat gösterilmez.`;
       pill.textContent='BIST · VERİ YOK';
       dot.className='dot bad';
     } else if((m&&m.freshness)==='STALE'){

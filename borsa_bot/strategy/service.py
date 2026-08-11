@@ -68,6 +68,7 @@ from favorites import (
 from prediction import PredictionTrackingService
 from dashboard.daily import build_daily_home
 from data.integrity import FreshnessStatus, format_age_tr
+from data.validation import gate_market_data_for_scan, normalize_app_env
 from config.models import utc_now
 
 
@@ -103,6 +104,7 @@ class TradingService:
         self._last_favorite_scan_ts = 0.0
         self._favorite_deeper_cache: dict[str, dict] = {}
         self._prediction_cards: dict[str, dict] = {}
+        self._market_gate = None
 
     def multi_horizon(self) -> dict:
         self.multi.equity = self.ledger.equity()
@@ -169,6 +171,7 @@ class TradingService:
         return {
             "status": status,
             "mode": settings.mode,
+            "app_env": settings.normalized_app_env,
             "capital_mode": self.capital_mode.value,
             "data_fresh": data_fresh_for_safety,
             "kill_switch": settings.kill_switch,
@@ -177,8 +180,10 @@ class TradingService:
             "live_preflight_ok": live_ok,
             "live_preflight_failed": live_failed,
             "live_ready": live_ready,
+            "live_trading": False,
             "manual_approval": settings.require_manual_approval,
             "error": self.last_error,
+            "market_data_gate": (self._market_gate.to_dict() if self._market_gate else None),
             "objectives": SYSTEM_OBJECTIVES,
             "philosophy": (
                 "LESS DATA, MORE DECISION. "
@@ -209,9 +214,21 @@ class TradingService:
         self.provider.tick()
 
     def scan(self) -> list[SymbolDecision]:
+        # DATA NOT VERIFIED → NO SIGNAL (does not change decide_matrix math)
+        gate = gate_market_data_for_scan(
+            self.provider,
+            app_env=settings.app_env,
+            max_age_sec=settings.data_freshness_sec,
+        )
+        self._market_gate = gate
+        if not gate.signals_allowed:
+            self.last_error = f"{gate.code.value}: {gate.note}"
+            return []
+
         self.tick()
         # No fabricated scan when live source required / unavailable
         if not self.provider.has_market_data():
+            self.last_error = "NO_MARKET_DATA"
             return []
         # Evaluate matured forecasts against current marks (measurement only)
         try:
@@ -758,11 +775,22 @@ class TradingService:
         favorites_sorted = sorted(favorites, key=lambda x: sort_rank_key(x, FavoriteSort.PRIORITY), reverse=True)
         top_ops = [u for u in universe if u.get("scanner_class") in {"STRONG_OPPORTUNITY", "OPPORTUNITY"}][:8]
         meta = self.provider.source_meta(settings.data_freshness_sec)
-        signals_paused = meta.freshness in {
-            FreshnessStatus.STALE,
-            FreshnessStatus.DISCONNECTED,
-            FreshnessStatus.NO_DATA,
-        } or not self.provider.has_market_data()
+        gate = self._market_gate or gate_market_data_for_scan(
+            self.provider,
+            app_env=settings.app_env,
+            max_age_sec=settings.data_freshness_sec,
+        )
+        self._market_gate = gate
+        signals_paused = (
+            (not gate.signals_allowed)
+            or meta.freshness
+            in {
+                FreshnessStatus.STALE,
+                FreshnessStatus.DISCONNECTED,
+                FreshnessStatus.NO_DATA,
+            }
+            or not self.provider.has_market_data()
+        )
         daily = build_daily_home(
             universe,
             meta,
@@ -770,11 +798,22 @@ class TradingService:
             top_n=settings.daily_top_n,
             signals_paused=signals_paused,
         )
+        if not gate.signals_allowed:
+            daily["no_opportunity"] = True
+            daily["no_opportunity_message"] = (
+                "MARKET DATA UNAVAILABLE — "
+                f"{gate.code.value}: {gate.note}"
+            )
+            daily["market_data_gate"] = gate.to_dict()
+        else:
+            daily["market_data_gate"] = gate.to_dict()
 
         return {
             "health": health,
-            "principle": "LESS DATA, MORE DECISION · FAVORITE ≠ BUY · SİMÜLE ≠ CANLI",
+            "principle": "LESS DATA, MORE DECISION · FAVORITE ≠ BUY · SİMÜLE ≠ CANLI · PROD MOCK HARD BLOCK",
             "daily": daily,
+            "app_env": settings.normalized_app_env,
+            "market_data_gate": gate.to_dict(),
             "favorites": favorites_sorted,
             "favorites_summary": [
                 {
@@ -829,6 +868,7 @@ class TradingService:
             "favorite_performance": self.favorites.performance(),
             "data_source": meta.to_dict(),
             "live_ready": False,
+            "live_trading": False,
         }
 
     def _serialize(self, d: SymbolDecision) -> dict:
@@ -1003,12 +1043,27 @@ class TradingService:
 
     def execute_signal(self, symbol: str, approved: bool = False) -> dict:
         if settings.is_live:
-            return {"ok": False, "message": "LIVE mode blocked — paper trading zorunlu"}
+            return {"ok": False, "message": "LIVE mode blocked — paper trading zorunlu", "live_trading": False}
+        gate = gate_market_data_for_scan(
+            self.provider,
+            app_env=settings.app_env,
+            max_age_sec=settings.data_freshness_sec,
+        )
+        self._market_gate = gate
+        if not gate.signals_allowed:
+            return {
+                "ok": False,
+                "message": f"{gate.code.value} — trading blocked",
+                "auto_trading": False,
+                "live_trading": False,
+                "market_data_gate": gate.to_dict(),
+            }
         if not self.provider.has_market_data():
             return {
                 "ok": False,
                 "message": "DATA SOURCE REQUIRED — canlı/paper veri yok, emir yok",
                 "auto_trading": False,
+                "live_trading": False,
             }
         meta = self.provider.source_meta(settings.data_freshness_sec)
         if meta.freshness.value in {"STALE", "DISCONNECTED", "NO_DATA"}:
@@ -1016,6 +1071,7 @@ class TradingService:
                 "ok": False,
                 "message": "STALE/DISCONNECTED data — auto trading disabled",
                 "auto_trading": False,
+                "live_trading": False,
             }
         if settings.require_manual_approval and not approved:
             decisions = {d.symbol: d for d in self.scan()}

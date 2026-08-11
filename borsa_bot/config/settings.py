@@ -27,6 +27,8 @@ def _b(name: str, default: bool = False) -> bool:
 class Settings:
     """Capital protection first, then positive expectancy / risk-adjusted profit."""
 
+    # APP_ENV: PRODUCTION | DEVELOPMENT | TEST (aliases: PROD/DEV/CI)
+    app_env: str = os.getenv("APP_ENV", os.getenv("ENV", "DEVELOPMENT")).upper()
     mode: str = os.getenv("MODE", "PAPER").upper()
     starting_cash: float = _f("STARTING_CASH", 100_000)
     # Capital sleeves (must sum ~1.0; cash is reserve)
@@ -104,11 +106,24 @@ class Settings:
     def is_live(self) -> bool:
         return self.mode == "LIVE"
 
+    @property
+    def is_production(self) -> bool:
+        from data.validation import normalize_app_env, AppEnvironment
+
+        return normalize_app_env(self.app_env) == AppEnvironment.PRODUCTION
+
+    @property
+    def normalized_app_env(self) -> str:
+        from data.validation import normalize_app_env
+
+        return normalize_app_env(self.app_env).value
+
 
 settings = Settings()
 
 SYSTEM_OBJECTIVES = (
     "SCAN AGGRESSIVELY · ANALYZE DEEPLY · FILTER AGGRESSIVELY · TRADE SELECTIVELY · "
     "MANAGE RISK STRICTLY · LET WINNERS RUN · CUT LOSSES QUICKLY. "
-    "Capital first, positive expectancy second. No profit guarantee. LIVE default OFF."
+    "Capital first, positive expectancy second. No profit guarantee. LIVE default OFF. "
+    "PRODUCTION: mock/simulated market data HARD BLOCKED."
 )
