@@ -182,6 +182,17 @@
   <div class="panel" id="panel-set">
     <h2>⚙ Sistem</h2>
     <div class="card" id="sysHealth" style="cursor:default"></div>
+    <div class="card" style="cursor:default" id="autonomyCard">
+      <div class="why"><b>AUTONOMY</b> — AUTO = otomatik paper (canlı broker kilitli)</div>
+      <div class="filters" id="autonomyModes" style="margin-top:8px">
+        <button class="filter" data-amode="PAPER" type="button">PAPER</button>
+        <button class="filter" data-amode="SEMI_AUTO" type="button">SEMI</button>
+        <button class="filter" data-amode="AUTO" type="button">AUTO</button>
+        <button class="filter" data-amode="PAUSED" type="button">PAUSE</button>
+      </div>
+      <div id="autonomyMeta" class="meta" style="margin-top:8px">—</div>
+      <button class="more" id="autonomyCycleBtn" type="button" style="margin-top:8px">BIST cycle çalıştır</button>
+    </div>
     <div class="card" style="cursor:default">
       <div class="why"><b>AI PERFORMANCE</b> — ana sayfada gösterilmez.</div>
       <div id="aiPerf" class="why" style="margin-top:8px">Yükleniyor…</div>
@@ -839,14 +850,31 @@
         <div class="meta">${(dash.health||{}).philosophy||''}</div>`;
       const rep = await (await fetch('/api/predictions/report')).json();
       document.getElementById('aiPerf').innerHTML = `Grade: ${rep.grade||'—'} · Geçmiş doğruluk: %${rep.historical_accuracy_pct??'—'} · Brier: ${rep.brier_score??'—'} · n=${rep.sample_size||0}<br>${rep.principle||''}`;
+      await loadAutonomy();
       bindCards();
     } catch(e) {}
+  }
+
+  async function loadAutonomy(){
+    try{
+      const st = await (await fetch('/api/autonomy/status')).json();
+      const mode = st.user_trading_mode||'PAPER';
+      document.querySelectorAll('#autonomyModes .filter').forEach(b=>{
+        b.classList.toggle('on', b.dataset.amode===mode);
+      });
+      const last = st.last_cycle||{};
+      document.getElementById('autonomyMeta').textContent =
+        `Mode ${mode} · LIVE broker ${st.live_broker||'DISABLED'} · last ${last.status||'—'} · paper orders ${last.paper_orders??0} · ${st.note||''}`;
+    }catch(e){
+      document.getElementById('autonomyMeta').textContent = 'Autonomy API yok';
+    }
   }
 
   document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>setNav(b.dataset.nav));
   document.querySelectorAll('.market-btn').forEach(b=>b.onclick=()=>setMarket(b.dataset.market));
   document.querySelectorAll('.filter').forEach(b=>b.onclick=()=>{
     if(b.closest('#cFilters')) return;
+    if(b.closest('#autonomyModes')) return;
     document.querySelectorAll('#filters .filter').forEach(x=>x.classList.remove('on'));
     b.classList.add('on'); filter=b.dataset.f; renderHome();
   });
@@ -854,6 +882,17 @@
     document.querySelectorAll('#cFilters .filter').forEach(x=>x.classList.remove('on'));
     b.classList.add('on'); cFilter=b.dataset.cf; renderCryptoHome();
   });
+  document.querySelectorAll('#autonomyModes .filter').forEach(b=>b.onclick=async()=>{
+    await fetch('/api/autonomy/mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:b.dataset.amode})});
+    await loadAutonomy();
+  });
+  document.getElementById('autonomyCycleBtn').onclick=async()=>{
+    document.getElementById('autonomyMeta').textContent = 'Cycle çalışıyor…';
+    const r = await (await fetch('/api/autonomy/cycle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({market:'BIST',force:true})})).json();
+    const f = r.filter_stats||{};
+    document.getElementById('autonomyMeta').textContent =
+      `${r.status} · UNIVERSE=${f.UNIVERSE??'—'} FAST=${f.FAST_FILTER??'—'} DEEP=${f.DEEP_ANALYSIS??r.deep_count??'—'} SIGNALS=${JSON.stringify(r.signals||{})} · LIVE=${r.live_broker||'DISABLED'}`;
+  };
   document.getElementById('moreBtn').onclick=()=>{showAll=true; renderHome();};
   document.getElementById('refresh').onclick=load;
   document.getElementById('cryptoRefresh').onclick=loadCrypto;

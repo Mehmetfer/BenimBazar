@@ -226,7 +226,7 @@ class TradingService:
     def tick(self) -> None:
         self.provider.tick()
 
-    def scan(self) -> list[SymbolDecision]:
+    def scan(self, symbols: list[str] | None = None) -> list[SymbolDecision]:
         # DATA NOT VERIFIED → NO SIGNAL (does not change decide_matrix math)
         gate = gate_market_data_for_scan(
             self.provider,
@@ -285,6 +285,9 @@ class TradingService:
         # Priority queue: FAVORITES → rest of market (does not skip non-favorites)
         fav_set = self.favorites.symbols()
         all_syms = [s for s in self.provider.list_symbols() if s != "XU100"]
+        if symbols:
+            want = {s.upper() for s in symbols}
+            all_syms = [s for s in all_syms if s in want]
         ordered = [s for s in all_syms if s in fav_set] + [s for s in all_syms if s not in fav_set]
 
         for symbol in ordered:

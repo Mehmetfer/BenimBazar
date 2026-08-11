@@ -14,6 +14,9 @@ from analytics.reports import daily_market_report, top_opportunities
 from walk_forward.runner import run_walk_forward
 from monte_carlo.simulator import run_monte_carlo
 from crypto.service import CryptoFoundationService
+from autonomous.agent import get_autonomous_agent
+from autonomous.explain import explain_decision
+from autonomous.modes import parse_user_mode
 
 STATIC = Path(__file__).resolve().parent / "static"
 STATIC.mkdir(parents=True, exist_ok=True)
@@ -22,6 +25,7 @@ app = FastAPI(title="Borsa Bot", version="0.3.0")
 service = TradingService()
 crypto_service = CryptoFoundationService()
 crypto_service.bind_shared(favorites=service.favorites, alerts=service.alerts)
+autonomy = get_autonomous_agent(trading=service)
 
 
 class ExecBody(BaseModel):
@@ -40,6 +44,15 @@ class NotificationSettingsBody(BaseModel):
     quiet_hours_end: str | None = None
     cooldown_seconds: int | None = None
     prefs: dict | None = None
+
+
+class AutonomyModeBody(BaseModel):
+    mode: str
+
+
+class AutonomyCycleBody(BaseModel):
+    market: str = "BIST"
+    force: bool = False
 
 
 @app.get("/api/health")
@@ -638,6 +651,72 @@ def predictions_evaluate() -> dict:
 
     n = service.predictions.evaluate_due(_px)
     return {"ok": True, "evaluated": n}
+
+
+@app.get("/api/autonomy/status")
+def autonomy_status() -> dict:
+    """Phase 6 autonomy status — paper-only; LIVE broker locked."""
+    return autonomy.status()
+
+
+@app.post("/api/autonomy/mode")
+def autonomy_set_mode(body: AutonomyModeBody) -> dict:
+    raw = (body.mode or "").strip().upper()
+    if raw in {"LIVE", "LIVE_BROKER", "REAL", "REAL_MONEY"}:
+        raise HTTPException(400, "LIVE broker is locked (Phase 7). Use PAPER | SEMI_AUTO | AUTO | PAUSED.")
+    parse_user_mode(body.mode)  # normalize / validate aliases
+    return autonomy.set_user_mode(body.mode)
+
+
+@app.post("/api/autonomy/cycle")
+def autonomy_cycle(body: AutonomyCycleBody | None = None) -> dict:
+    """Run one autonomous cycle. AUTO executes paper only; never live broker."""
+    if settings.is_live:
+        raise HTTPException(400, "LIVE mode blocked — autonomy is paper-only")
+    payload = body or AutonomyCycleBody()
+    market = (payload.market or "BIST").upper()
+    if market == "CRYPTO":
+        return autonomy.run_crypto_cycle(force=bool(payload.force))
+    if market != "BIST":
+        raise HTTPException(400, "market must be BIST or CRYPTO")
+    return autonomy.run_bist_cycle(force=bool(payload.force))
+
+
+@app.get("/api/autonomy/audit")
+def autonomy_audit(limit: int = 20) -> dict:
+    cycles = autonomy.audit.recent_cycles(limit=limit)
+    return {
+        "cycles": cycles,
+        "live_broker": "DISABLED",
+        "note": "Audit answers why a symbol was NO_TRADE.",
+    }
+
+
+@app.get("/api/autonomy/audit/{cycle_id}")
+def autonomy_audit_cycle(cycle_id: str) -> dict:
+    return {
+        "cycle_id": cycle_id,
+        "events": autonomy.audit.cycle_events(cycle_id),
+        "live_broker": "DISABLED",
+    }
+
+
+@app.get("/api/autonomy/explain/{symbol}")
+def autonomy_explain(symbol: str) -> dict:
+    """Explainable card from last scan decision — computed features only."""
+    symbol = symbol.upper()
+    decisions = {d.symbol: d for d in service.scan(symbols=[symbol])}
+    d = decisions.get(symbol)
+    if not d:
+        raise HTTPException(404, f"No decision for {symbol}")
+    ser = service._serialize(d)
+    return {
+        "ok": True,
+        "explain": explain_decision(ser),
+        "decision": ser,
+        "confidence_is_probability": False,
+        "live_broker": "DISABLED",
+    }
 
 
 @app.get("/")
