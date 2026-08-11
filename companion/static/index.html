@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Koca Kafa</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+  <main class="shell">
+    <header class="brand">
+      <p class="brand__mark">Koca Kafa</p>
+      <p class="brand__line">Yerel sohbet arkadaşı</p>
+      <p class="status" id="status">Bağlantı kontrol ediliyor…</p>
+    </header>
+
+    <section class="stage" aria-label="Sohbet">
+      <div class="transcript" id="transcript" role="log" aria-live="polite"></div>
+      <form class="composer" id="composer">
+        <label class="sr-only" for="message">Mesaj</label>
+        <textarea id="message" name="message" rows="1" placeholder="Bir şey söyle…" required></textarea>
+        <button type="submit" id="send">Gönder</button>
+      </form>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
