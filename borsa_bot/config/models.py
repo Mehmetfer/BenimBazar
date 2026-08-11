@@ -13,9 +13,11 @@ def utc_now() -> datetime:
 class MarketRegime(str, Enum):
     STRONG_BULL = "STRONG_BULL"
     BULL = "BULL"
-    SIDEWAYS = "SIDEWAYS"
+    NEUTRAL = "NEUTRAL"
     BEAR = "BEAR"
     STRONG_BEAR = "STRONG_BEAR"
+    # backward-compatible alias used in older tests/docs
+    SIDEWAYS = "NEUTRAL"
 
 
 class SignalAction(str, Enum):
@@ -23,6 +25,12 @@ class SignalAction(str, Enum):
     SAT = "SAT"
     BEKLE = "BEKLE"
     ALMA = "ALMA"
+    BUY = "BUY"
+    STRONG_BUY = "STRONG_BUY"
+    WATCH = "WATCH"
+    HOLD = "HOLD"
+    AVOID = "AVOID"
+    SELL = "SELL"
 
 
 class RiskLevel(str, Enum):
@@ -30,6 +38,14 @@ class RiskLevel(str, Enum):
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
     BLOCKED = "BLOCKED"
+
+
+class NewsSentiment(str, Enum):
+    POSITIVE = "POSITIVE"
+    NEGATIVE = "NEGATIVE"
+    NEUTRAL = "NEUTRAL"
+    HIGH_RISK = "HIGH_RISK"
+    UNCERTAIN = "UNCERTAIN"
 
 
 @dataclass
@@ -70,7 +86,10 @@ class IndicatorSet:
     ema9: float
     ema21: float
     ema50: float
+    ema100: float
     ema200: float
+    sma20: float
+    sma50: float
     rsi14: float
     macd: float
     macd_signal: float
@@ -82,9 +101,45 @@ class IndicatorSet:
     adx14: float
     stoch_k: float
     stoch_d: float
+    stoch_rsi_k: float
+    stoch_rsi_d: float
     vwap: float
     vol_sma20: float
     momentum10: float
+    roc12: float
+    obv: float
+    mfi14: float
+    cmf20: float
+    support: float
+    resistance: float
+    pivot: float
+    structure: str  # HH_HL / LH_LL / RANGE
+
+
+@dataclass
+class ScoreBundle:
+    technical: float
+    fundamental: float
+    market: float
+    sector: float
+    momentum: float
+    volume: float
+    news: float
+    liquidity: float
+    risk: float
+    ai_confidence: float
+    final: float
+
+
+@dataclass
+class TradePlan:
+    entry: float
+    stop: float
+    target1: float
+    target2: float
+    target3: float
+    risk_reward: float
+    quantity: float = 0.0
 
 
 @dataclass
@@ -103,8 +158,14 @@ class SymbolDecision:
     stop_price: float | None
     target_price: float | None
     explanation: str
+    scores: ScoreBundle | None = None
+    trade_plan: TradePlan | None = None
+    reasons: list[str] = field(default_factory=list)
+    risks: list[str] = field(default_factory=list)
     indicators: dict[str, float] = field(default_factory=dict)
     strategy_votes: dict[str, str] = field(default_factory=dict)
+    mtf: dict[str, str] = field(default_factory=dict)
+    conflict: bool = False
 
 
 @dataclass
@@ -128,3 +189,39 @@ class OrderResult:
     fill_price: float | None = None
     quantity: float | None = None
     details: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class FundamentalSnapshot:
+    symbol: str
+    pe: float | None = None
+    pb: float | None = None
+    ev_ebitda: float | None = None
+    ev_sales: float | None = None
+    net_debt: float | None = None
+    debt_equity: float | None = None
+    current_ratio: float | None = None
+    roe: float | None = None
+    roa: float | None = None
+    net_margin: float | None = None
+    op_margin: float | None = None
+    revenue_growth: float | None = None
+    earnings_growth: float | None = None
+    equity_growth: float | None = None
+    fcf: float | None = None
+    ocf: float | None = None
+    dividend_yield: float | None = None
+    available: bool = False
+
+
+@dataclass
+class NewsItem:
+    symbol: str
+    headline: str
+    sentiment: NewsSentiment
+    importance: float
+    confidence: float
+    price_impact: float
+    sector_impact: float
+    validity_hours: float
+    available: bool = False

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -14,12 +14,13 @@ from backtest.runner import run_simple_backtest
 STATIC = Path(__file__).resolve().parent / "static"
 STATIC.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="Borsa Bot", version="0.1.0")
+app = FastAPI(title="Borsa Bot", version="0.2.0")
 service = TradingService()
 
 
 class ExecBody(BaseModel):
     symbol: str
+    approved: bool = False
 
 
 @app.get("/api/health")
@@ -36,7 +37,7 @@ def dashboard() -> dict:
 def execute(body: ExecBody) -> dict:
     if settings.is_live:
         raise HTTPException(400, "LIVE disabled")
-    return service.execute_signal(body.symbol.upper())
+    return service.execute_signal(body.symbol.upper(), approved=body.approved)
 
 
 @app.post("/api/reset")
@@ -56,6 +57,5 @@ def index() -> FileResponse:
     return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
 
 
-# Optional mount if extra assets added later
 if any(STATIC.iterdir()):
     app.mount("/static", StaticFiles(directory=STATIC), name="static")

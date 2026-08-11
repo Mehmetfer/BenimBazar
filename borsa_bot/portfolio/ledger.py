@@ -165,6 +165,36 @@ class PortfolioLedger:
                 break
         return n
 
+    def peak_equity(self) -> float:
+        with self._connect() as conn:
+            start = float(conn.execute("SELECT starting_cash FROM account WHERE id=1").fetchone()["starting_cash"])
+        # Approximate peak as max(start, current) — extend with history later
+        return max(start, self.equity())
+
+    def drawdown_pct(self) -> float:
+        peak = self.peak_equity()
+        if peak <= 0:
+            return 0.0
+        return max(0.0, (peak - self.equity()) / peak * 100)
+
+    def weekly_loss_pct(self) -> float:
+        """Approx weekly PnL % from last 7d sells + MTM vs starting; MVP uses total_pnl proxy scaled."""
+        # Without full equity history, use daily as conservative proxy if total drawdown small
+        return min(0.0, self.daily_loss_pct() * 2.5)
+
+    def sector_risk_pct(self, sector: str) -> float:
+        eq = self.equity()
+        if eq <= 0:
+            return 0.0
+        risk = 0.0
+        for p in self.positions():
+            if p.sector != sector:
+                continue
+            mark = self.mark_prices.get(p.symbol, p.avg_cost)
+            stop = p.stop_price or (p.avg_cost * 0.97)
+            risk += max(0.0, (mark - stop) * p.quantity)
+        return risk / eq * 100
+
     def apply_buy(
         self,
         symbol: str,

@@ -1,8 +1,17 @@
 # Borsa Bot
 
-Sermaye koruma öncelikli BIST AL-SAT-BEKLE paper trading MVP.
+Sermaye koruma öncelikli BIST **AL / SAT / BEKLE** paper trading sistemi.
 
-Öncelik: kâr tahmini değil, sermaye korunması ve kontrollü risk.
+## Felsefe
+
+1. Önce sermayeyi koru  
+2. Emin değilsen **BEKLE**  
+3. Risk Engine sinyal motorundan üstündür  
+4. AI karar verici değil, analiz yardımcısıdır  
+5. Skor tek başına emir açtırmaz  
+6. LIVE varsayılan kapalı; manuel onay açık  
+
+Zarar etmeyen / kâr garantili sistem iddiası yoktur.
 
 ## Çalıştır
 
@@ -14,38 +23,35 @@ export PYTHONPATH=/workspace/borsa_bot
 uvicorn dashboard.app:app --app-dir borsa_bot --host 0.0.0.0 --port 8090
 ```
 
-Cep / masaüstü: http://127.0.0.1:8090
-
 ## Test
 
 ```bash
 PYTHONPATH=/workspace/borsa_bot pytest borsa_bot/tests -q
 ```
 
-## Mimari
+## Modüller
 
-| Modül | Görev |
-|-------|--------|
-| `data/` | Değiştirilebilir veri sağlayıcı (şimdilik simulated) |
-| `indicators/` | EMA/RSI/MACD/BB/ATR/ADX/Stoch/VWAP/hacim/momentum |
-| `strategy/` | Rejim + BUY/SELL skor + ensemble (Trend/EMA/Momentum/MR/Breakout) |
-| `ai/` | Sinyal kalitesi / confidence — nihai emir vermez |
-| `risk/` | ATR stop/TP, pozisyon/sektör/günlük zarar, LIVE preflight |
-| `execution/` | Paper broker, duplicate koruması, kill switch / safety gate |
-| `backtest/` | Net return, CAGR, Sharpe, Sortino, MDD, win rate, PF, B&H, look-ahead guard |
-| `portfolio/` | SQLite paper ledger + decision log |
-| `dashboard/` | Mobil API UI: portföy, AL/SAT/BEKLE, decision explanation |
+| Klasör | Görev |
+|--------|--------|
+| `data/` | Modüler veri sağlayıcı (simulated MVP) |
+| `indicators/` | EMA/SMA/RSI/MACD/ADX/ATR/BB/Stoch/StochRSI/VWAP/OBV/MFI/CMF/ROC… |
+| `technical/` | Multi-timeframe + sektör relative strength |
+| `fundamental/` | Kalite/büyüme/değerleme/risk skorları (stub veri) |
+| `news/` | KAP/haber sınıflandırma stub (yoksa uydurmaz) |
+| `market_regime/` | STRONG_BULL…STRONG_BEAR + breadth |
+| `signals/` | Çok skorlu motor + çatışma filtresi + trade plan |
+| `ai/` | Confidence / anomali / vol rejimi (emir vermez) |
+| `risk/` | Risk-based sizing, R:R≥1.5, T1–T3, pause, kill switch |
+| `execution/` | Paper broker + safety gate + duplicate koruma |
+| `backtest/` | Komisyon/slippage + metrikler + look-ahead guard |
+| `paper_trading/` | Paper facade |
+| `dashboard/` | Mobil UI: skorlar, NEDEN/RİSKLER, manuel onaylı paper emir |
 
-## Güvenlik
+## Geliştirme aşamaları
 
-- `MODE=PAPER` varsayılan
-- `KILL_SWITCH=true` tüm girişleri keser
-- LIVE broker emri bilerek kapalı; preflight geçmeden LIVE emir yok
-- API anahtarları `.env` içinde (koda gömülmez)
+PHASE 1–9: Data → Indicators → Regime → Signal → Risk → Backtest → AI → Dashboard → Paper  
+PHASE 10: Broker (henüz yok, bilinçli olarak kapalı)
 
-## Sonraki aşamalar
+## Sonraki
 
-1. Gerçek BIST/KAP veri adaptörleri
-2. Walk-forward / OOS backtest genişletmesi
-3. Paper trading doğrulama süresi
-4. En son: broker entegrasyonu
+Gerçek BIST/KAP adaptörleri → walk-forward OOS → uzun paper → manuel onaylı küçük canlı.

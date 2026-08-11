@@ -108,8 +108,7 @@ def atr(bars: Sequence[Bar], period: int = 14) -> list[float | None]:
             abs(bars[i].low - bars[i - 1].close),
         )
         trs.append(tr)
-    # align trs with bars[1:]
-    atr_vals = [None]
+    atr_vals: list[float | None] = [None]
     seed = sum(trs[:period]) / period
     atr_vals.extend([None] * (period - 1))
     atr_vals.append(seed)
@@ -175,6 +174,24 @@ def stochastic(bars: Sequence[Bar], period_k: int = 14, period_d: int = 3):
     return k_vals, d_vals
 
 
+def stochastic_rsi(values: Sequence[float], period: int = 14, smooth_k: int = 3, smooth_d: int = 3):
+    r = rsi(values, period)
+    stoch: list[float | None] = [None] * len(values)
+    for i in range(len(values)):
+        window = [x for x in r[max(0, i - period + 1) : i + 1] if x is not None]
+        if len(window) < period or r[i] is None:
+            continue
+        lo, hi = min(window), max(window)
+        stoch[i] = 50.0 if hi == lo else (r[i] - lo) / (hi - lo) * 100
+    k = sma([x if x is not None else 0.0 for x in stoch], smooth_k)
+    # mask where stoch was None
+    k_out: list[float | None] = [None if stoch[i] is None else k[i] for i in range(len(values))]
+    d_src = [x if x is not None else 0.0 for x in k_out]
+    d_raw = sma(d_src, smooth_d)
+    d_out: list[float | None] = [None if k_out[i] is None else d_raw[i] for i in range(len(values))]
+    return k_out, d_out
+
+
 def vwap(bars: Sequence[Bar]) -> list[float | None]:
     out: list[float | None] = []
     pv = 0.0
@@ -187,6 +204,80 @@ def vwap(bars: Sequence[Bar]) -> list[float | None]:
     return out
 
 
+def obv(bars: Sequence[Bar]) -> list[float]:
+    out = [0.0]
+    for i in range(1, len(bars)):
+        if bars[i].close > bars[i - 1].close:
+            out.append(out[-1] + bars[i].volume)
+        elif bars[i].close < bars[i - 1].close:
+            out.append(out[-1] - bars[i].volume)
+        else:
+            out.append(out[-1])
+    return out
+
+
+def mfi(bars: Sequence[Bar], period: int = 14) -> list[float | None]:
+    out: list[float | None] = [None] * len(bars)
+    tp = [(b.high + b.low + b.close) / 3 for b in bars]
+    raw = [tp[i] * bars[i].volume for i in range(len(bars))]
+    for i in range(period, len(bars)):
+        pos = neg = 0.0
+        for j in range(i - period + 1, i + 1):
+            if tp[j] > tp[j - 1]:
+                pos += raw[j]
+            elif tp[j] < tp[j - 1]:
+                neg += raw[j]
+        out[i] = 100 if neg == 0 else 100 - (100 / (1 + pos / neg))
+    return out
+
+
+def cmf(bars: Sequence[Bar], period: int = 20) -> list[float | None]:
+    out: list[float | None] = [None] * len(bars)
+    for i in range(period - 1, len(bars)):
+        mfv = 0.0
+        vol = 0.0
+        for b in bars[i - period + 1 : i + 1]:
+            denom = b.high - b.low
+            mfm = 0.0 if denom == 0 else ((b.close - b.low) - (b.high - b.close)) / denom
+            mfv += mfm * b.volume
+            vol += b.volume
+        out[i] = mfv / vol if vol else 0.0
+    return out
+
+
+def roc(values: Sequence[float], period: int = 12) -> list[float | None]:
+    out: list[float | None] = [None] * len(values)
+    for i in range(period, len(values)):
+        prev = values[i - period]
+        out[i] = ((values[i] - prev) / prev * 100) if prev else 0.0
+    return out
+
+
+def support_resistance(bars: Sequence[Bar], lookback: int = 40) -> tuple[float, float, float]:
+    window = bars[-lookback:] if len(bars) >= lookback else list(bars)
+    support = min(b.low for b in window)
+    resistance = max(b.high for b in window)
+    last = bars[-1]
+    pivot = (last.high + last.low + last.close) / 3
+    return support, resistance, pivot
+
+
+def structure_label(bars: Sequence[Bar], lookback: int = 30) -> str:
+    if len(bars) < lookback:
+        return "RANGE"
+    w = bars[-lookback:]
+    mid = lookback // 2
+    first_high = max(b.high for b in w[:mid])
+    second_high = max(b.high for b in w[mid:])
+    first_low = min(b.low for b in w[:mid])
+    second_low = min(b.low for b in w[mid:])
+    if second_high > first_high and second_low > first_low:
+        return "HH_HL"
+    if second_high < first_high and second_low < first_low:
+        return "LH_LL"
+    return "RANGE"
+
+
 def compute_indicators(bars: Sequence[Bar]) -> IndicatorSet | None:
     if len(bars) < 210:
         return None
@@ -195,28 +286,46 @@ def compute_indicators(bars: Sequence[Bar]) -> IndicatorSet | None:
     e9 = ema(closes, 9)
     e21 = ema(closes, 21)
     e50 = ema(closes, 50)
+    e100 = ema(closes, 100)
     e200 = ema(closes, 200)
+    s20 = sma(closes, 20)
+    s50 = sma(closes, 50)
     r = rsi(closes, 14)
     macd_line, macd_sig, macd_hist = macd(closes)
     bb_u, bb_m, bb_l = bollinger(closes)
     a = atr(bars, 14)
     adx_v = adx(bars, 14)
     k, d = stochastic(bars)
+    srk, srd = stochastic_rsi(closes)
     vw = vwap(bars)
     vol_sma = sma(volumes, 20)
     mom = [None] * len(closes)
     for i in range(10, len(closes)):
         mom[i] = (closes[i] / closes[i - 10] - 1) * 100
+    roc12 = roc(closes, 12)
+    obv_v = obv(bars)
+    mfi_v = mfi(bars, 14)
+    cmf_v = cmf(bars, 20)
+    support, resistance, pivot = support_resistance(bars)
+    structure = structure_label(bars)
 
     i = len(bars) - 1
-    required = [e9[i], e21[i], e50[i], e200[i], r[i], macd_line[i], macd_sig[i], macd_hist[i], bb_u[i], bb_m[i], bb_l[i], a[i], adx_v[i], k[i], d[i], vw[i], vol_sma[i], mom[i]]
+    required = [
+        e9[i], e21[i], e50[i], e100[i], e200[i], s20[i], s50[i], r[i],
+        macd_line[i], macd_sig[i], macd_hist[i], bb_u[i], bb_m[i], bb_l[i],
+        a[i], adx_v[i], k[i], d[i], srk[i], srd[i], vw[i], vol_sma[i],
+        mom[i], roc12[i], mfi_v[i], cmf_v[i],
+    ]
     if any(v is None for v in required):
         return None
     return IndicatorSet(
         ema9=e9[i],
         ema21=e21[i],
         ema50=e50[i],
+        ema100=e100[i],
         ema200=e200[i],
+        sma20=s20[i],
+        sma50=s50[i],
         rsi14=r[i],
         macd=macd_line[i],
         macd_signal=macd_sig[i],
@@ -228,7 +337,17 @@ def compute_indicators(bars: Sequence[Bar]) -> IndicatorSet | None:
         adx14=adx_v[i],
         stoch_k=k[i],
         stoch_d=d[i],
+        stoch_rsi_k=srk[i],
+        stoch_rsi_d=srd[i],
         vwap=vw[i],
         vol_sma20=vol_sma[i],
         momentum10=mom[i],
+        roc12=roc12[i],
+        obv=obv_v[i],
+        mfi14=mfi_v[i],
+        cmf20=cmf_v[i],
+        support=support,
+        resistance=resistance,
+        pivot=pivot,
+        structure=structure,
     )
