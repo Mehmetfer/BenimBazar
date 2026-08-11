@@ -199,6 +199,26 @@ def test_notification(kind: str = "BUY_SIGNAL", symbol: str = "THYAO") -> dict:
     return {"ok": True, "event_id": ev.event_id, "type": et.value}
 
 
+@app.get("/api/trade-plan/{symbol}")
+def trade_plan(symbol: str) -> dict:
+    """Full AI trade plan for one symbol. Plan ≠ order. LIVE default OFF."""
+    decisions = {d.symbol: d for d in service.scan()}
+    d = decisions.get(symbol.upper())
+    if not d:
+        raise HTTPException(404, "symbol not found")
+    ser = service._serialize(d)
+    return {
+        "symbol": symbol.upper(),
+        "decision": ser.get("decision"),
+        "final_decision": ser.get("final_decision"),
+        "signal": ser.get("signal"),
+        "ai_trade_plan": ser.get("ai_trade_plan"),
+        "trade_plan_legacy": ser.get("trade_plan"),
+        "note": "Trade plan is not an order. Requires Risk Engine + approval. No profit guarantee.",
+        "live": False,
+    }
+
+
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})

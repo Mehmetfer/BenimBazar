@@ -227,6 +227,28 @@
             <div>T1 <b>${tp.target1??u.target_price??'—'}</b></div><div>T2 <b>${tp.target2??'—'}</b></div>
             <div>T3 <b>${tp.target3??'—'}</b></div><div>R/R <b>${tp.risk_reward??'—'}</b></div>
           </div>
+          ${(() => {
+            const ap = u.ai_trade_plan;
+            if(!ap) return '';
+            const z = ap.entry_zone || {};
+            const pa = ap.plan_a || {};
+            const pb = ap.plan_b || {};
+            return `<div class="why" style="margin-top:8px;padding:8px;border:1px solid var(--line);border-radius:10px">
+              <b>FULL TRADE PLAN</b> · ${ap.final_decision||''} · ${ap.state||''} · ${ap.preferred_plan||''}
+              <div class="scores">
+                <div>ZONE <b>${z.low??'—'}–${z.high??'—'}</b></div>
+                <div>HORIZON <b>${ap.time_horizon||'—'}</b></div>
+                <div>SIZE <b>${ap.position_size??'—'}</b></div>
+                <div>MAX RİSK <b>${ap.max_risk_tl??'—'} TL</b></div>
+                <div>P(win) <b>${ap.win_probability!=null?Math.round(ap.win_probability*100)+'%':'—'}</b></div>
+                <div>VALID <b>${(ap.valid_until||'').slice(0,16)||'—'}</b></div>
+              </div>
+              <div class="why">Stop gerekçe: ${ap.stop_reason||'—'}</div>
+              <div class="why">A PULLBACK EV=${pa.expected_value??'—'} · B BREAKOUT EV=${pb.expected_value??'—'} trigger=${pb.trigger??'—'}</div>
+              ${ap.chase_warning?`<div class="why" style="color:var(--down)">${ap.chase_warning}</div>`:''}
+              <div class="why">${ap.disclaimer||''}</div>
+            </div>`;
+          })()}
           <div class="why"><b>NEDEN:</b> ${(u.reasons||[]).slice(0,5).join(' · ') || u.explanation}</div>
           <div class="why"><b>RİSKLER:</b> ${(u.risks||[]).join(' · ') || '—'}</div>
           ${(u.signal==='AL'||u.signal==='SAT') ? `<button class="btn" data-sym="${u.symbol}">Paper ${u.signal} (Onaylı)</button>`:''}

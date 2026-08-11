@@ -79,7 +79,8 @@ class SmsChannel:
         self.to = os.getenv("SMS_TO", "").strip()
 
     def send(self, event: TradingAlertEvent) -> ChannelResult:
-        body = event.message[:400]
+        # Prefer short ASCII SMS body for trade plans
+        body = (event.payload.get("sms_ascii") or event.payload.get("sms_body") or event.message)[:160]
         if self.provider.name == "null":
             return ChannelResult(
                 False,

@@ -46,6 +46,7 @@ from signals.engine import (
     technical_score,
     volume_score,
 )
+from trade_plan.engine import ai_plan_to_dict, build_ai_trade_plan, legacy_from_ai
 from strategy.modules import ensemble_votes, regime_weights, weighted_ensemble_bias
 from strategy.ranking import example_ranking_report
 from technical.mtf import analyze_mtf, mtf_conflict_risk
@@ -230,6 +231,7 @@ class TradingService:
             mom = round(0.5 * momentum_score(ind) + 0.5 * factors.momentum, 1)
             vol, vol_notes = volume_score(ind, quote.volume)
             mkt = market_score(regime, index_bullish)
+            # Preliminary legacy plan for EV; upgraded to AITradePlan after decision
             plan = build_trade_plan(quote.price, ind)
             if plan:
                 plan.t1_exit_pct = settings.tp1_exit_pct
@@ -386,12 +388,11 @@ class TradingService:
             target = plan.target1 if plan else None
             risk_level = RiskLevel.LOW
             risk_verdict = ""
+            open_syms = [p.symbol for p in self.ledger.positions()]
+            corr_book = 0.0
+            if open_syms:
+                corr_book = max(corr_matrix.get(symbol, {}).get(s, 0.0) for s in open_syms)
             if signal in ENTRY_ACTIONS:
-                # Max correlation vs open book
-                open_syms = [p.symbol for p in self.ledger.positions()]
-                corr_book = 0.0
-                if open_syms:
-                    corr_book = max(corr_matrix.get(symbol, {}).get(s, 0.0) for s in open_syms)
                 tgt = None
                 if plan and opp:
                     tgt = size_position(
@@ -434,11 +435,74 @@ class TradingService:
                     if rd.verdict.value == "REDUCE":
                         reasons.append("RiskEngine REDUCE size")
 
+            # AI Trade Plan Engine — plan ≠ order
+            pos = self.ledger.get_position(symbol)
+            strategy_label = alpha_label or "ensemble"
+            if votes:
+                strategy_label = f"{strategy_label}/" + ",".join(list(votes.keys())[:2])
+            thesis = (
+                f"Trend + momentum + hacim + sektör RS; alpha={alpha_label}; "
+                f"PA={pa.pattern}; regime={regime.value}"
+            )
+            ai_plan = build_ai_trade_plan(
+                symbol=symbol,
+                price=quote.price,
+                ind=ind,
+                decision=decision.value,
+                confidence=bundle.ai_confidence,
+                p_win=opp.p_win if opp else 0.5,
+                strategy=strategy_label,
+                regime=regime,
+                capital_mode=self.capital_mode,
+                equity=self.ledger.equity(),
+                spread_pct=quote.spread_pct,
+                liquidity_ok=bool(uni.eligible) if uni else True,
+                corr_ok=corr_book < 0.85,
+                size_mult=size_mult if size_mult > 0 else (opp.position_size_mult if opp else 0.5),
+                thesis=thesis,
+                risk_notes=list(risks),
+                opp=opp,
+                position=pos,
+                sell_pressure=sell_pressure,
+            )
+            if ai_plan is not None:
+                legacy = legacy_from_ai(ai_plan)
+                if legacy is not None:
+                    plan = legacy
+                    if settings:
+                        plan.t1_exit_pct = settings.tp1_exit_pct
+                        plan.t2_exit_pct = settings.tp2_exit_pct
+                        plan.t3_exit_pct = settings.tp3_exit_pct
+                        plan.trail_remainder_pct = settings.trail_exit_pct
+                    stop = plan.stop
+                    target = plan.target1
+                if not ai_plan.risk_validated and decision in {
+                    SignalAction.BUY,
+                    SignalAction.STRONG_BUY,
+                }:
+                    decision = SignalAction.NO_TRADE
+                    signal = _to_exec_signal(decision)
+                    reasons.append(f"TradePlan validation FAIL: {ai_plan.risk_reject_reason}")
+                    risk_verdict = "REJECT"
+                if ai_plan.chase_warning and decision in {SignalAction.BUY, SignalAction.STRONG_BUY}:
+                    decision = SignalAction.WAIT
+                    signal = SignalAction.BEKLE
+                    reasons.append("WAIT_FOR_ENTRY: chase risk")
+                final_decision_str = ai_plan.final_decision.value
+            else:
+                final_decision_str = decision.value
+
             explanation = (
                 f"DECISION={decision.value} FINAL={bundle.final:.0f} EV={(opp.expected_value if opp else 0):.3f} "
                 f"Pwin={(opp.p_win if opp else 0):.2f} MODE={self.capital_mode.value}; "
                 f"reasons={'; '.join(reasons[:6])}; risks={'; '.join(risks) or 'n/a'}"
             )
+            if ai_plan:
+                explanation += (
+                    f" | PLAN entry={ai_plan.entry_zone.low}-{ai_plan.entry_zone.high} "
+                    f"SL={ai_plan.stop_loss} T1={ai_plan.target1.price} RR={ai_plan.risk_reward} "
+                    f"state={ai_plan.state.value} pref={ai_plan.preferred_plan}"
+                )
 
             d = SymbolDecision(
                 symbol=symbol,
@@ -495,6 +559,8 @@ class TradingService:
                 universe_ok=bool(uni.eligible) if uni else True,
                 universe_reason=uni.reason if uni else "ok",
                 risk_verdict=risk_verdict,
+                ai_trade_plan=ai_plan,
+                final_decision=final_decision_str,
             )
             decisions.append(d)
             self.ledger.log_decision(
@@ -605,6 +671,7 @@ class TradingService:
             "universe_ok": d.universe_ok,
             "universe_reason": d.universe_reason,
             "risk_verdict": d.risk_verdict,
+            "final_decision": d.final_decision,
         }
         if d.scores:
             base["scores"] = asdict(d.scores)
@@ -612,6 +679,8 @@ class TradingService:
             base["trade_plan"] = asdict(d.trade_plan)
         if d.opportunity:
             base["opportunity"] = asdict(d.opportunity)
+        if d.ai_trade_plan is not None:
+            base["ai_trade_plan"] = ai_plan_to_dict(d.ai_trade_plan)
         return base
 
     def execute_signal(self, symbol: str, approved: bool = False) -> dict:

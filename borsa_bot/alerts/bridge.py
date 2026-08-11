@@ -11,13 +11,27 @@ from config.models import OrderResult, SignalAction, SymbolDecision
 
 
 def emit_signal_alerts(manager: AlertManager, decisions: list[SymbolDecision]) -> None:
-    """Emit SIGNAL alerts only (not fills). Strong buy/sell only."""
+    """Emit SIGNAL alerts only (not fills). Strong buy/sell only — with full trade plan if present."""
     for d in decisions:
+        ai = getattr(d, "ai_trade_plan", None)
         if d.decision in {SignalAction.STRONG_BUY, SignalAction.BUY} or d.signal == SignalAction.AL:
             if d.ai_confidence < 70 and d.decision != SignalAction.STRONG_BUY:
                 continue
             plan = d.trade_plan
             opp = d.opportunity
+            payload = {"decision": d.decision.value, "signal": d.signal.value}
+            msg = None
+            tts = None
+            if ai is not None:
+                payload["ai_trade_plan"] = True
+                payload["entry_zone"] = f"{ai.entry_zone.low}-{ai.entry_zone.high}"
+                payload["targets"] = [ai.target1.price, ai.target2.price, ai.target3.price]
+                payload["preferred_plan"] = ai.preferred_plan
+                payload["state"] = ai.state.value
+                payload["push_body"] = ai.push_body
+                payload["sms_ascii"] = ai.sms_ascii
+                msg = ai.message_tr
+                tts = ai.tts_tr
             manager.publish(
                 TradingAlertEvent(
                     event_type=AlertEventType.BUY_SIGNAL,
@@ -25,14 +39,32 @@ def emit_signal_alerts(manager: AlertManager, decisions: list[SymbolDecision]) -
                     strategy=_strategy_label(d),
                     price=d.price,
                     confidence=d.ai_confidence,
-                    risk_reward=plan.risk_reward if plan else (opp.risk_reward if opp else None),
-                    stop=d.stop_price or (plan.stop if plan else None),
-                    target=d.target_price or (plan.target1 if plan else None),
-                    payload={"decision": d.decision.value, "signal": d.signal.value},
+                    risk_reward=(
+                        ai.risk_reward
+                        if ai
+                        else (plan.risk_reward if plan else (opp.risk_reward if opp else None))
+                    ),
+                    stop=ai.stop_loss if ai else (d.stop_price or (plan.stop if plan else None)),
+                    target=ai.target1.price if ai else (d.target_price or (plan.target1 if plan else None)),
+                    message=msg or "",
+                    tts_text=tts,
+                    payload=payload,
                     dedupe_key=f"BUY_SIGNAL:{d.symbol}:{d.decision.value}",
                 )
             )
         elif d.decision in {SignalAction.STRONG_SELL, SignalAction.SELL} or d.signal == SignalAction.SAT:
+            payload = {
+                "decision": d.decision.value,
+                "signal": d.signal.value,
+                "reason": "Trend zayıfladı. Risk seviyesi yükseldi.",
+            }
+            msg = None
+            tts = None
+            if ai is not None:
+                payload["push_body"] = ai.push_body
+                payload["sms_ascii"] = ai.sms_ascii
+                msg = ai.message_tr
+                tts = ai.tts_tr
             manager.publish(
                 TradingAlertEvent(
                     event_type=AlertEventType.SELL_SIGNAL,
@@ -42,11 +74,9 @@ def emit_signal_alerts(manager: AlertManager, decisions: list[SymbolDecision]) -
                     confidence=d.ai_confidence,
                     stop=d.stop_price,
                     target=d.target_price,
-                    payload={
-                        "decision": d.decision.value,
-                        "signal": d.signal.value,
-                        "reason": "Trend zayıfladı. Risk seviyesi yükseldi.",
-                    },
+                    message=msg or "",
+                    tts_text=tts,
+                    payload=payload,
                     dedupe_key=f"SELL_SIGNAL:{d.symbol}:{d.decision.value}",
                 )
             )

@@ -92,3 +92,21 @@ TRADING EVENT → EVENT BUS → ALERT MANAGER → PRIORITY → CHANNEL ROUTER
 ### Test gate
 `pytest borsa_bot/tests -q` → **36 passed**
 
+---
+
+## 2026-08-11 — AI Trade Plan Engine (§81–102)
+
+### Principle
+Trade plan ≠ order. Flow: AI TRADE PLAN → RISK → NOTIFICATION → USER APPROVAL (LIVE auto OFF).
+
+### Delivered
+- `trade_plan/` — entry zone, ATR/structure stop, T1–T3, dual PULLBACK/BREAKOUT, chase guard,
+  position sizing (max TL risk), existing-position advice, state machine, VALID_UNTIL
+- Messages: TR full card, TTS, push, ASCII SMS
+- Disclaimer: model estimate, no guarantee
+- API: `GET /api/trade-plan/{symbol}`
+- Dashboard FULL TRADE PLAN card
+
+### Test gate
+`pytest borsa_bot/tests -q` → **44 passed**
+

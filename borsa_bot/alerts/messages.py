@@ -28,15 +28,24 @@ def format_alert(event: TradingAlertEvent) -> TradingAlertEvent:
     strategy = event.strategy or event.payload.get("strategy") or "—"
 
     if event.event_type == AlertEventType.BUY_SIGNAL:
+        # Prefer full trade-plan message if already set by bridge
+        if not event.message:
+            event.title = event.title or f"GÜÇLÜ AL — {sym}"
+            event.message = (
+                f"HİSSE AL SİNYALİ: {sym}. Güven skoru {int(conf) if conf is not None else '—'}. "
+                f"Risk/ödül 1’e {_num_tr(rr, 1)}. Modelin mevcut verilere göre tahmini; garanti değildir."
+            )
         event.title = event.title or f"GÜÇLÜ AL — {sym}"
-        event.message = event.message or (
-            f"HİSSE AL SİNYALİ: {sym}. Güven skoru {int(conf) if conf is not None else '—'}. "
-            f"Risk/ödül 1’e {_num_tr(rr, 1)}."
+        if not event.tts_text:
+            event.tts_text = (
+                f"{sym} için güçlü al sinyali oluştu. Güven skoru {_confidence_words(conf)}. "
+                f"Bu modelin mevcut verilere göre tahminidir."
+            )
+        event.payload.setdefault(
+            "push_body",
+            event.payload.get("push_body")
+            or _push_body(sym, price, conf, rr, stop, target, strategy, "AL"),
         )
-        event.tts_text = event.tts_text or (
-            f"{sym} için güçlü al sinyali oluştu. Güven skoru {_confidence_words(conf)}."
-        )
-        event.payload.setdefault("push_body", _push_body(sym, price, conf, rr, stop, target, strategy, "AL"))
 
     elif event.event_type == AlertEventType.SELL_SIGNAL:
         event.title = event.title or f"SAT — {sym}"
