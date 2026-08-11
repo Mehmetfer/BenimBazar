@@ -1,0 +1,192 @@
+:root {
+  --bg0: #0b1220;
+  --panel: rgba(16, 26, 40, 0.9);
+  --ink: #e8eef8;
+  --mute: #8fa0b8;
+  --up: #3dd68c;
+  --down: #ff6b6b;
+  --buy: #1f9d6a;
+  --sell: #c44b4b;
+  --line: rgba(232, 238, 248, 0.12);
+  --font-display: "Palatino Linotype", Palatino, Georgia, serif;
+  --font-body: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--bg0);
+}
+
+.atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(900px 500px at 0% 0%, rgba(31, 157, 106, 0.2), transparent 55%),
+    radial-gradient(800px 480px at 100% 10%, rgba(196, 75, 75, 0.14), transparent 50%),
+    linear-gradient(165deg, #0b1220, #101a28 55%, #0d1522);
+}
+
+.shell {
+  width: min(920px, calc(100% - 1.25rem));
+  margin: 0 auto;
+  padding: 1.25rem 0 2rem;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.brand {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 1rem;
+  animation: rise 420ms ease both;
+}
+
+.brand__mark {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 6vw, 3.2rem);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+}
+
+.brand__line { margin: 0.35rem 0 0; color: var(--mute); }
+
+.equity {
+  text-align: right;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 0.7rem 0.9rem;
+  min-width: 9rem;
+}
+
+.equity__label { display: block; color: var(--mute); font-size: 0.78rem; }
+.equity strong { font-size: 1.2rem; }
+.equity__pnl { display: block; font-size: 0.85rem; margin-top: 0.15rem; }
+.equity__pnl.up { color: var(--up); }
+.equity__pnl.down { color: var(--down); }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 0.9rem;
+  animation: rise 520ms ease both;
+}
+
+.panel__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.55rem;
+}
+
+.panel h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--mute);
+  text-transform: uppercase;
+}
+
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-bottom: 0.75rem; }
+.tab, .ghost, #submitBtn, select, input, button {
+  font: inherit;
+}
+
+.tab {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  border-radius: 12px;
+  padding: 0.65rem;
+  cursor: pointer;
+}
+
+.tab.is-active[data-side="BUY"] { background: var(--buy); border-color: transparent; color: #fff; }
+.tab.is-active[data-side="SELL"] { background: var(--sell); border-color: transparent; color: #fff; }
+
+.order__form {
+  display: grid;
+  grid-template-columns: 1.4fr 0.8fr auto;
+  gap: 0.55rem;
+  align-items: end;
+}
+
+.order__form label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--mute);
+}
+
+select, input {
+  border: 1px solid var(--line);
+  background: #0a1018;
+  color: var(--ink);
+  border-radius: 12px;
+  padding: 0.7rem 0.75rem;
+}
+
+.order__meta {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  color: var(--mute);
+  font-size: 0.88rem;
+}
+
+#submitBtn {
+  border: 0;
+  border-radius: 12px;
+  padding: 0.75rem 1.2rem;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+}
+.btn-buy { background: var(--buy); }
+.btn-sell { background: var(--sell); }
+
+.order__msg {
+  grid-column: 1 / -1;
+  margin: 0;
+  min-height: 1.2rem;
+  font-size: 0.88rem;
+}
+
+.ghost {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--mute);
+  border-radius: 10px;
+  padding: 0.35rem 0.65rem;
+  cursor: pointer;
+}
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.55rem 0.35rem; border-bottom: 1px solid var(--line); }
+th { color: var(--mute); font-weight: 500; font-size: 0.78rem; }
+.up { color: var(--up); }
+.down { color: var(--down); }
+.cash { margin: 0.7rem 0 0; color: var(--mute); }
+.row-click { cursor: pointer; }
+.row-click:hover { background: rgba(255,255,255,0.03); }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 720px) {
+  .brand { flex-direction: column; align-items: stretch; }
+  .equity { text-align: left; }
+  .order__form { grid-template-columns: 1fr 1fr; }
+  #submitBtn { grid-column: 1 / -1; }
+}

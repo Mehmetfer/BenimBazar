@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Borsa — Al / Sat</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+  <main class="shell">
+    <header class="brand">
+      <div>
+        <p class="brand__mark">Borsa</p>
+        <p class="brand__line">Kağıt üstü al–sat</p>
+      </div>
+      <div class="equity" id="equityBox">
+        <span class="equity__label">Portföy</span>
+        <strong id="equityValue">—</strong>
+        <span id="equityPnl" class="equity__pnl"></span>
+      </div>
+    </header>
+
+    <section class="panel order" aria-label="Emir">
+      <div class="tabs">
+        <button type="button" class="tab is-active" data-side="BUY" id="tabBuy">Al</button>
+        <button type="button" class="tab" data-side="SELL" id="tabSell">Sat</button>
+      </div>
+      <form id="orderForm" class="order__form">
+        <label>
+          Hisse
+          <select id="symbol" required></select>
+        </label>
+        <label>
+          Lot
+          <input id="quantity" type="number" min="1" step="1" value="10" required />
+        </label>
+        <div class="order__meta">
+          <span id="livePrice">Fiyat: —</span>
+          <span id="liveTotal">Toplam: —</span>
+        </div>
+        <button type="submit" id="submitBtn" class="btn-buy">Al</button>
+        <p class="order__msg" id="orderMsg" role="status"></p>
+      </form>
+    </section>
+
+    <section class="panel" aria-label="Piyasa">
+      <div class="panel__head">
+        <h2>Piyasa</h2>
+        <button type="button" class="ghost" id="refreshBtn">Yenile</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Hisse</th><th>Fiyat</th><th>Değişim</th></tr>
+          </thead>
+          <tbody id="marketBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Pozisyonlar">
+      <div class="panel__head">
+        <h2>Pozisyonlar</h2>
+        <button type="button" class="ghost" id="resetBtn">Sıfırla</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Hisse</th><th>Lot</th><th>Maliyet</th><th>K/Z</th></tr>
+          </thead>
+          <tbody id="posBody"></tbody>
+        </table>
+      </div>
+      <p class="cash" id="cashLine">Nakit: —</p>
+    </section>
+
+    <section class="panel" aria-label="İşlemler">
+      <div class="panel__head"><h2>Son işlemler</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Yön</th><th>Hisse</th><th>Lot</th><th>Fiyat</th></tr>
+          </thead>
+          <tbody id="tradeBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

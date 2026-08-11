@@ -3,6 +3,15 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+# Secrets / local env
+.env
+.env.local
+borsa_bot/.env
+borsa_bot/database/*.db
+borsa_bot/database/notification_settings.json
+borsa_bot/logs/*
+!borsa_bot/logs/.gitkeep
+
 # User-specific files
 *.rsuser
 *.suo
@@ -361,3 +370,17 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Companion / Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+companion/data/
+/opt/flutter
+
+# Flutter
+borsa_app/.dart_tool/
+borsa_app/.flutter-plugins
+borsa_app/.flutter-plugins-dependencies
+borsa_app/build/
+borsa_app/.packages
