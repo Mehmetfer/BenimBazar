@@ -361,7 +361,7 @@
     return out;
   }
 
-  function renderCryptoHome(){
+  async function renderCryptoHome(){
     if(!cryptoDash) return;
     const s = cryptoDash.sections||{};
     const banner = document.getElementById('cryptoBanner');
@@ -395,15 +395,21 @@
     document.getElementById('cryptoFavHome').innerHTML = (s.favorites||[]).map(cryptoCardHtml).join('') || '<div class="empty">Crypto favori yok — ★ ile ekleyin</div>';
     document.getElementById('cryptoMktList').innerHTML = (cryptoDash.rows||[]).map(cryptoCardHtml).join('') || '<div class="empty">Piyasa verisi yok</div>';
     const sigOn = !!(st.crypto_signals_enabled && st.signals_allowed);
+    let health = {};
+    try { health = await (await fetch('/api/crypto/health')).json(); } catch(e) {}
+    const ws = (health.websocket||{});
+    const conn = health.connected ? 'CONNECTED' : 'DISCONNECTED';
     document.getElementById('cryptoSys').innerHTML = `
       <div class="why"><b>CRYPTO SYSTEM</b></div>
       <div class="grid" style="margin-top:8px">
-        <div class="k"><span>Enabled</span><b>${st.crypto_enabled?'AÇIK':'KAPALI'}</b></div>
-        <div class="k"><span>Provider</span><b>${st.provider_class||'—'}</b></div>
-        <div class="k"><span>Markets</span><b>${st.symbol_count||0}</b></div>
+        <div class="k"><span>Paribu</span><b>● ${conn}</b></div>
+        <div class="k"><span>Markets</span><b>${health.market_count ?? st.symbol_count ?? 0}</b></div>
+        <div class="k"><span>Fresh</span><b>${health.data_fresh?'YES':'NO'}</b></div>
+        <div class="k"><span>OHLCV 240</span><b>${health.ohlcv_ready?'READY':'ACCUMULATING'}</b></div>
+        <div class="k"><span>WS</span><b>${ws.state||'—'}</b></div>
         <div class="k"><span>Sinyal</span><b>${sigOn?'AÇIK':'KAPALI'}</b></div>
       </div>
-      <div class="meta" style="margin-top:8px">Paper only · LIVE trading: HAYIR · BIST etkilenmez</div>`;
+      <div class="meta" style="margin-top:8px">Last update: ${health.last_update||'—'} · Paper only · LIVE orders: HAYIR · mock fallback: yok</div>`;
     bindCryptoCards();
   }
 
@@ -499,7 +505,7 @@
   async function loadCrypto(){
     try{
       cryptoDash = await (await fetch('/api/crypto/dashboard?limit=40')).json();
-      renderCryptoHome();
+      await renderCryptoHome();
       // Update top integrity line lightly for crypto context
       const st = cryptoDash.status||{};
       const pill = document.getElementById('mktText');

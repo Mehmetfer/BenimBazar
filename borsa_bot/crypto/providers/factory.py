@@ -43,7 +43,7 @@ def create_crypto_provider(
         return RequiredCryptoProvider("CRYPTO_PROVIDER=required")
 
     if key in {"paribu", "live", "http", "crypto"}:
-        if not settings.paribu_enabled and key == "paribu":
+        if not settings.paribu_enabled:
             return RequiredCryptoProvider("PARIBU_ENABLED=false")
         api_base = (
             os.getenv("PARIBU_API_BASE", "").strip()

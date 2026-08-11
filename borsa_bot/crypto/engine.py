@@ -184,6 +184,13 @@ class CryptoSignalEngine:
                 )
 
         if action in {SignalAction.BUY, SignalAction.STRONG_BUY, SignalAction.AL}:
+            spread = None
+            if hasattr(self.provider, "quote_spread_pct"):
+                spread = self.provider.quote_spread_pct(q)
+            elif q.bid > 0 and q.ask > 0 and q.ask >= q.bid:
+                from data.contract import compute_spread_pct
+
+                spread = compute_spread_pct(q.bid, q.ask)
             risk_res = evaluate_crypto_entry(
                 self.risk,
                 symbol=sym,
@@ -191,7 +198,7 @@ class CryptoSignalEngine:
                 ind=tech.indicators,
                 action=action,
                 plan=plan_view.to_legacy() if plan_view else None,
-                spread_pct=q.spread_pct,
+                spread_pct=spread,
                 opportunity=opp,
                 size_mult=size_mult,
                 max_exposure_pct=settings.crypto_max_exposure_pct,

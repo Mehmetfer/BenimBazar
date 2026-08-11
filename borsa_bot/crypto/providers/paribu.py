@@ -14,13 +14,16 @@ from typing import Any
 from config.models import Bar, QuoteSnapshot
 from crypto.http_client import DEFAULT_API_BASE, ParibuHTTPClient, ParibuHTTPError, ParibuRateLimitError
 from crypto.market import MarketType
+from crypto.markets import CryptoMarketInfo, build_market_catalog
 from crypto.ohlcv import TradeBarAccumulator
 from crypto.rest import RawTrade, fetch_orderbook, fetch_recent_trades, fetch_tickers
 from crypto.safety import crypto_provenance_fields
 from crypto.symbols import CryptoSymbolMapper, normalize_crypto_app_symbol, to_display_symbol, to_paribu_market
+from crypto.trade_store import CryptoTradeStore
 from crypto.websocket import ParibuPublicStream
-from data.contract import EnvironmentOrigin, stamp_bar_defaults, stamp_quote_defaults
+from data.contract import EnvironmentOrigin, compute_spread_pct, stamp_quote_defaults
 from data.integrity import DataSourceKind, DataSourceMeta, MarketSession, build_source_meta
+from dataclasses import replace
 
 log = logging.getLogger("borsa_bot.crypto.paribu")
 
@@ -71,6 +74,23 @@ class RequiredCryptoProvider:
     def provenance(self) -> dict[str, str]:
         return crypto_provenance_fields(provider_id=self.provider_id, data_source_kind=self.kind)
 
+    def health_dict(self) -> dict[str, Any]:
+        return {
+            "provider": self.provider_id,
+            "connected": False,
+            "market_count": 0,
+            "valid_symbols": 0,
+            "rejected_symbols": 0,
+            "last_update": None,
+            "data_fresh": False,
+            "ohlcv_ready": False,
+            "websocket": {"enabled": False, "connected": False, "state": "DISABLED"},
+            "rest": False,
+            "errors": [self.reason],
+            "note": "CRYPTO plane off or misconfigured — NO MOCK FALLBACK",
+            "live_trading": False,
+        }
+
 
 class ParibuMarketDataProvider:
     """LIVE Paribu adapter (public market data only).
@@ -95,6 +115,7 @@ class ParibuMarketDataProvider:
         enable_websocket: bool = True,
         poll_interval_sec: float = 3.0,
         ws_seed_markets: int = 8,
+        trade_store: CryptoTradeStore | None = None,
     ) -> None:
         del api_key, api_secret  # public MD only — keys unused (no trading)
         base = (api_base or DEFAULT_API_BASE).rstrip("/") or DEFAULT_API_BASE
@@ -109,12 +130,17 @@ class ParibuMarketDataProvider:
         self._lock = threading.RLock()
         self._tickers: dict[str, Any] = {}  # provider market -> RawTicker
         self._quotes: dict[str, QuoteSnapshot] = {}  # app symbol
+        self._markets: dict[str, CryptoMarketInfo] = {}
         self._last_tick: datetime | None = None
         self._connected = False
         self._error = ""
+        self._api_errors = 0
+        self._rejected_symbols = 0
         self._accumulator = TradeBarAccumulator()
+        self._trade_store = trade_store if trade_store is not None else CryptoTradeStore()
         self._stream: ParibuPublicStream | None = None
         self._ws_started = False
+        self._bid_ask_known: dict[str, bool] = {}
 
     # --- MarketDataProvider ---
 
@@ -126,14 +152,17 @@ class ParibuMarketDataProvider:
         except ParibuRateLimitError as exc:
             self._connected = False
             self._error = f"RATE_LIMIT:{exc.retry_after}"
+            self._api_errors += 1
             log.warning("paribu rate limit: %s", exc)
         except ParibuHTTPError as exc:
             self._connected = False
             self._error = f"HTTP_ERROR:{exc}"
+            self._api_errors += 1
             log.warning("paribu http: %s", exc)
         except Exception as exc:  # noqa: BLE001
             self._connected = False
             self._error = f"PROVIDER_FAILURE:{exc}"
+            self._api_errors += 1
             log.exception("paribu tick failure")
 
     def list_symbols(self) -> list[str]:
@@ -186,13 +215,37 @@ class ParibuMarketDataProvider:
     def get_bars(self, symbol: str, lookback: int = 220) -> list[Bar]:
         app = normalize_crypto_app_symbol(symbol)
         self._ingest_rest_trades(app)
-        bars = self._accumulator.bars(app, timeframe="15m", lookback=lookback)
-        return bars
+        # Prefer persisted + in-memory merge (never invent history)
+        stored = self._trade_store.bars(app, timeframe="15m", lookback=lookback, provider=self.provider_id)
+        live = self._accumulator.bars(app, timeframe="15m", lookback=lookback)
+        return self._merge_bars(stored, live, lookback=lookback)
 
     def get_bars_tf(self, symbol: str, timeframe: str, lookback: int = 220) -> list[Bar]:
         app = normalize_crypto_app_symbol(symbol)
         self._ingest_rest_trades(app)
-        return self._accumulator.bars(app, timeframe=timeframe, lookback=lookback)
+        stored = self._trade_store.bars(app, timeframe=timeframe, lookback=lookback, provider=self.provider_id)
+        live = self._accumulator.bars(app, timeframe=timeframe, lookback=lookback)
+        return self._merge_bars(stored, live, lookback=lookback)
+
+    def list_markets(self) -> list[CryptoMarketInfo]:
+        with self._lock:
+            if not self._markets:
+                try:
+                    self._refresh_tickers()
+                except Exception:  # noqa: BLE001
+                    return []
+            return list(self._markets.values())
+
+    def bid_ask_known(self, symbol: str) -> bool:
+        app = normalize_crypto_app_symbol(symbol)
+        with self._lock:
+            return bool(self._bid_ask_known.get(app))
+
+    def quote_spread_pct(self, quote: QuoteSnapshot) -> float | None:
+        """None when bid/ask unknown — never invent spread from last."""
+        if quote.bid <= 0 or quote.ask <= 0 or quote.ask < quote.bid:
+            return None
+        return compute_spread_pct(quote.bid, quote.ask)
 
     def is_fresh(self, max_age_sec: float = 30.0) -> bool:
         if not self._last_tick:
@@ -206,7 +259,7 @@ class ParibuMarketDataProvider:
 
     def source_meta(self, max_age_sec: float = 30.0) -> DataSourceMeta:
         note = self._error or ("Paribu LIVE public ticker/orderbook" if self._connected else "disconnected")
-        return build_source_meta(
+        meta = build_source_meta(
             provider_id=self.provider_id,
             kind=DataSourceKind.LIVE if self._connected else DataSourceKind.UNAVAILABLE,
             display_name=self.display_name,
@@ -216,6 +269,12 @@ class ParibuMarketDataProvider:
             live_ready=False,  # trading/broker not enabled
             note=note,
         )
+        # Crypto is 24/7 — do not inherit BIST session CLOSED from build_source_meta
+        session = MarketSession.OPEN if self._connected else MarketSession.UNKNOWN
+        if self._error.startswith("HTTP_ERROR") or self._error.startswith("PROVIDER_FAILURE"):
+            session = MarketSession.UNKNOWN
+            note = f"MARKET_UNAVAILABLE:{self._error}"
+        return replace(meta, market_session=session, note=note or meta.note)
 
     def provenance(self) -> dict[str, str]:
         kind = DataSourceKind.LIVE if self._connected else DataSourceKind.UNAVAILABLE
@@ -235,9 +294,63 @@ class ParibuMarketDataProvider:
             "last_error": self._stream.state.last_error if self._stream else "",
         }
         d["symbols"] = len(self.list_symbols())
-        d["ohlcv_note"] = "aggregated from public trades; no official candle endpoint"
+        d["markets_discovered"] = len(self._markets)
+        d["ohlcv_note"] = (
+            "aggregated from public trades (/trades limit<=20) + WS matches; "
+            "no official candle endpoint — 240×15m requires accumulated history"
+        )
+        d["trade_store"] = self._trade_store.stats()
+        d["api_errors"] = self._api_errors
+        d["rejected_symbols"] = self._rejected_symbols
         d["updated_at"] = datetime.now(timezone.utc).isoformat()
         return d
+
+    def health_dict(self) -> dict[str, Any]:
+        """Debug/ops snapshot for GET /api/crypto/health."""
+        try:
+            if not self._connected:
+                self.tick()
+        except Exception:  # noqa: BLE001
+            pass
+        meta = self.source_meta()
+        bars_ready = 0
+        sample_sym = None
+        with self._lock:
+            symbols = sorted(self._quotes.keys())
+        if symbols:
+            sample_sym = "BTC_TL" if "BTC_TL" in symbols else symbols[0]
+            bars_ready = len(self.get_bars(sample_sym, lookback=240))
+        return {
+            "provider": self.provider_id,
+            "connected": self._connected,
+            "market_count": len(self.list_symbols()),
+            "valid_symbols": len([m for m in self.list_markets() if m.status == "ACTIVE"]),
+            "rejected_symbols": self._rejected_symbols,
+            "last_update": meta.last_update,
+            "data_fresh": self.is_fresh(),
+            "freshness": meta.freshness.value if hasattr(meta.freshness, "value") else str(meta.freshness),
+            "ohlcv_ready": bars_ready >= 240,
+            "ohlcv_bars_sample": bars_ready,
+            "ohlcv_sample_symbol": sample_sym,
+            "websocket": {
+                "enabled": self.enable_websocket,
+                "connected": bool(self._stream and self._stream.state.connected),
+                "state": (
+                    "CONNECTED"
+                    if (self._stream and self._stream.state.connected)
+                    else ("DISABLED" if not self.enable_websocket else "DISCONNECTED")
+                ),
+                "reconnects": self._stream.state.reconnects if self._stream else 0,
+            },
+            "rest": True,
+            "errors": [self._error] if self._error else [],
+            "api_errors": self._api_errors,
+            "trade_store": self._trade_store.stats(),
+            "market_session": meta.market_session.value,
+            "source_kind": meta.kind.value if hasattr(meta.kind, "value") else str(meta.kind),
+            "live_trading": False,
+            "note": "REAL MD + PAPER only this phase — no live crypto orders",
+        }
 
     def close(self) -> None:
         if self._stream:
@@ -245,31 +358,44 @@ class ParibuMarketDataProvider:
 
     # --- internals ---
 
+    @staticmethod
+    def _merge_bars(a: list[Bar], b: list[Bar], *, lookback: int) -> list[Bar]:
+        by_ts: dict[datetime, Bar] = {}
+        for bar in a + b:
+            by_ts[bar.ts] = bar
+        return [by_ts[k] for k in sorted(by_ts.keys())][-lookback:]
+
     def _refresh_tickers(self) -> None:
         rows = fetch_tickers(self.http, cache_ttl_sec=self.poll_interval_sec)
         if not rows:
             raise ParibuHTTPError("empty ticker list")
+        catalog = build_market_catalog(rows)
         now = datetime.now(timezone.utc)
+        rejected = 0
         with self._lock:
             self._tickers = {r.market: r for r in rows if r.market}
+            self._markets = {m.canonical_symbol: m for m in catalog}
             for market, raw in self._tickers.items():
                 app = normalize_crypto_app_symbol(market)
-                self.mapper.register(app, market)
-                # lightweight quote from ticker; bid/ask filled lazily / via WS
-                existing = self._quotes.get(app)
-                bid = existing.bid if existing and existing.bid > 0 else raw.last
-                ask = existing.ask if existing and existing.ask > 0 else raw.last
-                if bid <= 0 or ask <= 0:
+                if not app or raw.last <= 0:
+                    rejected += 1
                     continue
-                if ask < bid:
-                    bid, ask = ask, bid
+                self.mapper.register(app, market)
+                existing = self._quotes.get(app)
+                known = bool(self._bid_ask_known.get(app))
+                # NEVER invent bid/ask = last (§17). Keep unknown until orderbook/WS.
+                if known and existing and existing.bid > 0 and existing.ask > 0:
+                    bid, ask = float(existing.bid), float(existing.ask)
+                else:
+                    bid, ask = 0.0, 0.0
+                    self._bid_ask_known[app] = False
                 q = QuoteSnapshot(
                     symbol=app,
                     name=to_display_symbol(app),
                     sector="CRYPTO",
                     price=float(raw.last),
-                    bid=float(bid),
-                    ask=float(ask),
+                    bid=bid,
+                    ask=ask,
                     volume=float(raw.volume),
                     trades=0,
                     ts=now,
@@ -279,11 +405,11 @@ class ParibuMarketDataProvider:
                     market_status=MarketSession.OPEN.value,
                     received_at=now,
                 )
-                # Avoid BIST session overwrite
                 stamp_quote_defaults(q, provider=self.provider_id, origin=EnvironmentOrigin.LIVE)
                 q.symbol = app
                 q.market_status = MarketSession.OPEN.value
                 self._quotes[app] = q
+            self._rejected_symbols = rejected
             self._connected = True
             self._last_tick = now
             self.kind = DataSourceKind.LIVE
@@ -297,6 +423,8 @@ class ParibuMarketDataProvider:
         book = fetch_orderbook(self.http, market, depth=5, cache_ttl_sec=0)
         now = datetime.now(timezone.utc)
         ts = book.timestamp if book.timestamp.tzinfo else now
+        if book.bid <= 0 or book.ask <= 0 or book.ask < book.bid:
+            raise RuntimeError("INVALID_ORDERBOOK")
         q = QuoteSnapshot(
             symbol=app_symbol,
             name=to_display_symbol(app_symbol),
@@ -320,17 +448,19 @@ class ParibuMarketDataProvider:
             self._quotes[app_symbol] = q
             self._tickers[market] = raw
             self.mapper.register(app_symbol, market)
+            self._bid_ask_known[app_symbol] = True
             self._connected = True
             self._last_tick = now
 
     def _ingest_rest_trades(self, app_symbol: str) -> None:
         market = to_paribu_market(app_symbol)
         try:
-            trades = fetch_recent_trades(self.http, market, limit=5, cache_ttl_sec=2.0)
+            trades = fetch_recent_trades(self.http, market, limit=20, cache_ttl_sec=2.0)
         except Exception as exc:  # noqa: BLE001
             log.debug("trades fetch failed %s: %s", market, exc)
             return
         self._accumulator.add_trades(app_symbol, trades)
+        self._trade_store.add_trades(app_symbol, trades, provider_symbol=market, provider=self.provider_id)
 
     def _ensure_ws(self) -> None:
         if not self.enable_websocket or self._ws_started:
@@ -355,7 +485,9 @@ class ParibuMarketDataProvider:
 
         def on_match(market: str, price: float, qty: float, ts: datetime) -> None:
             app = normalize_crypto_app_symbol(market)
-            self._accumulator.add_trade(app, RawTrade(price=price, amount=qty, time=ts, side=""))
+            trade = RawTrade(price=price, amount=qty, time=ts, side="")
+            self._accumulator.add_trade(app, trade)
+            self._trade_store.add_trades(app, [trade], provider_symbol=market, provider=self.provider_id)
             on_match_price(market, price, ts)
 
         def on_book(market: str, bid: float, ask: float, ts: datetime) -> None:
@@ -369,6 +501,7 @@ class ParibuMarketDataProvider:
                     q.ask = ask
                     q.ts = ts
                     q.received_at = datetime.now(timezone.utc)
+                    self._bid_ask_known[app] = True
                     self._last_tick = q.received_at
 
         self._stream = ParibuPublicStream(

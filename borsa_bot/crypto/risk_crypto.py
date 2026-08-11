@@ -36,7 +36,7 @@ def evaluate_crypto_entry(
     ind: IndicatorSet,
     action: SignalAction,
     plan: TradePlan | None,
-    spread_pct: float,
+    spread_pct: float | None,
     opportunity: OpportunityMetrics | None,
     size_mult: float = 1.0,
     max_spread_pct: float | None = None,
@@ -59,6 +59,18 @@ def evaluate_crypto_entry(
         return CryptoRiskResult(False, RiskVerdict.REJECT.value, "daily_loss_limit", 0, None, None, RiskLevel.BLOCKED.value, None, size_mult)
     if risk.ledger.drawdown_pct() >= cfg.max_drawdown_pct:
         return CryptoRiskResult(False, RiskVerdict.REJECT.value, "max_drawdown", 0, None, None, RiskLevel.BLOCKED.value, None, size_mult)
+    if spread_pct is None or spread_pct < 0:
+        return CryptoRiskResult(
+            False,
+            RiskVerdict.REJECT.value,
+            "UNKNOWN_SPREAD",
+            0,
+            None,
+            None,
+            RiskLevel.BLOCKED.value,
+            None,
+            size_mult,
+        )
     if spread_pct > max_spread:
         return CryptoRiskResult(False, RiskVerdict.REJECT.value, "excessive_spread", 0, None, None, RiskLevel.BLOCKED.value, None, size_mult)
 

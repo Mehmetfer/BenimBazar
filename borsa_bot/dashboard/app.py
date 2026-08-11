@@ -138,6 +138,18 @@ def crypto_status() -> dict:
     return crypto_service.status()
 
 
+@app.get("/api/crypto/health")
+def crypto_health() -> dict:
+    """Paribu connection / discovery / freshness / OHLCV readiness."""
+    return crypto_service.health()
+
+
+@app.get("/api/crypto/markets")
+def crypto_markets() -> dict:
+    """Full Paribu market discovery catalog (canonical + provider symbols)."""
+    return crypto_service.markets()
+
+
 @app.get("/api/crypto/dashboard")
 def crypto_dashboard(limit: int = 40) -> dict:
     """Crypto dashboard cards — favorites-first, LIVE/STALE/UNAVAILABLE badges."""
@@ -204,15 +216,23 @@ def crypto_quote(symbol: str) -> dict:
         raise HTTPException(404, str(exc)) from exc
     return {
         "symbol": q.symbol,
+        "display": q.name,
+        "canonical_symbol": q.symbol,
+        "provider_symbol": normalize_crypto_app_symbol(symbol).lower(),
         "price": q.price,
-        "bid": q.bid,
-        "ask": q.ask,
-        "spread_pct": q.spread_pct,
+        "bid": q.bid if q.bid > 0 else None,
+        "ask": q.ask if q.ask > 0 else None,
+        "bid_ask_known": bool(getattr(crypto_service.provider, "bid_ask_known", lambda _s: False)(q.symbol)),
+        "spread_pct": crypto_service.provider.quote_spread_pct(q)
+        if hasattr(crypto_service.provider, "quote_spread_pct")
+        else q.spread_pct,
         "volume": stats.get("volume", q.volume),
         "change_pct": stats.get("change_pct"),
         "timestamp_utc": q.ts.isoformat() if q.ts else None,
+        "received_at": q.received_at.isoformat() if q.received_at else None,
         "market_type": "CRYPTO",
         "data_source_kind": q.data_source_kind,
+        "source_kind": q.data_source_kind,
         "provider": q.provider,
         "market_status": q.market_status,
         "live_status": live_status_badge(

@@ -135,8 +135,8 @@ def fetch_recent_trades(
     cache_ttl_sec: float = 1.0,
 ) -> list[RawTrade]:
     market = market.strip().lower()
-    # Public API accepts small limits only (verified: limit=5 OK, larger → 400)
-    limit = max(1, min(5, int(limit)))
+    # Public API: limit must not exceed 20 (HTTP 400 / code 4001 verified live).
+    limit = max(1, min(20, int(limit)))
     resp = client.get_json(
         "/trades",
         {"market": market, "limit": limit},

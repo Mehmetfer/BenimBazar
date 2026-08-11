@@ -143,6 +143,61 @@ class CryptoFoundationService:
             "docs": "crypto/docs/PARIBU_API.md",
         }
 
+    def health(self) -> dict[str, Any]:
+        """Ops health — Paribu connection, discovery, freshness, OHLCV readiness."""
+        gate = gate_crypto_provider(
+            self.provider,
+            app_env=settings.app_env,
+            crypto_enabled=settings.crypto_enabled,
+        )
+        base = getattr(self.provider, "health_dict", lambda: {})()
+        return {
+            **base,
+            "crypto_enabled": settings.crypto_enabled,
+            "paribu_enabled": settings.paribu_enabled,
+            "crypto_signals_enabled": settings.crypto_signals_enabled,
+            "gate": gate.to_dict(),
+            "provider_class": type(self.provider).__name__,
+            "mock_fallback": False,
+            "paper_only": True,
+            "live_orders": False,
+        }
+
+    def markets(self) -> dict[str, Any]:
+        """Full discovered market catalog (not hardcoded BTC/ETH/SOL)."""
+        if not settings.crypto_enabled:
+            return {
+                "ok": False,
+                "market_type": "CRYPTO",
+                "count": 0,
+                "markets": [],
+                "note": "CRYPTO_ENABLED=false",
+            }
+        fn = getattr(self.provider, "list_markets", None)
+        if not callable(fn):
+            return {
+                "ok": False,
+                "market_type": "CRYPTO",
+                "count": 0,
+                "markets": [],
+                "note": "provider has no list_markets",
+            }
+        try:
+            if not self.provider.has_market_data():
+                self.provider.tick()
+        except Exception:  # noqa: BLE001
+            pass
+        rows = [m.to_dict() for m in fn()]
+        return {
+            "ok": bool(rows),
+            "market_type": "CRYPTO",
+            "provider": getattr(self.provider, "provider_id", ""),
+            "count": len(rows),
+            "markets": rows,
+            "hardcoded": False,
+            "note": "Discovered from GET /market/ticker — precision fields UNKNOWN until API exposes them",
+        }
+
     def scan(self, symbols: list[str] | None = None) -> list[dict[str, Any]]:
         """Crypto signal scan — empty unless CRYPTO_SIGNALS_ENABLED + live MD."""
         eng = self._signal_engine()

@@ -47,8 +47,8 @@ def test_create_provider_live_returns_http_live_not_stub(monkeypatch):
     assert not isinstance(p, HttpLiveProviderStub)
 
 
-def test_paper_fsm_full_fill_default():
-    ledger = PortfolioLedger()
+def test_paper_fsm_full_fill_default(tmp_path: Path):
+    ledger = PortfolioLedger(db_path=tmp_path / "paper1.db")
     broker = PaperBroker(ledger)
     res = broker.submit(
         OrderRequest(symbol="THYAO", side="BUY", quantity=10, price=100, reason="t", client_order_id="c1"),
@@ -59,12 +59,12 @@ def test_paper_fsm_full_fill_default():
     assert res.quantity == 10
 
 
-def test_paper_partial_fill_and_cancel(monkeypatch):
+def test_paper_partial_fill_and_cancel(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(
         "execution.paper.settings",
         replace(settings, paper_partial_fill_pct=0.4, paper_cancel_race_fill_pct=0.0),
     )
-    ledger = PortfolioLedger()
+    ledger = PortfolioLedger(db_path=tmp_path / "paper2.db")
     broker = PaperBroker(ledger)
     res = broker.submit(
         OrderRequest(symbol="GARAN", side="BUY", quantity=1000, price=50, reason="t", client_order_id="partial-1"),
@@ -82,8 +82,8 @@ def test_paper_partial_fill_and_cancel(monkeypatch):
     assert broker.get_order("partial-1") is None or broker.open_orders.get("partial-1") is None
 
 
-def test_paper_duplicate_client_order_id():
-    ledger = PortfolioLedger()
+def test_paper_duplicate_client_order_id(tmp_path: Path):
+    ledger = PortfolioLedger(db_path=tmp_path / "paper3.db")
     broker = PaperBroker(ledger)
     # Force remaining open via partial
     from dataclasses import replace as _r
