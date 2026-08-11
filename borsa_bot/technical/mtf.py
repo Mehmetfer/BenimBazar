@@ -20,22 +20,60 @@ TF_MINUTES = {
 
 
 def aggregate_bars(bars: Sequence[Bar], factor: int) -> list[Bar]:
-    """Aggregate base bars into higher timeframe by grouping `factor` bars."""
+    """Aggregate base bars into higher timeframe.
+
+    Prefer calendar/time-bucket alignment from bar timestamps when available
+    (reduces look-ahead vs naive consecutive grouping from series start).
+    Incomplete final bucket is dropped (no inventing closes).
+    """
     if factor <= 1:
         return list(bars)
+    if not bars:
+        return []
+
+    base_minutes = 15
+    # Infer base from first bar timeframe if present
+    try:
+        tf = str(getattr(bars[0], "timeframe", "") or "15m")
+        base_minutes = TF_MINUTES.get(tf, 15)
+    except Exception:  # noqa: BLE001
+        base_minutes = 15
+    bucket_minutes = base_minutes * factor
+
+    # Time-bucket aggregation
+    buckets: dict[int, list[Bar]] = {}
+    ordered: list[int] = []
+    for b in bars:
+        ts = b.ts
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        # Floor to bucket boundary (UTC minutes)
+        epoch_min = int(ts.timestamp() // 60)
+        bucket_id = epoch_min - (epoch_min % bucket_minutes)
+        if bucket_id not in buckets:
+            buckets[bucket_id] = []
+            ordered.append(bucket_id)
+        buckets[bucket_id].append(b)
+
     out: list[Bar] = []
-    for i in range(0, len(bars) - factor + 1, factor):
-        chunk = bars[i : i + factor]
+    # Drop incomplete last bucket unless it has full factor bars
+    for i, bid in enumerate(ordered):
+        chunk = buckets[bid]
+        is_last = i == len(ordered) - 1
+        if is_last and len(chunk) < factor:
+            continue
+        if not chunk:
+            continue
         src = getattr(chunk[-1], "data_source_kind", "UNKNOWN")
         out.append(
             Bar(
                 ts=chunk[-1].ts,
                 open=chunk[0].open,
-                high=max(b.high for b in chunk),
-                low=min(b.low for b in chunk),
+                high=max(x.high for x in chunk),
+                low=min(x.low for x in chunk),
                 close=chunk[-1].close,
-                volume=sum(b.volume for b in chunk),
-                trades=sum(b.trades for b in chunk),
+                volume=sum(x.volume for x in chunk),
+                trades=sum(x.trades for x in chunk),
                 data_source_kind=src,
                 symbol=getattr(chunk[-1], "symbol", "") or getattr(chunk[0], "symbol", ""),
                 provider=getattr(chunk[-1], "provider", ""),

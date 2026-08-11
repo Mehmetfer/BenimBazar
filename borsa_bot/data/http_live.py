@@ -37,16 +37,19 @@ logger = logging.getLogger("borsa_bot.market_data")
 
 
 def _parse_ts(raw: Any) -> datetime:
+    """Parse timestamp — NEVER invent `now` on failure (defeats future/invalid rejection)."""
     if isinstance(raw, datetime):
         return raw if raw.tzinfo else raw.replace(tzinfo=timezone.utc)
     if raw is None:
-        return datetime.now(timezone.utc)
-    s = str(raw).replace("Z", "+00:00")
+        raise ValueError("MISSING_TIMESTAMP")
+    s = str(raw).replace("Z", "+00:00").strip()
+    if not s:
+        raise ValueError("EMPTY_TIMESTAMP")
     try:
         dt = datetime.fromisoformat(s)
         return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-    except ValueError:
-        return datetime.now(timezone.utc)
+    except ValueError as exc:
+        raise ValueError(f"INVALID_TIMESTAMP:{raw!r}") from exc
 
 
 class HttpLiveMarketDataProvider:
@@ -199,11 +202,11 @@ class HttpLiveMarketDataProvider:
                 )
             bars.sort(key=lambda b: b.ts)
             self._bars[sym] = bars
+            self._last_ok = datetime.now(timezone.utc)
             return bars[-lookback:]
         except Exception as exc:  # noqa: BLE001
-            cached = self._bars.get(sym, [])
-            if cached:
-                return cached[-lookback:]
+            # Fail-closed: do NOT silently serve possibly stale cache as live data
+            self._error = f"bars:{exc}"
             raise RuntimeError(f"NO_MARKET_DATA bars: {exc}") from exc
 
     def list_symbols(self) -> list[str]:
@@ -226,7 +229,7 @@ class HttpLiveMarketDataProvider:
             kind=self._kind if self._connected else DataSourceKind.REQUIRED,
             display_name=self.display_name,
             connected=self._connected,
-            last_update=self._last_ok.isoformat() if self._last_ok else None,
+            last_update=self._last_ok,  # datetime — never isoformat string
             max_age_sec=max_age_sec,
             live_ready=bool(self._connected and self._kind == DataSourceKind.LIVE),
             note=self._error or ("LIVE connected" if self._connected else "not connected"),

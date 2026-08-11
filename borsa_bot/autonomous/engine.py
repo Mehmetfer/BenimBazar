@@ -295,6 +295,7 @@ class AutonomousTradingEngine:
         report.symbols_scanned = len(decisions)
         signal_counts: dict[str, int] = {}
         ranked_rows: list[dict[str, Any]] = []
+        entry_queue: list[tuple[Any, dict[str, Any]]] = []
 
         for d in decisions:
             sig = d.decision.value if d.decision else d.signal.value
@@ -323,10 +324,9 @@ class AutonomousTradingEngine:
                     "tradeable": getattr(d, "tradeable", False),
                 }
             )
-
-            # Entry candidates → gates → plan → execute/shadow
+            # Defer entries until AI Decision Engine has observed/ranked (L7 pipeline order)
             if d.decision in ENTRY or d.signal == SignalAction.AL:
-                self._handle_entry_candidate(report, d, ser, um, em)
+                entry_queue.append((d, ser))
 
         # Rank: STRONG_BUY → favorites → BUY → … ; demote stale/risk
         def _rank_key(row: dict[str, Any]) -> tuple:
@@ -355,7 +355,8 @@ class AutonomousTradingEngine:
         report.signals = signal_counts
         report.signals_generated = sum(signal_counts.values())
 
-        # 4b) AI Decision Engine — observe/rank/reason/propose (never bypasses risk)
+        # 4b) AI Decision Engine BEFORE execution — observe/rank/reason/propose (never bypasses risk)
+        ai_blocked = False
         try:
             ser_all = [self.trading._serialize(d) for d in decisions]
             ai_report = self.ai.run_from_scan_rows(
@@ -365,6 +366,10 @@ class AutonomousTradingEngine:
                 cycle_id=report.cycle_id,
             )
             report.ai_decision = ai_report
+            gov = (ai_report.get("governor") or {})
+            if str(gov.get("verdict") or "").upper() == "BLOCK" or str(ai_report.get("ai_status") or "").upper() == "BLOCKED":
+                ai_blocked = True
+                report.errors.append("AI_GOVERNOR_BLOCK_NO_NEW_ENTRIES")
             self.events.emit(
                 AutonomyEventType.SCAN_COMPLETED,
                 cycle_id=report.cycle_id,
@@ -374,6 +379,16 @@ class AutonomousTradingEngine:
         except Exception as exc:  # noqa: BLE001
             report.errors.append(f"AI_DECISION:{exc}")
             report.ai_decision = {"status": "ERROR", "error": str(exc), "risk_bypass": False}
+            # Fail-closed for AUTO: do not open new entries if AI layer crashed
+            if um is UserTradingMode.AUTO:
+                ai_blocked = True
+
+        # 4c) Entry candidates → gates → plan → execute/shadow (after AI observation)
+        if not ai_blocked:
+            for d, ser in entry_queue:
+                self._handle_entry_candidate(report, d, ser, um, em)
+        else:
+            report.errors.append("ENTRIES_SKIPPED_AI_BLOCK")
 
         self.events.emit(
             AutonomyEventType.SCAN_COMPLETED,

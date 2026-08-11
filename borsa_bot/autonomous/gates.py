@@ -204,8 +204,18 @@ def evaluate_pretrade_gates(
         )
     elif trading.risk.paused:
         gates.append(GateResult("RISK", False, f"PAUSED:{trading.risk.pause_reason}"))
-    elif risk_verdict in {"REJECT", "BLOCKED"}:
+    elif risk_verdict in {"REJECT", "BLOCKED", "WAIT"}:
         gates.append(GateResult("RISK", False, risk_verdict, {"reason_codes": [ReasonCode.RISK_REJECTED.value]}))
+    elif risk_verdict not in {"APPROVE", "REDUCE", "PASS", "ACCEPT", "OK"}:
+        # Fail-closed: entry must carry an evaluated approving risk verdict
+        gates.append(
+            GateResult(
+                "RISK",
+                False,
+                "RISK_NOT_EVALUATED",
+                {"reason_codes": [ReasonCode.RISK_REJECTED.value], "risk_verdict": risk_verdict or "EMPTY"},
+            )
+        )
     else:
         gates.append(
             GateResult(
@@ -213,7 +223,7 @@ def evaluate_pretrade_gates(
                 True,
                 "ok",
                 {
-                    "risk_verdict": risk_verdict or "PASS",
+                    "risk_verdict": risk_verdict,
                     "governor": gov.to_dict(),
                     "size_mult_cap": gov.size_mult,
                     "reason_codes": [ReasonCode.RISK_ACCEPTABLE.value],

@@ -128,17 +128,33 @@ class ExperimentFactory:
                 break
             m = dict(metrics_by_stage.get(cur.get("stage") or stage_hint) or metrics_by_stage.get(stage_hint) or {})
             # Default metrics if not provided — honest theoretical + sample awareness
-            m.setdefault("sample_size", m.get("n", 40))
+            m.setdefault("sample_size", m.get("n", 0))
             m.setdefault("includes_fees", False)
             m.setdefault("includes_slippage", False)
-            m.setdefault("walk_forward_passed", stage_hint != "WALK_FORWARD" or m.get("walk_forward_passed", True))
-            m.setdefault("calibration_ok", True)
-            m.setdefault("oos_sharpe", m.get("sharpe", 0.8))
-            m.setdefault("max_drawdown_pct", 12.0)
+            # Do NOT rubber-stamp validation — require explicit True in stage metrics
+            if "walk_forward_passed" not in m:
+                m["walk_forward_passed"] = False
+            if "calibration_ok" not in m:
+                m["calibration_ok"] = False
+            m.setdefault("oos_sharpe", m.get("sharpe", 0.0))
+            m.setdefault("max_drawdown_pct", 100.0)
             m.setdefault("overfit_risk", self._overfit_score(m))
             # Multiple-testing metadata
             m["number_of_trials"] = self._trial_count
             m["bonferroni_hint"] = round(0.05 / max(1, self._trial_count), 5)
+
+            # Block advance through WF/OOS/EVAL without explicit validation flags
+            stage_now = str(cur.get("stage") or stage_hint)
+            if stage_now in {"WALK_FORWARD", "OUT_OF_SAMPLE", "EVALUATION"}:
+                if not m.get("walk_forward_passed") and stage_now in {"WALK_FORWARD", "OUT_OF_SAMPLE", "EVALUATION"}:
+                    if stage_now != "WALK_FORWARD" and not m.get("walk_forward_passed"):
+                        r = self.experiments.advance(eid, passed=False, metrics={**m, "fail_reason": "WALK_FORWARD_REQUIRED"})
+                        history.append(r.get("experiment") or {})
+                        break
+                if stage_now in {"OUT_OF_SAMPLE", "EVALUATION"} and not m.get("calibration_ok"):
+                    r = self.experiments.advance(eid, passed=False, metrics={**m, "fail_reason": "CALIBRATION_REQUIRED"})
+                    history.append(r.get("experiment") or {})
+                    break
 
             if m.get("overfit_risk", 0) >= 0.7 and stage_hint in {"OUT_OF_SAMPLE", "EVALUATION"}:
                 r = self.experiments.advance(eid, passed=False, metrics={**m, "fail_reason": "OVERFIT_RISK"})
