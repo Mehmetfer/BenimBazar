@@ -81,9 +81,12 @@ def compute_targets(
             entry + risk * cfg.preferred_risk_reward,
             entry + risk * max(cfg.preferred_risk_reward + 1.0, cfg.atr_take_mult),
         ]
-        # Soft resistance awareness — do not invent fills
+        # Soft resistance awareness — never crush T1 below minimum R/R
         if ind.resistance > entry:
-            raw[0] = min(raw[0], max(entry + risk * 1.2, ind.resistance * 0.995))
+            capped = min(raw[0], max(entry + risk * cfg.min_risk_reward, ind.resistance * 0.995))
+            if (capped - entry) / risk >= cfg.min_risk_reward:
+                raw[0] = capped
+            # else keep ATR-based T1; note resistance separately
         probs = [min(0.85, p_win + 0.05), max(0.25, p_win - 0.08), max(0.12, p_win - 0.18)]
         notes = [
             f"yakın direnç/ATR R1 (~{_r(ind.resistance)})" if ind.resistance else "ATR R1",
