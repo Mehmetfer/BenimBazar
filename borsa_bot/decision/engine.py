@@ -31,6 +31,11 @@ from decision.quality import autonomy_dashboard_scores, score_decision_quality
 from decision.reason import ReasoningResult
 from decision.watchlist import AIWatchlist
 
+try:
+    from level7.engine import Level7Engine
+except Exception:  # noqa: BLE001
+    Level7Engine = None  # type: ignore[misc, assignment]
+
 
 @dataclass
 class AIDecisionCycleReport:
@@ -49,6 +54,7 @@ class AIDecisionCycleReport:
     autonomy: dict[str, Any] = field(default_factory=dict)
     learning: dict[str, Any] = field(default_factory=dict)
     command_center: dict[str, Any] = field(default_factory=dict)
+    level7: dict[str, Any] = field(default_factory=dict)
     top_card: dict[str, Any] | None = None
     ai_status: str = "ACTIVE"
     autonomy_score_hint: int = 55
@@ -82,6 +88,7 @@ class AIDecisionEngine:
         self.health_agent = HealthAgent()
         self.learning_agent = LearningAgent()
         self.outcome_agent = OutcomeAgent()
+        self.level7 = Level7Engine(trading) if Level7Engine is not None else None
         self._last: AIDecisionCycleReport | None = None
 
     def status(self) -> dict[str, Any]:
@@ -93,6 +100,7 @@ class AIDecisionEngine:
             "recent_decisions": self.memory.recent(limit=8),
             "command_center": (last or {}).get("command_center"),
             "autonomy": (last or {}).get("autonomy"),
+            "level7": (last or {}).get("level7") or (self.level7.status() if self.level7 else {}),
             "risk_bypass": False,
             "broker_direct": False,
             "fallback": (last or {}).get("fallback") or "QUANT/TECHNICAL",
@@ -341,6 +349,30 @@ class AIDecisionEngine:
         report.status = "OK" if gov.verdict != "BLOCK" else "GOVERNOR_BLOCKED"
         report.ai_status = "ACTIVE" if gov.verdict != "BLOCK" else "BLOCKED"
         report.fallback = "QUANT/TECHNICAL"
+
+        # Level 7 research / hypothesis / diagnostics layer (propose-only)
+        if self.level7 is not None:
+            top_row = by_sym.get((packets[0] or {}).get("symbol")) if packets else (ser_rows[0] if ser_rows else None)
+            dq = float(((packets[0] or {}).get("quality") or {}).get("total") or 70) if packets else 55.0
+            try:
+                report.level7 = self.level7.run_cycle(
+                    context=ctx_d,
+                    regime=reg,
+                    health=health,
+                    learning=learning,
+                    top_row=top_row,
+                    decision_quality_avg=dq,
+                    seed_research=True,
+                )
+                # Enrich command center
+                sc = report.level7.get("scorecard") or {}
+                report.command_center["level7_score"] = sc.get("level7_autonomy_score")
+                report.command_center["autonomy_state"] = (report.level7.get("autonomy") or {}).get("state")
+                report.command_center["research_open"] = len(report.level7.get("research_questions") or [])
+                report.command_center["hypotheses"] = len(report.level7.get("hypotheses") or [])
+            except Exception as exc:  # noqa: BLE001
+                report.level7 = {"status": "ERROR", "error": str(exc), "risk_bypass": False}
+
         self._last = report
         return report.to_dict()
 

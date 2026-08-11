@@ -58,6 +58,33 @@ class ModelRegistry:
                 return m
         return None
 
+    def register_challenger(
+        self,
+        *,
+        model_id: str,
+        version: str,
+        features: list[str] | None = None,
+        metrics: dict | None = None,
+        note: str | None = None,
+    ) -> dict:
+        """Register a CHALLENGER model for paper/shadow race — not ACTIVE."""
+        data = self._read()
+        for m in data.get("models") or []:
+            if m.get("model_id") == model_id:
+                return {"ok": False, "reason": "already_exists", "model": m}
+        rec = ModelRecord(
+            model_id=model_id,
+            version=version,
+            status="SHADOW",
+            features=list(features or []),
+            metrics=dict(metrics or {"role": "CHALLENGER"}),
+            created_at=utc_now().isoformat(),
+            note=note or "Challenger — paper/shadow only until human promote",
+        )
+        data.setdefault("models", []).append(rec.to_dict())
+        self._write(data)
+        return {"ok": True, "model": rec.to_dict()}
+
     def promote(self, model_id: str, *, approved_by: str) -> dict:
         """Human-gated promotion. Never auto-called by trading loop."""
         data = self._read()

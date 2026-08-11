@@ -89,6 +89,20 @@ class ModelPromoteBody(BaseModel):
     approved_by: str = "dashboard"
 
 
+class Level7PromoteBody(BaseModel):
+    approved_by: str = "dashboard"
+
+
+class Level7AdvanceBody(BaseModel):
+    passed: bool = True
+    metrics: dict | None = None
+
+
+class ExperimentStartBody(BaseModel):
+    hypothesis_id: str
+    dataset: str = "historical_bars"
+
+
 @app.get("/api/health")
 def health() -> dict:
     return service.health()
@@ -802,6 +816,133 @@ def ai_autonomy_scores() -> dict:
 def ai_research(symbol: str) -> dict:
     """Research mode — debate + plan for one symbol; no order."""
     return engine.ai.analyze_symbol(symbol.upper())
+
+
+@app.get("/api/level7/status")
+def level7_status() -> dict:
+    l7 = getattr(engine.ai, "level7", None)
+    if l7 is None:
+        return {"ok": False, "reason": "level7_unavailable"}
+    return {"ok": True, **l7.status()}
+
+
+@app.post("/api/level7/cycle")
+def level7_cycle() -> dict:
+    """Run Level 7 research/hypothesis/diagnostics cycle (no broker)."""
+    l7 = getattr(engine.ai, "level7", None)
+    if l7 is None:
+        raise HTTPException(503, "level7_unavailable")
+    # Prefer last AI context if present
+    st = engine.ai.status()
+    last = st.get("last_cycle") or {}
+    out = l7.run_cycle(
+        context={**(last.get("context") or {}), "data_valid": True},
+        regime=last.get("regime") or {},
+        health=last.get("health") or {},
+        learning=last.get("learning") or {},
+        top_row=((last.get("decisions") or [{}])[0] if last.get("decisions") else None),
+        decision_quality_avg=float((((last.get("decisions") or [{}])[0].get("quality") or {}).get("total") or 70)),
+    )
+    return {"ok": True, "cycle": out, "risk_bypass": False, "broker_direct": False}
+
+
+@app.get("/api/level7/research")
+def level7_research() -> dict:
+    l7 = getattr(engine.ai, "level7", None)
+    if l7 is None:
+        raise HTTPException(503, "level7_unavailable")
+    return {"ok": True, "questions": l7.research.list_questions(50)}
+
+
+@app.get("/api/level7/hypotheses")
+def level7_hypotheses() -> dict:
+    l7 = getattr(engine.ai, "level7", None)
+    if l7 is None:
+        raise HTTPException(503, "level7_unavailable")
+    return {"ok": True, "hypotheses": l7.hypotheses.list_hypotheses(50)}
+
+
+@app.get("/api/level7/experiments")
+def level7_experiments() -> dict:
+    l7 = getattr(engine.ai, "level7", None)
+    if l7 is None:
+        raise HTTPException(503, "level7_unavailable")
+    return {"ok": True, "experiments": l7.experiments.list_experiments(50), "pipeline": [
+        "HYPOTHESIS", "DATASET", "BACKTEST", "WALK_FORWARD", "OUT_OF_SAMPLE", "PAPER", "SHADOW", "EVALUATION", "HUMAN_APPROVAL"
+    ]}
+
+
+@app.post("/api/level7/experiments/start")
+def level7_experiment_start(body: ExperimentStartBody) -> dict:
+    l7 = getattr(engine.ai, "level7", None)
+    if l7 is None:
+        raise HTTPException(503, "level7_unavailable")
+    exp = l7.experiments.start(body.hypothesis_id, dataset=body.dataset)
+    return {"ok": True, "experiment": exp.to_dict()}
+
+
+@app.post("/api/level7/experiments/{experiment_id}/advance")
+def level7_experiment_advance(experiment_id: str, body: Level7AdvanceBody | None = None) -> dict:
+    l7 = getattr(engine.ai, "level7", None)
+    if l7 is None:
+        raise HTTPException(503, "level7_unavailable")
+    payload = body or Level7AdvanceBody()
+    return l7.experiments.advance(experiment_id, passed=bool(payload.passed), metrics=payload.metrics)
+
+
+@app.get("/api/level7/lab")
+def level7_lab() -> dict:
+    l7 = getattr(engine.ai, "level7", None)
+    if l7 is None:
+        raise HTTPException(503, "level7_unavailable")
+    return {"ok": True, "strategies": l7.lab.list_strategies(50), "arena": l7.arena.status()}
+
+
+@app.post("/api/level7/lab/{strategy_id}/propose-promotion")
+def level7_propose_promotion(strategy_id: str, body: Level7AdvanceBody | None = None) -> dict:
+    l7 = getattr(engine.ai, "level7", None)
+    if l7 is None:
+        raise HTTPException(503, "level7_unavailable")
+    payload = body or Level7AdvanceBody()
+    return l7.arena.propose_promotion(strategy_id, metrics=payload.metrics or {})
+
+
+@app.post("/api/level7/lab/{strategy_id}/approve")
+def level7_approve_promotion(strategy_id: str, body: Level7PromoteBody | None = None) -> dict:
+    """Human-gated champion promotion — never called by trading loop."""
+    l7 = getattr(engine.ai, "level7", None)
+    if l7 is None:
+        raise HTTPException(503, "level7_unavailable")
+    payload = body or Level7PromoteBody()
+    return l7.arena.human_approve_promotion(strategy_id, approved_by=payload.approved_by)
+
+
+@app.get("/api/level7/memory")
+def level7_memory() -> dict:
+    l7 = getattr(engine.ai, "level7", None)
+    if l7 is None:
+        raise HTTPException(503, "level7_unavailable")
+    return {
+        "ok": True,
+        "patterns": l7.memory.list_patterns(30),
+        "journal": l7.memory.list_journal(30),
+        "note": "similarity ≠ certainty",
+    }
+
+
+@app.get("/api/level7/diagnostics")
+def level7_diagnostics() -> dict:
+    l7 = getattr(engine.ai, "level7", None)
+    if l7 is None:
+        raise HTTPException(503, "level7_unavailable")
+    st = l7.status()
+    last = st.get("last_cycle") or {}
+    return {
+        "ok": True,
+        "diagnostics": last.get("diagnostics") or l7.diagnostics.diagnose(),
+        "scorecard": last.get("scorecard") or st.get("scorecard"),
+        "full_level7_claimed": False,
+    }
 
 
 @app.get("/api/models")

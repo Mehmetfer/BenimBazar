@@ -212,6 +212,12 @@
       <div class="why"><b>AI AUTONOMY</b></div>
       <div id="aiAutonomyBody" class="meta" style="margin-top:8px">—</div>
     </div>
+    <div class="card" style="cursor:default" id="level7Card">
+      <div class="why"><b>LEVEL 7 — RESEARCH / LAB</b></div>
+      <div id="level7Body" class="meta" style="margin-top:8px">—</div>
+      <div id="level7Diag" class="meta" style="margin-top:6px">—</div>
+      <button class="more" id="level7CycleBtn" type="button" style="margin-top:8px">L7 Research Cycle</button>
+    </div>
     <div class="card" style="cursor:default">
       <div class="why"><b>AI PERFORMANCE</b> — ana sayfada gösterilmez.</div>
       <div id="aiPerf" class="why" style="margin-top:8px">Yükleniyor…</div>
@@ -928,6 +934,19 @@
         `Level ${aut.autonomy_level??'?'} ${aut.autonomy_label||''} · TOTAL <b>${aut.total_autonomy??'—'}</b><br>`+
         `Market ${aut.market_understanding??'—'} · Discovery ${aut.opportunity_discovery??'—'} · Reasoning ${aut.reasoning??'—'}<br>`+
         `Risk ${aut.risk_awareness??'—'} · Pred ${aut.prediction_accuracy??'—'} · Adapt ${aut.adaptability??'—'} · Self ${aut.self_evaluation??'—'}`;
+      const l7 = await (await fetch('/api/level7/status')).json();
+      const sc = (l7.scorecard||(l7.last_cycle||{}).scorecard)||{};
+      const arena = l7.champion||{};
+      document.getElementById('level7Body').innerHTML =
+        `Score <b>${sc.level7_autonomy_score??'—'}</b> · maturity L${sc.operational_maturity_level??'?'} ${sc.maturity_label||''}<br>`+
+        `Research ${sc.research_intelligence??'—'} · Decision ${sc.decision_intelligence??'—'} · Risk ${sc.risk_intelligence??'—'}<br>`+
+        `Learning ${sc.learning_intelligence??'—'} · SelfDiag ${sc.self_diagnostic_score??'—'} · Data ${sc.data_integrity??'—'} · Exec ${sc.execution_safety??'—'}<br>`+
+        `Q open ${l7.research_open??0} · Hyp ${l7.hypotheses??0} · Exp ${l7.experiments??0}<br>`+
+        `Champion: ${((arena.champion||{}).name)||'—'} ${((arena.champion||{}).version)||''} · Challengers ${(arena.challengers||[]).length}<br>`+
+        `<span class="meta">full_level7_claimed=false · auto_promote=NO · LIVE locked</span>`;
+      const dg = await (await fetch('/api/level7/diagnostics')).json();
+      const bad = ((dg.diagnostics||{}).what_am_i_doing_badly||[]).slice(0,3).join(' · ')||'—';
+      document.getElementById('level7Diag').textContent = 'Self-diag: '+bad;
     }catch(e){
       document.getElementById('aiDecisionBody').textContent = 'AI API yok';
     }
@@ -960,6 +979,12 @@
     const f = r.filter_stats||{};
     document.getElementById('autonomyMeta').textContent =
       `${r.status} · exec=${r.execution_mode} · UNIVERSE=${f.UNIVERSE??'—'} DEEP=${f.DEEP_ANALYSIS??r.symbols_scanned??'—'} orders=${r.orders_submitted??0} shadow=${(r.shadow_intents||[]).length} · LIVE=${r.live_broker||'DISABLED'}`;
+    await loadAutonomy();
+  };
+  const l7btn=document.getElementById('level7CycleBtn');
+  if(l7btn) l7btn.onclick=async()=>{
+    document.getElementById('level7Body').textContent='L7 cycle…';
+    await fetch('/api/level7/cycle',{method:'POST'});
     await loadAutonomy();
   };
   document.getElementById('moreBtn').onclick=()=>{showAll=true; renderHome();};
