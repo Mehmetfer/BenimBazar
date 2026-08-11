@@ -56,6 +56,7 @@ class FavoriteRecord:
     favorite_id: str
     user_id: str
     symbol: str
+    market_type: str = "BIST"  # BIST | CRYPTO — keeps markets separate
     priority: int = 50  # user watchlist priority 0-100
     notes: str = ""
     strategy_preference: list[str] = field(default_factory=lambda: ["SWING"])

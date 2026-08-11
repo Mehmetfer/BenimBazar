@@ -166,6 +166,23 @@ class ParibuMarketDataProvider:
             raise RuntimeError(f"NO_MARKET_DATA: {app}")
         return q
 
+    def ticker_stats(self, symbol: str) -> dict[str, Any]:
+        """24h change / volume from Paribu ticker cache (percentage field)."""
+        app = normalize_crypto_app_symbol(symbol)
+        market = to_paribu_market(app)
+        with self._lock:
+            raw = self._tickers.get(market)
+        if raw is None:
+            return {}
+        return {
+            "change_pct": float(raw.percentage),
+            "change": float(raw.change),
+            "volume": float(raw.volume),
+            "high": float(raw.high),
+            "low": float(raw.low),
+            "first": float(raw.first),
+        }
+
     def get_bars(self, symbol: str, lookback: int = 220) -> list[Bar]:
         app = normalize_crypto_app_symbol(symbol)
         self._ingest_rest_trades(app)

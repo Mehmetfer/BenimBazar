@@ -1,6 +1,6 @@
 """CRYPTO market foundation — isolated from BIST trading path.
 
-Phase 1: architecture only. No Paribu HTTP, no live crypto trading.
+Phase 1–4: market type, Paribu MD, analytics/signals, dashboard UI (paper only).
 Default: CRYPTO_ENABLED=false → BIST behavior unchanged.
 """
 

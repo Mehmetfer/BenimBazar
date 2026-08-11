@@ -21,6 +21,7 @@ STATIC.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="Borsa Bot", version="0.3.0")
 service = TradingService()
 crypto_service = CryptoFoundationService()
+crypto_service.bind_shared(favorites=service.favorites, alerts=service.alerts)
 
 
 class ExecBody(BaseModel):
@@ -58,6 +59,12 @@ def crypto_status() -> dict:
     return crypto_service.status()
 
 
+@app.get("/api/crypto/dashboard")
+def crypto_dashboard(limit: int = 40) -> dict:
+    """Crypto dashboard cards — favorites-first, LIVE/STALE/UNAVAILABLE badges."""
+    return crypto_service.dashboard(limit=limit, emit_alerts=True)
+
+
 @app.get("/api/crypto/scan")
 def crypto_scan(limit: int = 20) -> dict:
     """Crypto signal scan (paper analysis). Empty unless CRYPTO_SIGNALS_ENABLED."""
@@ -79,6 +86,18 @@ def crypto_signal(symbol: str) -> dict:
     return crypto_service.signal(symbol)
 
 
+@app.get("/api/crypto/detail/{symbol}")
+def crypto_detail(symbol: str, timeframe: str = "15m") -> dict:
+    """Coin detail: price, chart, indicators, signal, trade plan, accuracy, risk."""
+    return crypto_service.detail(symbol, timeframe=timeframe)
+
+
+@app.get("/api/crypto/chart/{symbol}")
+def crypto_chart(symbol: str, timeframe: str = "15m", lookback: int = 120) -> dict:
+    """Crypto chart adapter (Paribu trade aggregation — not a BIST chart copy)."""
+    return crypto_service.chart(symbol, timeframe=timeframe, lookback=lookback)
+
+
 @app.get("/api/crypto/symbols")
 def crypto_symbols() -> dict:
     st = crypto_service.status()
@@ -93,6 +112,7 @@ def crypto_symbols() -> dict:
 
 @app.get("/api/crypto/quote/{symbol}")
 def crypto_quote(symbol: str) -> dict:
+    from crypto.dashboard import live_status_badge
     from crypto.providers.paribu import ParibuMarketDataProvider
     from crypto.symbols import normalize_crypto_app_symbol
 
@@ -100,6 +120,7 @@ def crypto_quote(symbol: str) -> dict:
         raise HTTPException(503, "Paribu live provider not active")
     try:
         q = crypto_service.provider.get_quote(normalize_crypto_app_symbol(symbol))
+        stats = crypto_service.provider.ticker_stats(normalize_crypto_app_symbol(symbol))
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(404, str(exc)) from exc
     return {
@@ -108,12 +129,16 @@ def crypto_quote(symbol: str) -> dict:
         "bid": q.bid,
         "ask": q.ask,
         "spread_pct": q.spread_pct,
-        "volume": q.volume,
+        "volume": stats.get("volume", q.volume),
+        "change_pct": stats.get("change_pct"),
         "timestamp_utc": q.ts.isoformat() if q.ts else None,
         "market_type": "CRYPTO",
         "data_source_kind": q.data_source_kind,
         "provider": q.provider,
         "market_status": q.market_status,
+        "live_status": live_status_badge(
+            has_quote=True, data_source_kind=q.data_source_kind, ts=q.ts
+        ),
     }
 
 
@@ -393,7 +418,26 @@ class PriceAlertBody(BaseModel):
 
 
 @app.get("/api/favorites")
-def favorites(sort: str = "PRIORITY", group: str | None = None) -> dict:
+def favorites(sort: str = "PRIORITY", group: str | None = None, market_type: str = "BIST") -> dict:
+    mt = (market_type or "BIST").upper()
+    if mt == "CRYPTO":
+        rows = [
+            {
+                **f.to_dict(),
+                "is_favorite": True,
+                "favorite": True,
+                "priority": f.priority,
+            }
+            for f in service.favorites.list_favorites(market_type="CRYPTO")
+        ]
+        return {
+            "market_type": "CRYPTO",
+            "favorites": rows,
+            "count": len(rows),
+            "principle": "FAVORITE ≠ BUY · market_type ayrımı korunur",
+            "sort": sort,
+            "group": group,
+        }
     return service.favorites_view(sort=sort, group=group)
 
 
@@ -414,32 +458,38 @@ def favorites_groups() -> dict:
 
 
 @app.get("/api/favorites/performance")
-def favorites_performance() -> dict:
-    return service.favorites.performance()
+def favorites_performance(market_type: str | None = None) -> dict:
+    return service.favorites.performance(market_type=market_type)
 
 
 @app.post("/api/favorites/price-alert")
-def favorites_price_alert(body: PriceAlertBody) -> dict:
-    if not service.favorites.is_favorite(body.symbol.upper()):
-        service.favorites.add(body.symbol.upper())
-    rule = service.favorites.add_price_alert(body.symbol.upper(), body.kind, body.threshold)
-    return {"ok": True, "alert": rule.__dict__}
+def favorites_price_alert(body: PriceAlertBody, market_type: str = "BIST") -> dict:
+    mt = (market_type or "BIST").upper()
+    if not service.favorites.is_favorite(body.symbol.upper(), market_type=mt):
+        service.favorites.add(body.symbol.upper(), market_type=mt)
+    rule = service.favorites.add_price_alert(body.symbol.upper(), body.kind, body.threshold, market_type=mt)
+    return {"ok": True, "alert": rule.__dict__, "market_type": mt}
 
 
 @app.post("/api/favorites/{symbol}/toggle")
-def favorites_toggle(symbol: str) -> dict:
-    fav = service.favorites.toggle(symbol.upper())
+def favorites_toggle(symbol: str, market_type: str = "BIST") -> dict:
+    mt = (market_type or "BIST").upper()
+    fav = service.favorites.toggle(symbol.upper(), market_type=mt)
     return {
         "ok": True,
         "symbol": fav.symbol,
+        "market_type": fav.market_type,
         "is_favorite": fav.active,
+        "favorite": fav.active,
+        "priority": fav.priority,
         "record": fav.to_dict(),
         "principle": "FAVORITE ≠ BUY · FAVORITE = PRIORITY ANALYSIS",
     }
 
 
 @app.put("/api/favorites/{symbol}")
-def favorites_update(symbol: str, body: FavoriteUpdateBody) -> dict:
+def favorites_update(symbol: str, body: FavoriteUpdateBody, market_type: str = "BIST") -> dict:
+    mt = (market_type or "BIST").upper()
     try:
         fav = service.favorites.update(
             symbol.upper(),
@@ -447,17 +497,29 @@ def favorites_update(symbol: str, body: FavoriteUpdateBody) -> dict:
             priority=body.priority,
             strategy_preference=body.strategy_preference,
             notification_preferences=body.notification_preferences,
+            market_type=mt,
         )
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from exc
     if body.groups is not None:
-        service.favorites.set_groups(symbol.upper(), body.groups)
-        fav = service.favorites.get(symbol.upper())
+        service.favorites.set_groups(symbol.upper(), body.groups, market_type=mt)
+        fav = service.favorites.get(symbol.upper(), market_type=mt)
     return {"ok": True, "record": fav.to_dict() if fav else None}
 
 
 @app.get("/api/favorites/{symbol}")
-def favorites_detail(symbol: str) -> dict:
+def favorites_detail(symbol: str, market_type: str = "BIST") -> dict:
+    mt = (market_type or "BIST").upper()
+    if mt == "CRYPTO":
+        fav = service.favorites.get(symbol.upper(), market_type="CRYPTO")
+        return {
+            "market_type": "CRYPTO",
+            "symbol": symbol.upper(),
+            "is_favorite": bool(fav and fav.active),
+            "record": fav.to_dict() if fav else None,
+            "timeline": service.favorites.timeline(symbol.upper(), market_type="CRYPTO"),
+            "price_alerts": [a.__dict__ for a in service.favorites.list_price_alerts(symbol.upper(), market_type="CRYPTO")],
+        }
     return service.favorite_detail(symbol.upper())
 
 

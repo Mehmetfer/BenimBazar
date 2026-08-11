@@ -69,6 +69,22 @@
     .market-btn{flex:1;min-height:40px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--mute);font-weight:800;font-size:.8rem}
     .market-btn.on{background:rgba(46,207,138,.16);color:var(--buy2);border-color:rgba(46,207,138,.4)}
     .market-btn:disabled{opacity:.55;cursor:not-allowed}
+    .live-LIVE{color:var(--ok);font-weight:800;font-size:.72rem;letter-spacing:.04em}
+    .live-STALE{color:var(--warn);font-weight:800;font-size:.72rem}
+    .live-UNAVAILABLE{color:var(--bad);font-weight:800;font-size:.72rem}
+    .crypto-mobile-row{display:none}
+    .chart-box{height:160px;margin-top:10px;background:rgba(0,0,0,.18);border-radius:12px;padding:8px}
+    .chart-box svg{width:100%;height:100%;display:block}
+    .tf-row{display:flex;gap:6px;margin:8px 0;overflow:auto}
+    .tf-btn{flex:0 0 auto;min-height:36px;padding:6px 12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--mute);font-weight:700;font-size:.75rem}
+    .tf-btn.on{background:rgba(46,207,138,.16);color:var(--buy2);border-color:rgba(46,207,138,.4)}
+    @media (max-width:560px){
+      .crypto-card .grid{display:none}
+      .crypto-card .chg,.crypto-card .meta.desktop-only{display:none}
+      .crypto-mobile-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px}
+      .crypto-mobile-row .m-price{font-size:1.25rem;font-weight:800}
+      .crypto-mobile-row .m-conf{font-size:.85rem;color:var(--mute);font-weight:700}
+    }
   </style>
 </head>
 <body>
@@ -138,20 +154,48 @@
   </div><!-- /bistShell -->
 
   <div id="cryptoShell" style="display:none">
-    <div class="panel on" id="panel-crypto">
-      <h2>CRYPTO · Paribu</h2>
-      <div class="banner sim" id="cryptoBanner">Kripto foundation yükleniyor…</div>
-      <div class="card" style="cursor:default" id="cryptoCard">
-        <div class="why" id="cryptoMsg">—</div>
-        <div class="grid" style="margin-top:12px">
-          <div class="k"><span>Durum</span><b id="cryptoEnabled">—</b></div>
-          <div class="k"><span>Provider</span><b id="cryptoProv">—</b></div>
-          <div class="k"><span>Veri</span><b id="cryptoData">—</b></div>
-          <div class="k"><span>Sinyal</span><b id="cryptoSig">KAPALI</b></div>
-        </div>
-        <p class="why" style="margin-top:12px">Phase 1: mimari hazırlık. Paribu API bağlı değil. BIST davranışı değişmez.</p>
+    <div class="panel on" id="panel-crypto-home">
+      <div class="search">
+        <input id="cq" placeholder="Coin ara (BTC, ETH…)" autocomplete="off" />
+        <button type="button" id="cSearchBtn">Ara</button>
       </div>
-      <div class="empty" id="cryptoEmpty">Kripto sinyali yok (beklenen).</div>
+      <div class="filters" id="cFilters">
+        <button class="filter on" data-cf="ALL" type="button">Tümü</button>
+        <button class="filter" data-cf="FAV" type="button">Favoriler</button>
+        <button class="filter" data-cf="STRONG_BUY" type="button">Güçlü AL</button>
+        <button class="filter" data-cf="BUY" type="button">AL</button>
+        <button class="filter" data-cf="WAIT" type="button">Bekle</button>
+        <button class="filter" data-cf="SELL" type="button">Sat</button>
+      </div>
+      <div class="banner sim" id="cryptoBanner">Kripto yükleniyor…</div>
+      <div id="cryptoHome"></div>
+    </div>
+
+    <div class="panel" id="panel-crypto-fav">
+      <h2>★ Crypto Favoriler</h2>
+      <p class="why">Favori ≠ otomatik AL. market_type=CRYPTO ayrımı korunur.</p>
+      <div id="cryptoFavHome"></div>
+    </div>
+
+    <div class="panel" id="panel-crypto-mkt">
+      <h2>CRYPTO Piyasa</h2>
+      <div id="cryptoMktList"></div>
+    </div>
+
+    <div class="panel" id="panel-crypto-port">
+      <h2>Crypto Portföy</h2>
+      <div class="empty">Paper only · Canlı emir / broker yok. BIST paper portföyünden ayrı tutulur.</div>
+    </div>
+
+    <div class="panel" id="panel-crypto-set">
+      <h2>Crypto Ayar</h2>
+      <div class="card" style="cursor:default" id="cryptoSys"></div>
+      <button class="more" id="cryptoRefresh" type="button">Yenile</button>
+    </div>
+
+    <div class="panel" id="panel-crypto-detail">
+      <button class="detail-back" id="cBackBtn" type="button">← Geri</button>
+      <div id="cryptoDetail"></div>
     </div>
   </div>
 
@@ -167,6 +211,7 @@
 (() => {
   let daily = null, dash = null, filter = 'ALL', showAll = false, lastPanel = 'home';
   let activeMarket = 'BIST';
+  let cryptoDash = null, cFilter = 'ALL', lastCryptoPanel = 'home', cryptoTf = '15m';
   const money = n => Number(n||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
   const pct = n => (n==null||n===undefined) ? '—' : `${n>=0?'+':''}${Number(n).toFixed(2)}%`;
 
@@ -178,7 +223,8 @@
     if(activeMarket === 'CRYPTO'){
       bist.style.display = 'none';
       crypto.style.display = 'block';
-      document.querySelectorAll('.nav button').forEach(b=>b.disabled = true);
+      document.querySelectorAll('.nav button').forEach(b=>b.disabled = false);
+      setCryptoNav(lastCryptoPanel || 'home');
       loadCrypto();
     } else {
       bist.style.display = 'block';
@@ -188,30 +234,236 @@
     }
   }
 
+  function setCryptoNav(name){
+    document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on', b.dataset.nav===name));
+    document.querySelectorAll('#cryptoShell .panel').forEach(p=>p.classList.remove('on'));
+    const id = name==='home'?'panel-crypto-home': name==='fav'?'panel-crypto-fav': name==='mkt'?'panel-crypto-mkt': name==='port'?'panel-crypto-port': name==='set'?'panel-crypto-set':'panel-crypto-detail';
+    document.getElementById(id).classList.add('on');
+    if(name!=='detail') lastCryptoPanel = name;
+  }
+
+  function liveBadge(st){
+    const s = st||'UNAVAILABLE';
+    return `<span class="live-${s}">${s}</span>`;
+  }
+
+  function cryptoCardHtml(c){
+    if(!c) return '';
+    const dec = c.signal||c.decision||'NO_DATA';
+    const star = c.is_favorite?'★':'☆';
+    const chgCls = (c.change_pct||0)>=0?'up':'down';
+    const priceBlock = (c.price==null)
+      ? `<div class="price">VERİ YOK</div><div class="meta">${c.note||'Canlı veri alınamıyor'}</div>`
+      : `<div class="price">${money(c.price)} <span style="font-size:.9rem;color:var(--mute)">TL</span></div>
+         <div class="chg ${chgCls}">${pct(c.change_pct)}</div>
+         <div class="meta desktop-only">${liveBadge(c.live_status)} · Vol ${c.volume!=null?money(c.volume):'—'} · ${c.last_update_ago||'—'}</div>`;
+    return `<div class="card crypto-card" data-csym="${c.symbol}">
+      <div class="row1">
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="star ${c.is_favorite?'on':''}" data-cfav="${c.symbol}" type="button">${star}</button>
+          <div class="sym">${c.coin||c.display||c.symbol}</div>
+        </div>
+        <span class="badge ${dec}">${c.decision_label||dec}</span>
+      </div>
+      ${priceBlock}
+      <div class="crypto-mobile-row">
+        <div class="m-price">${c.price!=null?money(c.price):'—'}</div>
+        <div class="m-conf">${c.confidence!=null?('Skor '+c.confidence):'—'}</div>
+      </div>
+      ${dec==='NO_DATA'&&c.price==null?'':`<div class="grid">
+        <div class="k"><span>Giriş</span><b>${c.entry??'—'}</b></div>
+        <div class="k"><span>Stop</span><b>${c.stop??'—'}</b></div>
+        <div class="k"><span>Hedef</span><b>${c.target??'—'}</b></div>
+        <div class="k"><span>R/R</span><b>${c.risk_reward!=null?('1 : '+c.risk_reward):'—'}</b></div>
+        <div class="k"><span>Model Skoru</span><b>${c.confidence??c.model_score??'—'}</b></div>
+        <div class="k"><span>Trend</span><b>${c.trend||'—'}</b></div>
+        <div class="k"><span>Canlılık</span><b>${liveBadge(c.live_status)}</b></div>
+        <div class="k"><span>Güncelleme</span><b>${c.last_update_ago||'—'}</b></div>
+      </div>
+      <div class="meta" style="margin-top:6px">Paper only · SIGNAL ≠ EXECUTION · ${c.live_status||'—'}</div>`}
+    </div>`;
+  }
+
+  function cSection(title, items){
+    if(!items||!items.length) return '';
+    return `<h2>${title}</h2>` + items.map(cryptoCardHtml).join('');
+  }
+
+  function applyCryptoFilter(list){
+    const q = (document.getElementById('cq').value||'').trim().toUpperCase();
+    let out = list||[];
+    if(q) out = out.filter(c => (c.symbol||'').includes(q) || (c.coin||'').toUpperCase().includes(q) || (c.display||'').toUpperCase().includes(q));
+    if(cFilter==='FAV') out = out.filter(c=>c.is_favorite);
+    if(cFilter==='STRONG_BUY') out = out.filter(c=>c.signal==='STRONG_BUY');
+    if(cFilter==='BUY') out = out.filter(c=>['BUY','AL'].includes(c.signal));
+    if(cFilter==='WAIT') out = out.filter(c=>['WAIT','WATCH','BEKLE','HOLD','WAIT_FOR_ENTRY'].includes(c.signal));
+    if(cFilter==='SELL') out = out.filter(c=>['SELL','SAT','STRONG_SELL'].includes(c.signal));
+    return out;
+  }
+
+  function renderCryptoHome(){
+    if(!cryptoDash) return;
+    const s = cryptoDash.sections||{};
+    const banner = document.getElementById('cryptoBanner');
+    const st = cryptoDash.status||{};
+    if(!cryptoDash.enabled){
+      banner.className='banner sim';
+      banner.textContent = (st.ui&&st.ui.message) || 'CRYPTO kapalı';
+    } else if((st.gate&&st.gate.signals_allowed) || st.has_market_data){
+      banner.className='banner ok';
+      banner.textContent = (cryptoDash.note||st.ui&&st.ui.message||'CRYPTO') + ' · Canlı emir yok';
+    } else {
+      banner.className='banner warn';
+      banner.textContent = cryptoDash.note || 'Veri yok';
+    }
+
+    if(cFilter!=='ALL'){
+      document.getElementById('cryptoHome').innerHTML = applyCryptoFilter(cryptoDash.rows||[]).map(cryptoCardHtml).join('') || '<div class="empty">Sonuç yok</div>';
+      bindCryptoCards(); return;
+    }
+    let html = '';
+    html += cSection('★ Favoriler', applyCryptoFilter(s.favorites||[]));
+    html += cSection('🔥 Güçlü AL', applyCryptoFilter(s.strong_buy||[]));
+    html += cSection('AL', applyCryptoFilter(s.buy||[]));
+    if(!(s.strong_buy||[]).length && !(s.buy||[]).length){
+      html += `<div class="empty">ŞU AN CRYPTO AL FIRSATI YOK<br><span style="font-size:.8rem">Paper only · Bot her an işlem yapmak zorunda değil.</span></div>`;
+    }
+    html += cSection('Bekle', applyCryptoFilter(s.wait||[]).slice(0,8));
+    html += cSection('Sat', applyCryptoFilter(s.sell||[]).concat(s.strong_sell||[]).slice(0,6));
+    if(!html) html = '<div class="empty">Coin listesi boş — CRYPTO_ENABLED / Paribu kontrol edin</div>';
+    document.getElementById('cryptoHome').innerHTML = html;
+    document.getElementById('cryptoFavHome').innerHTML = (s.favorites||[]).map(cryptoCardHtml).join('') || '<div class="empty">Crypto favori yok — ★ ile ekleyin</div>';
+    document.getElementById('cryptoMktList').innerHTML = (cryptoDash.rows||[]).map(cryptoCardHtml).join('') || '<div class="empty">Piyasa verisi yok</div>';
+    const sigOn = !!(st.crypto_signals_enabled && st.signals_allowed);
+    document.getElementById('cryptoSys').innerHTML = `
+      <div class="why"><b>CRYPTO SYSTEM</b></div>
+      <div class="grid" style="margin-top:8px">
+        <div class="k"><span>Enabled</span><b>${st.crypto_enabled?'AÇIK':'KAPALI'}</b></div>
+        <div class="k"><span>Provider</span><b>${st.provider_class||'—'}</b></div>
+        <div class="k"><span>Markets</span><b>${st.symbol_count||0}</b></div>
+        <div class="k"><span>Sinyal</span><b>${sigOn?'AÇIK':'KAPALI'}</b></div>
+      </div>
+      <div class="meta" style="margin-top:8px">Paper only · LIVE trading: HAYIR · BIST etkilenmez</div>`;
+    bindCryptoCards();
+  }
+
+  function sparkline(closes){
+    if(!closes||closes.length<2) return '<div class="empty" style="padding:8px">Grafik verisi yok</div>';
+    const w=320,h=140,pad=8;
+    const min=Math.min(...closes), max=Math.max(...closes);
+    const span=Math.max(1e-9, max-min);
+    const pts=closes.map((v,i)=>{
+      const x=pad+(i/(closes.length-1))*(w-2*pad);
+      const y=h-pad-((v-min)/span)*(h-2*pad);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline fill="none" stroke="#2ecf8a" stroke-width="2" points="${pts}"/></svg>`;
+  }
+
+  function bindCryptoCards(){
+    document.querySelectorAll('.card[data-csym]').forEach(el=>{
+      el.onclick = (e)=>{
+        if(e.target.closest('[data-cfav]')) return;
+        openCryptoDetail(el.dataset.csym);
+      };
+    });
+    document.querySelectorAll('button[data-cfav]').forEach(btn=>{
+      btn.onclick = async (e)=>{
+        e.stopPropagation();
+        await fetch('/api/favorites/'+encodeURIComponent(btn.dataset.cfav)+'/toggle?market_type=CRYPTO',{method:'POST'});
+        loadCrypto();
+      };
+    });
+  }
+
+  async function openCryptoDetail(sym){
+    setCryptoNav('detail');
+    document.getElementById('cryptoDetail').innerHTML = '<div class="empty">Yükleniyor…</div>';
+    const r = await (await fetch('/api/crypto/detail/'+encodeURIComponent(sym)+'?timeframe='+cryptoTf)).json();
+    const plan = r.trade_plan||{};
+    const ind = r.indicators||{};
+    const acc = r.prediction_accuracy||{};
+    const risk = r.risk||{};
+    const chart = r.chart||{};
+    const tfs = (r.timeframes||['15m','1h','4h','1d']).map(tf=>
+      `<button type="button" class="tf-btn ${tf===cryptoTf?'on':''}" data-tf="${tf}">${tf}</button>`
+    ).join('');
+    document.getElementById('cryptoDetail').innerHTML = `
+      <div class="card" style="cursor:default">
+        <div class="row1">
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="star ${r.is_favorite?'on':''}" data-cfav="${r.symbol}" type="button">${r.is_favorite?'★':'☆'}</button>
+            <div class="sym">${r.display||r.symbol}</div>
+          </div>
+          <span class="badge ${r.signal||''}">${r.decision_label||r.signal||'—'}</span>
+        </div>
+        <div class="price">${r.price!=null?money(r.price)+' TL':'VERİ YOK'}</div>
+        <div class="meta">${liveBadge(r.live_status)} · ${pct(r.change_pct)} · ${r.last_update_ago||'—'}</div>
+      </div>
+      <div class="card" style="cursor:default">
+        <h2 style="margin-top:0">Chart</h2>
+        <div class="tf-row" id="tfRow">${tfs}</div>
+        <div class="chart-box">${sparkline(chart.closes||[])}</div>
+        <div class="meta">${chart.note||''} · n=${chart.count||0}</div>
+      </div>
+      <div class="card" style="cursor:default"><h2 style="margin-top:0">Indicators</h2>
+        <div class="why">MTF: ${JSON.stringify(ind.mtf||{})}</div>
+        <div class="meta" style="margin-top:6px">Confirmations: ${(ind.confirmations||[]).join(', ')||'—'} · Model skoru ${ind.model_score??'—'} (${ind.probability_label||'NOT_A_PROBABILITY'})</div>
+      </div>
+      <div class="card" style="cursor:default"><h2 style="margin-top:0">Signal</h2>
+        <div class="why">${r.decision_label||r.signal||'—'} · skor ${r.confidence??r.model_score??'—'}</div>
+      </div>
+      <div class="card" style="cursor:default"><h2 style="margin-top:0">Trade Plan</h2>
+        <div class="grid">
+          <div class="k"><span>Giriş</span><b>${plan.entry??'—'}</b></div>
+          <div class="k"><span>Stop</span><b>${plan.stop_loss??'—'}</b></div>
+          <div class="k"><span>Hedef 1</span><b>${plan.target_1??'—'}</b></div>
+          <div class="k"><span>R/R</span><b>${plan.risk_reward??'—'}</b></div>
+        </div>
+        <div class="meta" style="margin-top:6px">Plan ≠ emir. Canlı broker yok.</div>
+      </div>
+      <div class="card" style="cursor:default"><h2 style="margin-top:0">Prediction Accuracy</h2>
+        <div class="why">${acc.label||'Geçmiş doğruluk'}: %${acc.historical_accuracy_pct??'—'} · n=${acc.sample_size||0}</div>
+        <div class="meta">${acc.note||''}</div>
+      </div>
+      <div class="card" style="cursor:default"><h2 style="margin-top:0">Risk</h2>
+        <div class="why">${risk.allowed===false?'BLOKE':(risk.verdict||risk.reason||'—')}</div>
+        <div class="meta">${typeof risk==='object'?JSON.stringify(risk):String(risk||'—')}</div>
+      </div>`;
+    document.querySelectorAll('#tfRow .tf-btn').forEach(b=>{
+      b.onclick = ()=>{ cryptoTf=b.dataset.tf; openCryptoDetail(sym); };
+    });
+    bindCryptoCards();
+  }
+
   async function loadCrypto(){
     try{
-      const st = await (await fetch('/api/crypto/status')).json();
-      const banner = document.getElementById('cryptoBanner');
-      banner.className = st.crypto_enabled ? 'banner warn' : 'banner sim';
-      banner.textContent = (st.ui && st.ui.message) || 'CRYPTO';
-      document.getElementById('cryptoEnabled').textContent = st.crypto_enabled ? 'AÇIK' : 'KAPALI';
-      document.getElementById('cryptoProv').textContent = st.provider_class || st.crypto_provider || '—';
-      document.getElementById('cryptoData').textContent = st.has_market_data ? (`VAR · ${st.symbol_count||0} market`) : 'YOK';
-      document.getElementById('cryptoSig').textContent = st.signals_allowed ? 'AÇIK' : 'KAPALI';
-      document.getElementById('cryptoMsg').textContent =
-        `market_type=${st.market_type} · provider=${(st.provenance&&st.provenance.provider)||st.provider_id} · kind=${(st.provenance&&st.provenance.data_source_kind)||'—'} · WS=${(st.websocket&&st.websocket.connected)?'on':'off'}`;
-      const samples = (st.sample_quotes||[]).map(q=>`${q.symbol} ${q.price}`).join(' · ');
-      document.getElementById('cryptoEmpty').textContent = samples
-        ? (`Örnek: ${samples} — Sinyal yok (Phase 3)`)
-        : 'Kripto sinyali yok (beklenen).';
+      cryptoDash = await (await fetch('/api/crypto/dashboard?limit=40')).json();
+      renderCryptoHome();
+      // Update top integrity line lightly for crypto context
+      const st = cryptoDash.status||{};
+      const pill = document.getElementById('mktText');
+      const dot = document.getElementById('mktDot');
+      if(activeMarket==='CRYPTO'){
+        pill.textContent = `CRYPTO · ${(st.has_market_data?'LIVE MD':'VERİ YOK')}`;
+        dot.className = st.has_market_data ? 'dot open' : 'dot bad';
+        document.getElementById('clockLine').textContent =
+          `CRYPTO · ${(cryptoDash.count||0)} coin · Paper only · Son yenileme az önce`;
+        const banner = document.getElementById('integrityBanner');
+        banner.className = st.has_market_data ? 'banner ok' : 'banner sim';
+        banner.textContent = (st.ui&&st.ui.message) || 'CRYPTO · canlı emir yok';
+      }
     }catch(e){
       document.getElementById('cryptoBanner').className = 'banner bad';
-      document.getElementById('cryptoBanner').textContent = 'CRYPTO status alınamadı';
+      document.getElementById('cryptoBanner').textContent = 'CRYPTO dashboard alınamadı';
     }
   }
 
   function setNav(name){
-    if(activeMarket === 'CRYPTO') return;
+    if(activeMarket === 'CRYPTO'){
+      setCryptoNav(name);
+      return;
+    }
     document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on', b.dataset.nav===name));
     document.querySelectorAll('#bistShell .panel').forEach(p=>p.classList.remove('on'));
     const id = name==='home'?'panel-home': name==='fav'?'panel-fav': name==='mkt'?'panel-mkt': name==='port'?'panel-port': name==='set'?'panel-set':'panel-detail';
@@ -451,17 +703,26 @@
   document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>setNav(b.dataset.nav));
   document.querySelectorAll('.market-btn').forEach(b=>b.onclick=()=>setMarket(b.dataset.market));
   document.querySelectorAll('.filter').forEach(b=>b.onclick=()=>{
-    document.querySelectorAll('.filter').forEach(x=>x.classList.remove('on'));
+    if(b.closest('#cFilters')) return;
+    document.querySelectorAll('#filters .filter').forEach(x=>x.classList.remove('on'));
     b.classList.add('on'); filter=b.dataset.f; renderHome();
+  });
+  document.querySelectorAll('#cFilters .filter').forEach(b=>b.onclick=()=>{
+    document.querySelectorAll('#cFilters .filter').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); cFilter=b.dataset.cf; renderCryptoHome();
   });
   document.getElementById('moreBtn').onclick=()=>{showAll=true; renderHome();};
   document.getElementById('refresh').onclick=load;
+  document.getElementById('cryptoRefresh').onclick=loadCrypto;
   document.getElementById('backBtn').onclick=()=>setNav(lastPanel);
+  document.getElementById('cBackBtn').onclick=()=>setCryptoNav(lastCryptoPanel);
   document.getElementById('searchBtn').onclick=()=>{setNav('home'); renderHome();};
+  document.getElementById('cSearchBtn').onclick=()=>{setCryptoNav('home'); renderCryptoHome();};
   document.getElementById('q').oninput=()=>renderHome();
+  document.getElementById('cq').oninput=()=>renderCryptoHome();
   setMarket('BIST');
   load();
-  setInterval(load, 15000); // adaptive-ish polling — not every second
+  setInterval(()=>{ if(activeMarket==='BIST') load(); else loadCrypto(); }, 15000);
 })();
 </script>
 </body>
