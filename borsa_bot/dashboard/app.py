@@ -81,9 +81,45 @@ def walk_forward(symbol: str = "THYAO") -> dict:
 
 @app.get("/api/monte-carlo")
 def monte_carlo() -> dict:
-    # Illustrative trade PnL sample until real trade history wired
     sample = [1200, -800, 900, -500, 1500, -700, 400, -1100, 2000, -300]
     return run_monte_carlo(sample).__dict__
+
+
+@app.get("/api/multi-horizon")
+def multi_horizon() -> dict:
+    return service.multi_horizon()
+
+
+@app.get("/api/ai-daily-report")
+def ai_daily_report() -> dict:
+    mh = service.multi_horizon()
+    dash = service.dashboard()
+    base = daily_market_report(dash)
+    return {
+        **base,
+        "mode": mh.get("mode"),
+        "sleeves": mh.get("sleeves"),
+        "top_long_term": mh.get("top", {}).get("LONG_TERM", [])[:10],
+        "top_swing": mh.get("top", {}).get("SWING", [])[:10],
+        "top_day_trading": mh.get("top", {}).get("DAY_TRADING", [])[:10],
+        "day_risk": mh.get("day_risk"),
+        "portfolio_risk": mh.get("portfolio_risk"),
+        "calibration": mh.get("calibration"),
+        "cash_recommendation": mh.get("sleeves", {}).get("effective_cash_target"),
+        "sections": [
+            "1. BIST market regime",
+            "2. Sector ranking",
+            "3. Top long-term",
+            "4. Top swing",
+            "5. Top day trading",
+            "6. Risky stocks",
+            "7. KAP/news (stub if unavailable)",
+            "8. Portfolio risk VaR/stress",
+            "9. Cash recommendation",
+            "10. No-trade conditions",
+        ],
+        "disclaimer": "Illustrative paper report. Not investment advice. No profit guarantee. LIVE OFF.",
+    }
 
 
 @app.get("/")

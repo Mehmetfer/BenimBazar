@@ -42,6 +42,7 @@ from technical.mtf import analyze_mtf, mtf_conflict_risk
 from technical.price_action import analyze_price_action
 from technical.sector import liquidity_score, sector_relative_strength
 from universe.engine import select_universe
+from engines.orchestrator import MultiHorizonOrchestrator
 
 
 def _to_exec_signal(decision: SignalAction) -> SignalAction:
@@ -65,6 +66,12 @@ class TradingService:
         self.last_error = ""
         self.pending_approvals: dict[str, dict] = {}
         self.capital_mode = CapitalMode.NORMAL
+        self.multi = MultiHorizonOrchestrator(self.provider, equity=settings.starting_cash)
+
+    def multi_horizon(self) -> dict:
+        self.multi.equity = self.ledger.equity()
+        self.multi.provider = self.provider
+        return self.multi.run()
 
     def health(self) -> dict:
         fresh = self.provider.is_fresh(60)

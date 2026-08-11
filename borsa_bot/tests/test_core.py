@@ -268,3 +268,52 @@ def test_top_opportunities_report():
     assert "TOP_BUY" in tops and "TOP_WATCH" in tops
     rep = daily_market_report(dash)
     assert "bist_regime" in rep
+
+
+def test_mode_selector_and_sleeves():
+    from engines.mode_selector import select_modes, Horizon
+    from portfolio.sleeves import allocate_sleeves
+    from market_regime.engine import detect_regime
+    p = SimulatedProvider(seed=21)
+    regime = detect_regime(p)
+    mode = select_modes(p, regime)
+    assert mode.primary in Horizon
+    assert mode.priorities
+    sleeves = allocate_sleeves(100_000, mode)
+    total = sleeves.long_term + sleeves.swing + sleeves.day_trading + sleeves.cash_reserve
+    assert abs(total - 100_000) < 1.0
+
+
+def test_three_engines_separate():
+    from engines.orchestrator import MultiHorizonOrchestrator
+    p = SimulatedProvider(seed=22)
+    orch = MultiHorizonOrchestrator(p, equity=100_000)
+    out = orch.run()
+    assert "LONG_TERM" in out["top"]
+    assert "SWING" in out["top"]
+    assert "DAY_TRADING" in out["top"]
+    assert out["live"] is False
+    assert out["mode"]["primary"]
+
+
+def test_day_limits_pause():
+    from risk.day_limits import DayTradingRiskState
+    st = DayTradingRiskState(trades_today=8)
+    st.evaluate(equity=100_000, open_day_exposure=0)
+    assert st.paused is True
+
+
+def test_stress_and_calibration():
+    from portfolio.stress import portfolio_risk_report
+    from ai.calibration import CalibrationMonitor
+    rep = portfolio_risk_report(
+        [{"symbol": "THYAO", "sector": "ULASTIRMA", "value": 10000, "beta": 1.1}],
+        returns=[-0.02, 0.01, -0.015, 0.005] * 8,
+        equity=100_000,
+    )
+    assert rep.stress
+    cal = CalibrationMonitor()
+    for _ in range(6):
+        cal.record(85, False)
+        cal.record(65, True)
+    assert cal.confidence_haircut >= 0

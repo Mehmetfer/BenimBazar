@@ -37,7 +37,21 @@
 
 ---
 
-## 2026-08-11 — Institutional layer expansion
+## 2026-08-11 — Triple-horizon engines (LONG / SWING / DAY)
+
+### Pre-change gate
+- Architecture already has factors/alpha/risk/EV/paper
+- Gaps: separate horizons mixed; no capital sleeves; no day-trade daily limits; no mode selector; thin specialist AI ensemble; no VaR/stress; no confidence calibration
+- Risks: mixing horizons → wrong stops/holding; day losses eating long capital; overfit if engines share params uncontrolled
+- Tests before change: **22 passed**
+
+### Design decisions
+1. Three engines stay **separate modules** — shared indicators/data, separate scores/decisions/capital
+2. AI Mode Selector prioritizes engines from regime × volatility × trend; can return NO_TRADE
+3. Capital sleeves in config: LONG_TERM / SWING / DAY / CASH_RESERVE — one sleeve cannot silently drain another
+4. Day trading has hard daily pause limits
+5. LIVE remains OFF
+6. Scan aggressively, filter aggressively, trade selectively
 
 ### Why extend instead of rewrite
 Existing paper/risk/EV/dashboard already matched capital-protection philosophy. Rewriting would destroy validated tests and duplicate work.

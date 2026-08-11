@@ -25,10 +25,15 @@ def _b(name: str, default: bool = False) -> bool:
 
 @dataclass(frozen=True)
 class Settings:
-    """Dual objective: capital protection first, then risk-adjusted profit."""
+    """Capital protection first, then positive expectancy / risk-adjusted profit."""
 
     mode: str = os.getenv("MODE", "PAPER").upper()
     starting_cash: float = _f("STARTING_CASH", 100_000)
+    # Capital sleeves (must sum ~1.0; cash is reserve)
+    long_term_capital_pct: float = _f("LONG_TERM_CAPITAL_PCT", 0.50)
+    swing_capital_pct: float = _f("SWING_CAPITAL_PCT", 0.25)
+    day_trading_capital_pct: float = _f("DAY_TRADING_CAPITAL_PCT", 0.10)
+    cash_reserve_pct: float = _f("CASH_RESERVE_PCT", 0.15)
     max_portfolio_risk_pct: float = _f("MAX_PORTFOLIO_RISK_PCT", 1.0)
     max_position_risk_pct: float = _f("MAX_POSITION_RISK_PCT", 0.75)
     max_open_positions: int = _i("MAX_OPEN_POSITIONS", 5)
@@ -39,6 +44,12 @@ class Settings:
     defensive_dd_pct: float = _f("DEFENSIVE_DD_PCT", 4.0)
     high_risk_dd_pct: float = _f("HIGH_RISK_DD_PCT", 7.0)
     capital_protection_dd_pct: float = _f("CAPITAL_PROTECTION_DD_PCT", 10.0)
+    # Day trading hard limits
+    day_max_daily_loss_pct: float = _f("DAY_MAX_DAILY_LOSS_PCT", 1.0)
+    day_max_trades: int = _i("DAY_MAX_TRADES_PER_DAY", 8)
+    day_max_consecutive_losses: int = _i("DAY_MAX_CONSECUTIVE_LOSSES", 3)
+    day_max_position_pct: float = _f("DAY_MAX_POSITION_PCT", 5.0)
+    day_max_exposure_pct: float = _f("DAY_MAX_EXPOSURE_PCT", 15.0)
     atr_stop_mult: float = _f("ATR_STOP_MULT", 2.0)
     atr_take_mult: float = _f("ATR_TAKE_MULT", 3.0)
     atr_trail_mult: float = _f("ATR_TRAIL_MULT", 2.0)
@@ -76,7 +87,7 @@ class Settings:
 settings = Settings()
 
 SYSTEM_OBJECTIVES = (
-    "1) Sermaye koruma  2) Risk-ayarlı kâr üretme. "
-    "Minimum gereksiz risk ile maksimum sürdürülebilir risk-ayarlı getiri. "
-    "Kâr garantisi yoktur; geçmiş performans geleceği garanti etmez."
+    "SCAN AGGRESSIVELY · ANALYZE DEEPLY · FILTER AGGRESSIVELY · TRADE SELECTIVELY · "
+    "MANAGE RISK STRICTLY · LET WINNERS RUN · CUT LOSSES QUICKLY. "
+    "Capital first, positive expectancy second. No profit guarantee. LIVE default OFF."
 )
