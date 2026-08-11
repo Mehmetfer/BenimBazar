@@ -104,6 +104,13 @@ class Settings:
     # Market-data contract foundation (Phase 3 readiness — no real provider yet)
     base_timeframe: str = os.getenv("BASE_TIMEFRAME", "15m")
     required_history_bars: int = _i("REQUIRED_HISTORY_BARS", 240)
+    # CRYPTO / Paribu foundation (Phase 1) — default OFF; BIST path unchanged
+    crypto_enabled: bool = _b("CRYPTO_ENABLED", False)
+    crypto_provider: str = os.getenv("CRYPTO_PROVIDER", "paribu")
+    paribu_enabled: bool = _b("PARIBU_ENABLED", False)
+    paribu_api_base: str = os.getenv("PARIBU_API_BASE", "")
+    paribu_api_key: str = os.getenv("PARIBU_API_KEY", "")
+    paribu_api_secret: str = os.getenv("PARIBU_API_SECRET", "")
 
     @property
     def is_live(self) -> bool:

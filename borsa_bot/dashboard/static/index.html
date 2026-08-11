@@ -65,6 +65,10 @@
     .detail-back{min-height:40px;border:0;background:transparent;color:var(--buy2);font-weight:800;padding:0;margin-bottom:8px}
     .why{color:var(--mute);font-size:.8rem;line-height:1.4}
     .sysline{font-size:.78rem;color:var(--mute);margin-bottom:8px}
+    .market-switch{display:flex;gap:6px;margin:0 0 10px}
+    .market-btn{flex:1;min-height:40px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--mute);font-weight:800;font-size:.8rem}
+    .market-btn.on{background:rgba(46,207,138,.16);color:var(--buy2);border-color:rgba(46,207,138,.4)}
+    .market-btn:disabled{opacity:.55;cursor:not-allowed}
   </style>
 </head>
 <body>
@@ -75,9 +79,14 @@
     </div>
     <div id="mktPill" class="pill"><span class="dot" id="mktDot"></span><span id="mktText">…</span></div>
   </div>
+  <div class="market-switch" id="marketSwitch" role="tablist" aria-label="Piyasa">
+    <button type="button" class="market-btn on" data-market="BIST" id="mktBist">BIST</button>
+    <button type="button" class="market-btn" data-market="CRYPTO" id="mktCrypto">CRYPTO</button>
+  </div>
   <div id="integrityBanner" class="banner sim">Veri kaynağı kontrol ediliyor…</div>
   <div class="sysline" id="clockLine">Son veri: —</div>
 
+  <div id="bistShell">
   <div class="panel on" id="panel-home">
     <div class="search">
       <input id="q" placeholder="Hisse ara (THYAO, ASELS…)" autocomplete="off" />
@@ -126,6 +135,25 @@
     <button class="detail-back" id="backBtn" type="button">← Geri</button>
     <div id="detail"></div>
   </div>
+  </div><!-- /bistShell -->
+
+  <div id="cryptoShell" style="display:none">
+    <div class="panel on" id="panel-crypto">
+      <h2>CRYPTO · Paribu</h2>
+      <div class="banner sim" id="cryptoBanner">Kripto foundation yükleniyor…</div>
+      <div class="card" style="cursor:default" id="cryptoCard">
+        <div class="why" id="cryptoMsg">—</div>
+        <div class="grid" style="margin-top:12px">
+          <div class="k"><span>Durum</span><b id="cryptoEnabled">—</b></div>
+          <div class="k"><span>Provider</span><b id="cryptoProv">—</b></div>
+          <div class="k"><span>Veri</span><b id="cryptoData">—</b></div>
+          <div class="k"><span>Sinyal</span><b id="cryptoSig">KAPALI</b></div>
+        </div>
+        <p class="why" style="margin-top:12px">Phase 1: mimari hazırlık. Paribu API bağlı değil. BIST davranışı değişmez.</p>
+      </div>
+      <div class="empty" id="cryptoEmpty">Kripto sinyali yok (beklenen).</div>
+    </div>
+  </div>
 
   <nav class="nav">
     <button class="on" data-nav="home" type="button"><span class="ico">🏠</span>Ana</button>
@@ -138,12 +166,50 @@
 <script>
 (() => {
   let daily = null, dash = null, filter = 'ALL', showAll = false, lastPanel = 'home';
+  let activeMarket = 'BIST';
   const money = n => Number(n||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
   const pct = n => (n==null||n===undefined) ? '—' : `${n>=0?'+':''}${Number(n).toFixed(2)}%`;
 
+  function setMarket(m){
+    activeMarket = (m === 'CRYPTO') ? 'CRYPTO' : 'BIST';
+    document.querySelectorAll('.market-btn').forEach(b=>b.classList.toggle('on', b.dataset.market===activeMarket));
+    const bist = document.getElementById('bistShell');
+    const crypto = document.getElementById('cryptoShell');
+    if(activeMarket === 'CRYPTO'){
+      bist.style.display = 'none';
+      crypto.style.display = 'block';
+      document.querySelectorAll('.nav button').forEach(b=>b.disabled = true);
+      loadCrypto();
+    } else {
+      bist.style.display = 'block';
+      crypto.style.display = 'none';
+      document.querySelectorAll('.nav button').forEach(b=>b.disabled = false);
+      setNav(lastPanel || 'home');
+    }
+  }
+
+  async function loadCrypto(){
+    try{
+      const st = await (await fetch('/api/crypto/status')).json();
+      const banner = document.getElementById('cryptoBanner');
+      banner.className = st.crypto_enabled ? 'banner warn' : 'banner sim';
+      banner.textContent = (st.ui && st.ui.message) || 'CRYPTO';
+      document.getElementById('cryptoEnabled').textContent = st.crypto_enabled ? 'AÇIK (foundation)' : 'KAPALI';
+      document.getElementById('cryptoProv').textContent = st.provider_class || st.crypto_provider || '—';
+      document.getElementById('cryptoData').textContent = st.has_market_data ? 'VAR' : 'YOK';
+      document.getElementById('cryptoSig').textContent = st.signals_allowed ? 'AÇIK' : 'KAPALI';
+      document.getElementById('cryptoMsg').textContent =
+        `market_type=${st.market_type} · provider=${(st.provenance&&st.provenance.provider)||st.provider_id} · kind=${(st.provenance&&st.provenance.data_source_kind)||'—'}`;
+    }catch(e){
+      document.getElementById('cryptoBanner').className = 'banner bad';
+      document.getElementById('cryptoBanner').textContent = 'CRYPTO status alınamadı';
+    }
+  }
+
   function setNav(name){
+    if(activeMarket === 'CRYPTO') return;
     document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on', b.dataset.nav===name));
-    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));
+    document.querySelectorAll('#bistShell .panel').forEach(p=>p.classList.remove('on'));
     const id = name==='home'?'panel-home': name==='fav'?'panel-fav': name==='mkt'?'panel-mkt': name==='port'?'panel-port': name==='set'?'panel-set':'panel-detail';
     document.getElementById(id).classList.add('on');
     if(name!=='detail') lastPanel = name;
@@ -379,6 +445,7 @@
   }
 
   document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>setNav(b.dataset.nav));
+  document.querySelectorAll('.market-btn').forEach(b=>b.onclick=()=>setMarket(b.dataset.market));
   document.querySelectorAll('.filter').forEach(b=>b.onclick=()=>{
     document.querySelectorAll('.filter').forEach(x=>x.classList.remove('on'));
     b.classList.add('on'); filter=b.dataset.f; renderHome();
@@ -388,6 +455,7 @@
   document.getElementById('backBtn').onclick=()=>setNav(lastPanel);
   document.getElementById('searchBtn').onclick=()=>{setNav('home'); renderHome();};
   document.getElementById('q').oninput=()=>renderHome();
+  setMarket('BIST');
   load();
   setInterval(load, 15000); // adaptive-ish polling — not every second
 })();

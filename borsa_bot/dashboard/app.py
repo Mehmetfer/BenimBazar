@@ -13,12 +13,14 @@ from backtest.runner import run_simple_backtest
 from analytics.reports import daily_market_report, top_opportunities
 from walk_forward.runner import run_walk_forward
 from monte_carlo.simulator import run_monte_carlo
+from crypto.service import CryptoFoundationService
 
 STATIC = Path(__file__).resolve().parent / "static"
 STATIC.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Borsa Bot", version="0.3.0")
 service = TradingService()
+crypto_service = CryptoFoundationService()
 
 
 class ExecBody(BaseModel):
@@ -42,6 +44,29 @@ class NotificationSettingsBody(BaseModel):
 @app.get("/api/health")
 def health() -> dict:
     return service.health()
+
+
+@app.get("/api/markets")
+def markets() -> dict:
+    """Market plane catalog — BIST default; CRYPTO foundation only."""
+    return crypto_service.markets_catalog()
+
+
+@app.get("/api/crypto/status")
+def crypto_status() -> dict:
+    """CRYPTO plane status. Never mixes into BIST TradingService."""
+    return crypto_service.status()
+
+
+@app.get("/api/crypto/scan")
+def crypto_scan() -> dict:
+    """Phase 1: always empty signals (no crypto strategy yet)."""
+    return {
+        "market_type": "CRYPTO",
+        "signals": crypto_service.scan(),
+        "count": 0,
+        "note": "CRYPTO strategy not enabled in Phase 1",
+    }
 
 
 @app.get("/api/dashboard")
