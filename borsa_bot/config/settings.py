@@ -101,6 +101,9 @@ class Settings:
     signal_ttl_sec: float = _f("SIGNAL_TTL_SEC", 3600.0)
     daily_top_n: int = _i("DAILY_TOP_N", 8)
     allow_simulated_paper: bool = _b("ALLOW_SIMULATED_PAPER", True)
+    # Market-data contract foundation (Phase 3 readiness — no real provider yet)
+    base_timeframe: str = os.getenv("BASE_TIMEFRAME", "15m")
+    required_history_bars: int = _i("REQUIRED_HISTORY_BARS", 240)
 
     @property
     def is_live(self) -> bool:

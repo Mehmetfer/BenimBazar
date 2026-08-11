@@ -26,6 +26,7 @@ def aggregate_bars(bars: Sequence[Bar], factor: int) -> list[Bar]:
     out: list[Bar] = []
     for i in range(0, len(bars) - factor + 1, factor):
         chunk = bars[i : i + factor]
+        src = getattr(chunk[-1], "data_source_kind", "UNKNOWN")
         out.append(
             Bar(
                 ts=chunk[-1].ts,
@@ -35,6 +36,12 @@ def aggregate_bars(bars: Sequence[Bar], factor: int) -> list[Bar]:
                 close=chunk[-1].close,
                 volume=sum(b.volume for b in chunk),
                 trades=sum(b.trades for b in chunk),
+                data_source_kind=src,
+                symbol=getattr(chunk[-1], "symbol", "") or getattr(chunk[0], "symbol", ""),
+                provider=getattr(chunk[-1], "provider", ""),
+                environment_origin=getattr(chunk[-1], "environment_origin", "UNKNOWN"),
+                timeframe=getattr(chunk[-1], "timeframe", "15m"),
+                received_at=getattr(chunk[-1], "received_at", None),
             )
         )
     return out

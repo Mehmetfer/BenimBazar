@@ -37,7 +37,7 @@ class _VerifiedLiveProvider:
         self._price = 100.5
         self._bars = [
             Bar(
-                ts=self._ts,
+                ts=self._ts if self._ts.tzinfo else self._ts.replace(tzinfo=timezone.utc),
                 open=100.0,
                 high=101.0,
                 low=99.0,
@@ -45,6 +45,10 @@ class _VerifiedLiveProvider:
                 volume=1_000_000,
                 trades=1000,
                 data_source_kind=DataSourceKind.LIVE.value,
+                symbol="THYAO",
+                timeframe="15m",
+                provider=self.provider_id,
+                environment_origin="LIVE",
             )
         ]
 
@@ -56,6 +60,7 @@ class _VerifiedLiveProvider:
         return list(self._bars[-lookback:])
 
     def get_quote(self, symbol: str) -> QuoteSnapshot:
+        ts = self._ts if self._ts.tzinfo else self._ts.replace(tzinfo=timezone.utc)
         return QuoteSnapshot(
             symbol=symbol,
             name=symbol,
@@ -65,8 +70,11 @@ class _VerifiedLiveProvider:
             ask=101.0,
             volume=1_000_000,
             trades=1000,
-            ts=self._ts,
+            ts=ts,
             data_source_kind=DataSourceKind.LIVE.value,
+            provider=self.provider_id,
+            environment_origin="LIVE",
+            market_status="OPEN",
         )
 
     def list_symbols(self) -> list[str]:

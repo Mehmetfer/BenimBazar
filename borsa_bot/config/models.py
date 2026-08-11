@@ -107,7 +107,12 @@ class Bar:
     close: float
     volume: float
     trades: int = 0
-    data_source_kind: str = "UNKNOWN"  # LIVE | SIMULATED | TEST | UNKNOWN | …
+    data_source_kind: str = "UNKNOWN"  # LIVE | DELAYED | BROKER | SIMULATED | …
+    symbol: str = ""
+    timeframe: str = "15m"
+    provider: str = ""
+    environment_origin: str = "UNKNOWN"  # LIVE | SIMULATED | TEST | UNKNOWN
+    received_at: datetime | None = None
 
 
 @dataclass
@@ -122,6 +127,10 @@ class QuoteSnapshot:
     trades: int
     ts: datetime
     data_source_kind: str = "UNKNOWN"
+    provider: str = ""
+    environment_origin: str = "UNKNOWN"
+    market_status: str = "UNKNOWN"  # OPEN | CLOSED | UNKNOWN
+    received_at: datetime | None = None
 
     @property
     def spread(self) -> float:
@@ -129,8 +138,19 @@ class QuoteSnapshot:
 
     @property
     def spread_pct(self) -> float:
-        mid = (self.ask + self.bid) / 2 if self.ask and self.bid else self.price
+        """Canonical: ((ask-bid)/mid)*100; mid<=0 → 0 (callers should validate bid/ask first)."""
+        from data.contract import compute_spread_pct
+
+        pct = compute_spread_pct(self.bid, self.ask)
+        if pct is not None:
+            return pct
+        mid = self.price
         return (self.spread / mid * 100) if mid else 0.0
+
+    @property
+    def timestamp_utc(self) -> datetime:
+        """Alias for canonical contract naming."""
+        return self.ts
 
 
 @dataclass

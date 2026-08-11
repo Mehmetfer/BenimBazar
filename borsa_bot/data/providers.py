@@ -1,18 +1,30 @@
-"""Market data providers — honesty first. Simulated ≠ live."""
+"""Market data providers — honesty first. Simulated ≠ live.
+
+HttpLiveProviderStub is a STUB (not REAL). It never HTTP-fetches and never
+invents prices. Production fail-closed: stub → NO MARKET DATA → NO TRADE.
+"""
 
 from __future__ import annotations
 
-import math
 import os
 import random
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
 from config.models import Bar, QuoteSnapshot
+from data.contract import (
+    BASE_TIMEFRAME,
+    EnvironmentOrigin,
+    INDEX_SYMBOL,
+    REQUIRED_HISTORY_BARS_15M,
+    check_history,
+    normalize_app_symbol,
+    stamp_bar_defaults,
+    stamp_quote_defaults,
+)
 from data.integrity import (
     DataSourceKind,
     DataSourceMeta,
-    FreshnessStatus,
     build_source_meta,
 )
 
@@ -48,6 +60,8 @@ class SimulatedProvider:
     provider_id = "simulated"
     kind = DataSourceKind.SIMULATED
     display_name = "SimulatedProvider (paper only)"
+    is_stub = False
+    is_real_provider = False
 
     def __init__(self, seed: int = 42) -> None:
         self._rng = random.Random(seed)
@@ -60,26 +74,32 @@ class SimulatedProvider:
         for symbol, (_, _, base) in UNIVERSE.items():
             bars: list[Bar] = []
             price = base * (0.9 + self._rng.random() * 0.1)
-            for i in range(240):
-                drift = (self._rng.random() - 0.48) * (0.012 if symbol != "XU100" else 0.006)
+            for i in range(REQUIRED_HISTORY_BARS_15M):
+                drift = (self._rng.random() - 0.48) * (0.012 if symbol != INDEX_SYMBOL else 0.006)
                 o = price
                 c = max(0.5, o * (1 + drift))
                 h = max(o, c) * (1 + self._rng.random() * 0.006)
                 l = min(o, c) * (1 - self._rng.random() * 0.006)
                 vol = 1_000_000 * (0.5 + self._rng.random())
                 trades = int(800 + self._rng.random() * 2200)
-                bars.append(
-                    Bar(
-                        ts=now - timedelta(minutes=15 * (240 - i)),
-                        open=round(o, 2),
-                        high=round(h, 2),
-                        low=round(l, 2),
-                        close=round(c, 2),
-                        volume=round(vol, 0),
-                        trades=trades,
-                        data_source_kind=DataSourceKind.SIMULATED.value,
-                    )
+                bar = Bar(
+                    ts=now - timedelta(minutes=15 * (REQUIRED_HISTORY_BARS_15M - i)),
+                    open=round(o, 2),
+                    high=round(h, 2),
+                    low=round(l, 2),
+                    close=round(c, 2),
+                    volume=round(vol, 0),
+                    trades=trades,
+                    data_source_kind=DataSourceKind.SIMULATED.value,
                 )
+                stamp_bar_defaults(
+                    bar,
+                    provider=self.provider_id,
+                    origin=EnvironmentOrigin.SIMULATED,
+                    symbol=symbol,
+                    timeframe=BASE_TIMEFRAME,
+                )
+                bars.append(bar)
                 price = c
             self._bars[symbol] = bars
 
@@ -87,38 +107,47 @@ class SimulatedProvider:
         now = datetime.now(timezone.utc)
         for symbol, bars in self._bars.items():
             last = bars[-1]
-            scale = 0.01 if symbol != "XU100" else 0.004
+            scale = 0.01 if symbol != INDEX_SYMBOL else 0.004
             drift = (self._rng.random() - 0.5) * scale
             o = last.close
             c = max(0.5, o * (1 + drift))
             h = max(o, c) * (1 + self._rng.random() * 0.004)
             l = min(o, c) * (1 - self._rng.random() * 0.004)
             vol = last.volume * (0.8 + self._rng.random() * 0.5)
-            bars.append(
-                Bar(
-                    ts=now,
-                    open=round(o, 2),
-                    high=round(h, 2),
-                    low=round(l, 2),
-                    close=round(c, 2),
-                    volume=round(vol, 0),
-                    trades=int(700 + self._rng.random() * 2500),
-                    data_source_kind=DataSourceKind.SIMULATED.value,
-                )
+            bar = Bar(
+                ts=now,
+                open=round(o, 2),
+                high=round(h, 2),
+                low=round(l, 2),
+                close=round(c, 2),
+                volume=round(vol, 0),
+                trades=int(700 + self._rng.random() * 2500),
+                data_source_kind=DataSourceKind.SIMULATED.value,
             )
+            stamp_bar_defaults(
+                bar,
+                provider=self.provider_id,
+                origin=EnvironmentOrigin.SIMULATED,
+                symbol=symbol,
+                timeframe=BASE_TIMEFRAME,
+            )
+            bars.append(bar)
             if len(bars) > 300:
                 del bars[0 : len(bars) - 300]
         self._last_tick = now
 
     def get_bars(self, symbol: str, lookback: int = 220) -> list[Bar]:
-        return list(self._bars[symbol][-lookback:])
+        sym = normalize_app_symbol(symbol)
+        return list(self._bars[sym][-lookback:])
 
     def get_quote(self, symbol: str) -> QuoteSnapshot:
-        name, sector, _ = UNIVERSE[symbol]
-        bar = self._bars[symbol][-1]
+        sym = normalize_app_symbol(symbol)
+        name, sector, _ = UNIVERSE[sym]
+        bar = self._bars[sym][-1]
         spread = max(0.01, bar.close * 0.0008)
-        return QuoteSnapshot(
-            symbol=symbol,
+        ts = bar.ts if bar.ts.tzinfo else bar.ts.replace(tzinfo=timezone.utc)
+        q = QuoteSnapshot(
+            symbol=sym,
             name=name,
             sector=sector,
             price=bar.close,
@@ -126,12 +155,13 @@ class SimulatedProvider:
             ask=round(bar.close + spread / 2, 2),
             volume=bar.volume,
             trades=bar.trades,
-            ts=bar.ts,
+            ts=ts,
             data_source_kind=DataSourceKind.SIMULATED.value,
         )
+        return stamp_quote_defaults(q, provider=self.provider_id, origin=EnvironmentOrigin.SIMULATED)
 
     def list_symbols(self) -> list[str]:
-        return [s for s in UNIVERSE if s != "XU100"]
+        return [s for s in UNIVERSE if s != INDEX_SYMBOL]
 
     def is_fresh(self, max_age_sec: float = 30.0) -> bool:
         age = (datetime.now(timezone.utc) - self._last_tick).total_seconds()
@@ -139,6 +169,10 @@ class SimulatedProvider:
 
     def has_market_data(self) -> bool:
         return True
+
+    def history_status(self, symbol: str = "THYAO") -> dict:
+        bars = self.get_bars(symbol, lookback=REQUIRED_HISTORY_BARS_15M + 10)
+        return check_history(bars).to_dict()
 
     def source_meta(self, max_age_sec: float = 30.0) -> DataSourceMeta:
         return build_source_meta(
@@ -153,15 +187,13 @@ class SimulatedProvider:
 
 
 class RequiredLiveProvider:
-    """Fail-closed live provider when credentials/URL are missing.
-
-    Returns no prices — UI must show VERİ YOK / DATA SOURCE REQUIRED.
-    Never fabricates quotes.
-    """
+    """Fail-closed when credentials/URL missing. Never fabricates quotes/mock fallback."""
 
     provider_id = "live_required"
     kind = DataSourceKind.REQUIRED
     display_name = "Live market data (not configured)"
+    is_stub = False
+    is_real_provider = False
 
     def __init__(self, reason: str = "MARKET_DATA_URL / credentials missing") -> None:
         self.reason = reason
@@ -174,13 +206,10 @@ class RequiredLiveProvider:
         return []
 
     def get_quote(self, symbol: str) -> QuoteSnapshot:
-        # Honest empty quote — price None is not available on QuoteSnapshot (float).
-        # Callers must check has_market_data() / source_meta before using price.
         raise RuntimeError("NO_MARKET_DATA: canlı veri kaynağı yapılandırılmadı")
 
     def list_symbols(self) -> list[str]:
-        # Universe list for search UI only — not prices
-        return [s for s in UNIVERSE if s != "XU100"]
+        return [s for s in UNIVERSE if s != INDEX_SYMBOL]
 
     def is_fresh(self, max_age_sec: float = 30.0) -> bool:
         return False
@@ -202,64 +231,60 @@ class RequiredLiveProvider:
 
 
 class HttpLiveProviderStub:
-    """Skeleton for a licensed HTTP market-data API.
+    """STUB — NOT a real BIST provider.
 
-    Without MARKET_DATA_URL + MARKET_DATA_TOKEN this stays disconnected and
-    never invents prices. When configured, fetch must succeed or report NO_DATA.
+    Classification: STUB (not REAL, not MOCK).
+    No HTTP request, no real prices/OHLCV. Never invents synthetic quotes.
+    kind=REQUIRED until a real adapter replaces this. Not tradeable.
     """
 
-    provider_id = "http_live"
-    kind = DataSourceKind.LIVE
-    display_name = "HTTP Market Data API"
+    provider_id = "http_live_stub"
+    kind = DataSourceKind.REQUIRED
+    display_name = "HTTP Market Data API (STUB — not implemented)"
+    is_stub = True
+    is_real_provider = False
 
     def __init__(self, base_url: str, token: str) -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token
         self._last_ok: datetime | None = None
         self._connected = False
-        self._error = "not_fetched_yet"
+        self._error = "LIVE_ADAPTER_NOT_IMPLEMENTED — STUB only; NO MARKET DATA"
         self._quotes: dict[str, QuoteSnapshot] = {}
         self._bars: dict[str, list[Bar]] = {}
 
     def tick(self) -> None:
-        # Real fetch would go here. Without a working endpoint, stay disconnected.
-        # Do NOT fall back to simulated prices.
-        if not self.base_url or not self.token:
-            self._connected = False
-            self._error = "missing_url_or_token"
-            return
-        # Placeholder: no fabricated response parsing — require real HTTP success later.
         self._connected = False
-        self._error = "LIVE_ADAPTER_NOT_IMPLEMENTED — gerçek endpoint bağlanana kadar VERİ YOK"
+        if not self.base_url or not self.token:
+            self._error = "missing_url_or_token"
+        else:
+            self._error = "LIVE_ADAPTER_NOT_IMPLEMENTED — gerçek endpoint bağlanana kadar VERİ YOK"
 
     def get_bars(self, symbol: str, lookback: int = 220) -> list[Bar]:
-        return list(self._bars.get(symbol, [])[-lookback:])
+        return list(self._bars.get(normalize_app_symbol(symbol), [])[-lookback:])
 
     def get_quote(self, symbol: str) -> QuoteSnapshot:
-        q = self._quotes.get(symbol)
+        q = self._quotes.get(normalize_app_symbol(symbol))
         if q is None:
-            raise RuntimeError("NO_MARKET_DATA: canlı kotasyon yok")
+            raise RuntimeError("NO_MARKET_DATA: stub has no live quotes")
         return q
 
     def list_symbols(self) -> list[str]:
-        return [s for s in UNIVERSE if s != "XU100"]
+        return [s for s in UNIVERSE if s != INDEX_SYMBOL]
 
     def is_fresh(self, max_age_sec: float = 30.0) -> bool:
-        if not self._last_ok:
-            return False
-        return (datetime.now(timezone.utc) - self._last_ok).total_seconds() <= max_age_sec
+        return False
 
     def has_market_data(self) -> bool:
-        return self._connected and bool(self._quotes)
+        return False
 
     def source_meta(self, max_age_sec: float = 30.0) -> DataSourceMeta:
-        kind = DataSourceKind.LIVE if self._connected else DataSourceKind.REQUIRED
         return build_source_meta(
             provider_id=self.provider_id,
-            kind=kind,
+            kind=DataSourceKind.REQUIRED,
             display_name=self.display_name,
-            connected=self._connected,
-            last_update=self._last_ok,
+            connected=False,
+            last_update=None,
             max_age_sec=max_age_sec,
             live_ready=False,
             note=self._error,
@@ -267,10 +292,9 @@ class HttpLiveProviderStub:
 
 
 def create_provider(name: str = "simulated") -> MarketDataProvider:
-    """Factory. Unknown/live without credentials → RequiredLiveProvider (no fake prices).
+    """Factory. PRODUCTION mock/sim HARD BLOCKED. live/bist/http → STUB (not real).
 
-    PRODUCTION: mock/simulated/demo/fake provider names are HARD BLOCKED
-    (PRODUCTION_MARKET_DATA_VIOLATION) — fail closed to RequiredLiveProvider.
+    broker → RequiredLiveProvider (BROKER ≠ market-data provider).
     """
     from data.validation import (
         AppEnvironment,
@@ -285,7 +309,6 @@ def create_provider(name: str = "simulated") -> MarketDataProvider:
 
     gate = gate_provider_selection(key, env)
     if not gate.ok:
-        # Fail closed — never construct SimulatedProvider in PRODUCTION
         import logging
 
         logging.getLogger("borsa_bot.market_data").error(
@@ -305,7 +328,11 @@ def create_provider(name: str = "simulated") -> MarketDataProvider:
         return SimulatedProvider()
     if key in {"required", "none", "off"}:
         return RequiredLiveProvider("DATA_PROVIDER=required — canlı kaynak bekleniyor")
-    if key in {"live", "bist", "broker", "http"}:
+    if key == "broker":
+        return RequiredLiveProvider(
+            "DATA_PROVIDER=broker rejected as market-data provider — BROKER source is SEPARATE"
+        )
+    if key in {"live", "bist", "http"}:
         url = os.getenv("MARKET_DATA_URL", "").strip()
         token = os.getenv("MARKET_DATA_TOKEN", "").strip()
         if not url or not token:
@@ -326,3 +353,16 @@ def create_provider(name: str = "simulated") -> MarketDataProvider:
         f"Unknown data provider: {name}. "
         "Use simulated | required | live (needs MARKET_DATA_URL + MARKET_DATA_TOKEN)."
     )
+
+
+def classify_provider(provider: object) -> str:
+    """REAL | STUB | MOCK — readiness audit helper."""
+    if getattr(provider, "is_stub", False) or isinstance(provider, HttpLiveProviderStub):
+        return "STUB"
+    if getattr(provider, "kind", None) == DataSourceKind.SIMULATED:
+        return "MOCK"
+    if getattr(provider, "is_real_provider", False):
+        return "REAL"
+    if isinstance(provider, RequiredLiveProvider):
+        return "STUB"
+    return "STUB"

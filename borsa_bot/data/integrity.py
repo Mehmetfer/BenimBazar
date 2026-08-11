@@ -56,20 +56,33 @@ class DataSourceMeta:
     age_seconds: float | None
     freshness: FreshnessStatus
     market_session: MarketSession
-    is_live_market: bool  # True only for verified live/broker feeds when fresh
-    live_ready: bool  # False unless real feed + broker preflight
+    is_live_market: bool  # True ONLY for verified LIVE (not DELAYED/BROKER)
+    live_ready: bool  # False unless real LIVE feed + broker preflight
     note: str
     price_label: str  # e.g. "CANLI FİYAT" | "SİMÜLE FİYAT" | "VERİ YOK"
 
     def to_dict(self) -> dict[str, Any]:
+        from data.contract import EnvironmentOrigin
         from data.provenance import provenance_payload, tradeable_flag
 
         d = asdict(self)
         d["kind"] = self.kind.value
         d["data_source_kind"] = self.kind.value
+        d["provider"] = self.provider_id
         d["freshness"] = self.freshness.value
         d["market_session"] = self.market_session.value
-        # Backend-owned tradeability — never trust client overrides
+        # Environment origin ≠ feed subtype
+        if self.kind == DataSourceKind.SIMULATED:
+            origin = EnvironmentOrigin.SIMULATED.value
+        elif self.kind == DataSourceKind.TEST:
+            origin = EnvironmentOrigin.TEST.value
+        elif self.kind == DataSourceKind.LIVE:
+            origin = EnvironmentOrigin.LIVE.value
+        elif self.kind in {DataSourceKind.DELAYED, DataSourceKind.BROKER}:
+            origin = EnvironmentOrigin.LIVE.value  # real-market origin, non-LIVE tradeability
+        else:
+            origin = EnvironmentOrigin.UNKNOWN.value
+        d["environment_origin"] = origin
         d["tradeable"] = tradeable_flag(self.kind, verified=self.is_live_market)
         d.update(provenance_payload(self.kind, verified=self.is_live_market))
         return d
@@ -112,7 +125,9 @@ def build_source_meta(
 ) -> DataSourceMeta:
     age = age_seconds(last_update)
     session = bist_session_now()
-    is_real = kind in {DataSourceKind.LIVE, DataSourceKind.DELAYED, DataSourceKind.BROKER}
+    # Only LIVE is live-market for trading. DELAYED ≠ LIVE. BROKER is separate.
+    is_live_kind = kind == DataSourceKind.LIVE
+    is_real_feed = kind in {DataSourceKind.LIVE, DataSourceKind.DELAYED, DataSourceKind.BROKER}
 
     if kind in {DataSourceKind.UNAVAILABLE, DataSourceKind.REQUIRED, DataSourceKind.UNKNOWN} or not connected:
         freshness = FreshnessStatus.DISCONNECTED if kind == DataSourceKind.REQUIRED else FreshnessStatus.NO_DATA
@@ -131,7 +146,7 @@ def build_source_meta(
         default_note = "Timestamp yok — veri yok sayılır."
     elif age > max_age_sec:
         freshness = FreshnessStatus.STALE
-        price_label = "ESKİ VERİ" if is_real else "SİMÜLE (ESKİ)"
+        price_label = "ESKİ VERİ" if is_real_feed else "SİMÜLE (ESKİ)"
         is_live = False
         default_note = f"STALE DATA — son güncelleme {int(age)} sn önce (eşik {int(max_age_sec)} sn)."
     elif kind in {DataSourceKind.SIMULATED, DataSourceKind.TEST, DataSourceKind.BACKTEST}:
@@ -146,16 +161,25 @@ def build_source_meta(
             "PAPER / SİMÜLE / TEST / BACKTEST — CANLI PİYASA DEĞİL. "
             "Bu fiyatlar gerçek BIST kotasyonu değildir. NEVER TRADEABLE as LIVE."
         )
-    else:
+    elif kind == DataSourceKind.DELAYED:
+        freshness = FreshnessStatus.LIVE  # fresh delayed feed, but NOT live-tradeable
+        price_label = "GECİKMELİ FİYAT"
+        is_live = False  # DELAYED ≠ LIVE
+        default_note = "DELAYED feed — NON-LIVE for trading signals."
+    elif kind == DataSourceKind.BROKER:
         freshness = FreshnessStatus.LIVE
-        price_label = "CANLI FİYAT" if kind == DataSourceKind.LIVE else (
-            "BROKER FİYAT" if kind == DataSourceKind.BROKER else "GECİKMELİ FİYAT"
-        )
-        is_live = True
-        default_note = "Doğrulanmış piyasa kaynağı."
+        price_label = "BROKER FİYAT"
+        is_live = False  # BROKER ≠ market-data LIVE provider
+        default_note = "BROKER source — SEPARATE from market-data provider LIVE."
+    else:
+        # LIVE only
+        freshness = FreshnessStatus.LIVE
+        price_label = "CANLI FİYAT"
+        is_live = bool(is_live_kind)
+        default_note = "Doğrulanmış canlı piyasa kaynağı."
 
-    # Never claim live_ready without real feed
-    ready = bool(live_ready and is_real and is_live and connected)
+    # Never claim live_ready without real LIVE feed (+ broker preflight later)
+    ready = bool(live_ready and is_live_kind and is_live and connected)
     return DataSourceMeta(
         provider_id=provider_id,
         kind=kind,

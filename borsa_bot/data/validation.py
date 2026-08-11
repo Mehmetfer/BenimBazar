@@ -49,7 +49,13 @@ _BLOCKED_KINDS_PRODUCTION = frozenset(
 
 _VERIFIED_KINDS = frozenset(
     {
-        DataSourceKind.LIVE,
+        DataSourceKind.LIVE,  # only LIVE is tradeable market-data
+    }
+)
+
+# Recognized non-live real-market subtypes (accepted as identity, NOT tradeable)
+_NON_LIVE_FEED_KINDS = frozenset(
+    {
         DataSourceKind.DELAYED,
         DataSourceKind.BROKER,
     }
@@ -70,6 +76,9 @@ class MarketDataGateCode(str, Enum):
     STALE_DATA = "STALE_DATA"
     DATA_NOT_VERIFIED = "DATA_NOT_VERIFIED"
     UNKNOWN_SOURCE = "UNKNOWN_SOURCE"
+    INSUFFICIENT_HISTORY = "INSUFFICIENT_HISTORY"
+    STUB_NOT_IMPLEMENTED = "STUB_NOT_IMPLEMENTED"
+    NON_LIVE_FEED = "NON_LIVE_FEED"
 
 
 class ProductionMarketDataViolation(RuntimeError):
@@ -171,11 +180,25 @@ def gate_provider_selection(provider_name: str, env: AppEnvironment) -> MarketDa
 
 
 def gate_provider_instance(provider: Any, env: AppEnvironment) -> MarketDataGateResult:
-    """Block simulated/unknown provider instances in production."""
+    """Block simulated/unknown/stub providers from production trading."""
     pid = str(getattr(provider, "provider_id", "") or "")
     kind = getattr(provider, "kind", None)
     if mock_allowed(env):
+        # Still reject stubs as "verified live" even in dev when claiming LIVE
+        if getattr(provider, "is_stub", False):
+            return _reject(
+                env,
+                MarketDataGateCode.STUB_NOT_IMPLEMENTED,
+                f"stub provider_id={pid} — not real market data",
+            )
         return _allow(env, f"non-production provider_id={pid}")
+
+    if getattr(provider, "is_stub", False):
+        return _reject(
+            env,
+            MarketDataGateCode.STUB_NOT_IMPLEMENTED,
+            f"stub provider_id={pid} — LIVE adapter not implemented; NO TRADE",
+        )
 
     if is_blocked_provider_name(pid) or is_blocked_provider_name(getattr(provider, "display_name", None)):
         return _reject(
@@ -195,6 +218,12 @@ def gate_provider_instance(provider: Any, env: AppEnvironment) -> MarketDataGate
             MarketDataGateCode.UNKNOWN_SOURCE,
             "unknown source: provider.kind missing",
         )
+    if kind in _NON_LIVE_FEED_KINDS:
+        return _reject(
+            env,
+            MarketDataGateCode.NON_LIVE_FEED,
+            f"{kind.value} ≠ LIVE — not tradeable as live market-data",
+        )
     if kind not in _VERIFIED_KINDS and kind != DataSourceKind.REQUIRED:
         return _reject(
             env,
@@ -213,6 +242,7 @@ def validate_quote(
     require_verified_source: bool | None = None,
 ) -> MarketDataGateResult:
     """Validate a quote before it may drive signals/trading."""
+    from data.contract import is_future_timestamp, validate_canonical_quote
     from data.provenance import is_never_tradeable, parse_data_source_kind
 
     require_verified = (
@@ -222,6 +252,16 @@ def validate_quote(
     if quote is None:
         return _reject(env, MarketDataGateCode.NO_MARKET_DATA, "quote is None")
 
+    # Canonical contract (UTC, bid/ask, future, stale, market_status)
+    cc = validate_canonical_quote(quote, max_age_sec=max_age_sec)
+    if not cc.ok:
+        code = {
+            "STALE": MarketDataGateCode.STALE_DATA,
+            "UNAVAILABLE": MarketDataGateCode.NO_MARKET_DATA,
+            "UNKNOWN_SOURCE": MarketDataGateCode.UNKNOWN_SOURCE,
+        }.get(cc.quality.value, MarketDataGateCode.INVALID_MARKET_DATA)
+        return _reject(env, code, cc.note)
+
     price = getattr(quote, "price", None)
     if price is None or not isinstance(price, (int, float)) or not math.isfinite(float(price)) or float(price) <= 0:
         return _reject(env, MarketDataGateCode.INVALID_MARKET_DATA, "invalid price")
@@ -229,9 +269,12 @@ def validate_quote(
     ts = getattr(quote, "ts", None)
     if ts is None:
         return _reject(env, MarketDataGateCode.INVALID_MARKET_DATA, "missing timestamp")
-
     if isinstance(ts, datetime):
-        age = (datetime.now(timezone.utc) - (ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc))).total_seconds()
+        if ts.tzinfo is None:
+            return _reject(env, MarketDataGateCode.INVALID_MARKET_DATA, "naive timestamp REJECT")
+        if is_future_timestamp(ts):
+            return _reject(env, MarketDataGateCode.INVALID_MARKET_DATA, "future timestamp REJECT")
+        age = (datetime.now(timezone.utc) - ts.astimezone(timezone.utc)).total_seconds()
         if age > max_age_sec:
             return _reject(env, MarketDataGateCode.STALE_DATA, f"stale age={int(age)}s threshold={int(max_age_sec)}s")
     else:
@@ -240,8 +283,11 @@ def validate_quote(
     q_kind = parse_data_source_kind(getattr(quote, "data_source_kind", None))
     if q_kind == DataSourceKind.UNKNOWN and require_verified:
         return _reject(env, MarketDataGateCode.UNKNOWN_SOURCE, "UNKNOWN data_source_kind — NOT TRADEABLE")
+    if q_kind == DataSourceKind.DELAYED:
+        return _reject(env, MarketDataGateCode.NON_LIVE_FEED, "DELAYED ≠ LIVE — NON-LIVE")
+    if q_kind == DataSourceKind.BROKER:
+        return _reject(env, MarketDataGateCode.NON_LIVE_FEED, "BROKER source SEPARATE — not MD LIVE")
     if require_verified and is_never_tradeable(q_kind) and q_kind != DataSourceKind.REQUIRED:
-        # REQUIRED handled via meta / NO_MARKET_DATA
         if q_kind in _BLOCKED_KINDS_PRODUCTION:
             return _reject(
                 env,
@@ -269,11 +315,13 @@ def validate_quote(
                     else MarketDataGateCode.DATA_NOT_VERIFIED,
                     f"simulated/test source kind={meta.kind.value}",
                 )
+        if meta.kind in _NON_LIVE_FEED_KINDS:
+            return _reject(env, MarketDataGateCode.NON_LIVE_FEED, f"{meta.kind.value} ≠ LIVE")
         if require_verified and not meta.is_live_market:
             return _reject(
                 env,
                 MarketDataGateCode.DATA_NOT_VERIFIED,
-                "DATA NOT VERIFIED — source is not live/broker/delayed fresh feed",
+                "DATA NOT VERIFIED — source is not verified LIVE fresh feed",
             )
         if meta.kind not in _VERIFIED_KINDS and require_verified:
             if meta.kind in {DataSourceKind.REQUIRED, DataSourceKind.UNAVAILABLE, DataSourceKind.UNKNOWN}:
@@ -287,24 +335,42 @@ def validate_quote(
 
 
 def validate_bars(bars: list[Bar] | None, *, env: AppEnvironment) -> MarketDataGateResult:
+    from data.contract import check_history, sort_bars_safe, validate_canonical_bar
     from data.provenance import MixedProvenanceError, assert_homogeneous_provenance, kind_of
 
     if not bars:
         return _reject(env, MarketDataGateCode.NO_MARKET_DATA, "empty OHLCV")
-    last = bars[-1]
-    for attr in ("open", "high", "low", "close"):
-        v = getattr(last, attr, None)
-        if v is None or not isinstance(v, (int, float)) or not math.isfinite(float(v)) or float(v) <= 0:
-            return _reject(env, MarketDataGateCode.INVALID_MARKET_DATA, f"invalid OHLCV.{attr}")
-    if last.high < last.low:
-        return _reject(env, MarketDataGateCode.INVALID_MARKET_DATA, "OHLCV high < low")
-    if getattr(last, "ts", None) is None:
-        return _reject(env, MarketDataGateCode.INVALID_MARKET_DATA, "OHLCV missing timestamp")
+    cleaned = sort_bars_safe(bars)
+    if not cleaned:
+        return _reject(env, MarketDataGateCode.INVALID_MARKET_DATA, "no valid UTC bars after sort/dedupe")
+    last = cleaned[-1]
+    chk = validate_canonical_bar(last)
+    if not chk.ok:
+        code = (
+            MarketDataGateCode.UNKNOWN_SOURCE
+            if chk.quality.value == "UNKNOWN_SOURCE"
+            else MarketDataGateCode.INVALID_MARKET_DATA
+        )
+        return _reject(env, code, chk.note)
     try:
-        assert_homogeneous_provenance([kind_of(b) for b in bars], context="OHLCV bars")
+        assert_homogeneous_provenance([kind_of(b) for b in cleaned], context="OHLCV bars")
     except MixedProvenanceError as exc:
         return _reject(env, MarketDataGateCode.INVALID_MARKET_DATA, str(exc))
     return _allow(env, "ohlcv ok")
+
+
+def validate_history(
+    bars: list[Bar] | None,
+    *,
+    env: AppEnvironment,
+    min_bars: int = 240,
+) -> MarketDataGateResult:
+    from data.contract import check_history
+
+    chk = check_history(bars, min_bars=min_bars)
+    if not chk.ok:
+        return _reject(env, MarketDataGateCode.INSUFFICIENT_HISTORY, chk.note)
+    return _allow(env, chk.note)
 
 
 def validate_quote_bars_homogeneous(
@@ -336,6 +402,14 @@ def gate_market_data_for_scan(
     """Single entry gate used by TradingService.scan — DATA NOT VERIFIED → NO SIGNAL."""
     env = app_env if isinstance(app_env, AppEnvironment) else normalize_app_env(str(app_env))
 
+    # Stub never feeds trading (any env)
+    if getattr(provider, "is_stub", False):
+        return _reject(
+            env,
+            MarketDataGateCode.STUB_NOT_IMPLEMENTED,
+            "HttpLiveProviderStub / adapter not implemented — NO MARKET DATA — NO TRADE",
+        )
+
     inst = gate_provider_instance(provider, env)
     if not inst.ok:
         return inst
@@ -359,6 +433,12 @@ def gate_market_data_for_scan(
                 MarketDataGateCode.PRODUCTION_MARKET_DATA_VIOLATION,
                 f"simulated source kind={meta.kind.value}",
             )
+        if meta.kind in _NON_LIVE_FEED_KINDS:
+            return _reject(
+                env,
+                MarketDataGateCode.NON_LIVE_FEED,
+                f"{meta.kind.value} ≠ LIVE — not tradeable",
+            )
         if meta.kind not in _VERIFIED_KINDS:
             if meta.kind in {DataSourceKind.REQUIRED, DataSourceKind.UNAVAILABLE}:
                 return _reject(env, MarketDataGateCode.NO_MARKET_DATA, meta.note)
@@ -371,6 +451,8 @@ def gate_market_data_for_scan(
             return _reject(env, MarketDataGateCode.INVALID_MARKET_DATA, "missing timestamp")
         if meta.freshness == FreshnessStatus.STALE:
             return _reject(env, MarketDataGateCode.STALE_DATA, meta.note)
+        if meta.market_session == MarketSession.UNKNOWN:
+            return _reject(env, MarketDataGateCode.DATA_NOT_VERIFIED, "UNKNOWN market status — NOT TRADEABLE")
     else:
         # Dev/Test: allow simulated; still block empty/stale if no data at all
         if meta.freshness in {FreshnessStatus.NO_DATA, FreshnessStatus.DISCONNECTED}:

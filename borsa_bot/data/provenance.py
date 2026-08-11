@@ -14,18 +14,19 @@ from data.integrity import DataSourceKind
 
 # --- Canonical families (Phase 2 primary + existing subtypes) ---
 
-# Potentially tradeable ONLY when verified live/broker/delayed feed is present.
+# Potentially tradeable ONLY for verified real-time LIVE market-data feeds.
+# DELAYED ≠ LIVE (non-live). BROKER is a separate source family (not MD provider LIVE).
 # SIMULATED / TEST / UNKNOWN / BACKTEST / UNAVAILABLE / REQUIRED → never tradeable.
 _POTENTIALLY_TRADEABLE: frozenset[DataSourceKind] = frozenset(
     {
         DataSourceKind.LIVE,
-        DataSourceKind.DELAYED,
-        DataSourceKind.BROKER,
     }
 )
 
 _NEVER_TRADEABLE: frozenset[DataSourceKind] = frozenset(
     {
+        DataSourceKind.DELAYED,
+        DataSourceKind.BROKER,
         DataSourceKind.SIMULATED,
         DataSourceKind.TEST,
         DataSourceKind.UNKNOWN,
@@ -35,11 +36,11 @@ _NEVER_TRADEABLE: frozenset[DataSourceKind] = frozenset(
     }
 )
 
-# Homogeneity families — different families must not mix in one calculation
+# Homogeneity families — DELAYED/BROKER must not mix into LIVE calculations as LIVE
 _FAMILY: dict[DataSourceKind, str] = {
     DataSourceKind.LIVE: "LIVE",
-    DataSourceKind.DELAYED: "LIVE",
-    DataSourceKind.BROKER: "LIVE",
+    DataSourceKind.DELAYED: "DELAYED",
+    DataSourceKind.BROKER: "BROKER",
     DataSourceKind.SIMULATED: "SIMULATED",
     DataSourceKind.TEST: "TEST",
     DataSourceKind.BACKTEST: "BACKTEST",
@@ -61,8 +62,8 @@ PRIMARY_KINDS = frozenset(
 
 UI_STATUS = {
     DataSourceKind.LIVE: {"glyph": "●", "label": "LIVE"},
-    DataSourceKind.DELAYED: {"glyph": "●", "label": "LIVE (DELAYED)"},
-    DataSourceKind.BROKER: {"glyph": "●", "label": "LIVE (BROKER)"},
+    DataSourceKind.DELAYED: {"glyph": "◐", "label": "DELAYED (NON-LIVE)"},
+    DataSourceKind.BROKER: {"glyph": "◐", "label": "BROKER (SEPARATE)"},
     DataSourceKind.SIMULATED: {"glyph": "◐", "label": "SIMULATED"},
     DataSourceKind.TEST: {"glyph": "◐", "label": "TEST"},
     DataSourceKind.BACKTEST: {"glyph": "◐", "label": "BACKTEST"},
