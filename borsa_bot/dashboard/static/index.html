@@ -78,20 +78,40 @@
     .tf-row{display:flex;gap:6px;margin:8px 0;overflow:auto}
     .tf-btn{flex:0 0 auto;min-height:36px;padding:6px 12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--mute);font-weight:700;font-size:.75rem}
     .tf-btn.on{background:rgba(46,207,138,.16);color:var(--buy2);border-color:rgba(46,207,138,.4)}
+    .bist100-toolbar{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+    .bist100-toolbar select{min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:0 12px;font:inherit}
+    .bist100-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+    @media (min-width:960px){
+      .bist100-layout{grid-template-columns:minmax(280px,360px) minmax(0,1fr);align-items:start}
+      .bist100-list-wrap{max-height:calc(100dvh - 220px);overflow:auto;padding-right:4px}
+      .tv-sticky{position:sticky;top:8px}
+    }
+    .bist100-item{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:14px;padding:12px;margin-bottom:8px;cursor:pointer;font:inherit}
+    .bist100-item:hover,.bist100-item.on{border-color:rgba(46,207,138,.45);background:rgba(46,207,138,.08)}
+    .bist100-item .t{font-weight:800;font-size:1.05rem}
+    .bist100-item .n{color:var(--mute);font-size:.78rem;margin-top:2px;line-height:1.3}
+    .bist100-item .sec{flex:0 0 auto;font-size:.72rem;font-weight:700;color:var(--buy2);padding:6px 8px;border-radius:999px;border:1px solid rgba(46,207,138,.25)}
+    .tv-wrap{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;min-height:480px}
+    .tv-head{padding:12px 14px;border-bottom:1px solid var(--line)}
+    .tv-head .sym{font-size:1.2rem;font-weight:800}
+    .tv-chart{height:460px}
+    .tv-chart iframe{width:100%!important}
     @media (max-width:560px){
       .crypto-card .grid{display:none}
       .crypto-card .chg,.crypto-card .meta.desktop-only{display:none}
       .crypto-mobile-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px}
       .crypto-mobile-row .m-price{font-size:1.25rem;font-weight:800}
       .crypto-mobile-row .m-conf{font-size:.85rem;color:var(--mute);font-weight:700}
+      .tv-chart{height:360px}
     }
   </style>
+  <script src="https://s3.tradingview.com/tv.js" defer></script>
 </head>
 <body>
   <div class="top">
     <div>
       <h1 class="brand">Borsa Bot</h1>
-      <p class="sub">Günlük trading · LESS DATA, MORE DECISION</p>
+      <p class="sub">BIST 100 · Günlük trading · LESS DATA, MORE DECISION</p>
     </div>
     <div id="mktPill" class="pill"><span class="dot" id="mktDot"></span><span id="mktText">…</span></div>
   </div>
@@ -128,8 +148,30 @@
   </div>
 
   <div class="panel" id="panel-mkt">
-    <h2>📊 Piyasa</h2>
-    <div id="mktList"></div>
+    <h2>BIST 100 Şirketleri</h2>
+    <p class="why">XU100 · Kod / isim / sektör filtre · TradingView canlı grafik (BIST:TICKER)</p>
+    <div class="bist100-toolbar">
+      <div class="search">
+        <input id="b100q" placeholder="Kod veya şirket ara (THYAO, Garanti…)" autocomplete="off" />
+        <button type="button" id="b100SearchBtn">Ara</button>
+      </div>
+      <select id="b100Sector" aria-label="Sektör filtresi">
+        <option value="">Tüm sektörler</option>
+      </select>
+      <div class="sysline" id="b100Meta">Yükleniyor…</div>
+    </div>
+    <div class="bist100-layout">
+      <div class="bist100-list-wrap" id="bist100List"></div>
+      <div class="tv-sticky">
+        <div class="tv-wrap">
+          <div class="tv-head">
+            <div class="sym" id="tvSymTitle">BIST 100</div>
+            <div class="meta" id="tvSymMeta">Listeden bir şirket seçin</div>
+          </div>
+          <div class="tv-chart" id="tv_chart_container"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="panel" id="panel-port">
@@ -202,7 +244,7 @@
   <nav class="nav">
     <button class="on" data-nav="home" type="button"><span class="ico">🏠</span>Ana</button>
     <button data-nav="fav" type="button"><span class="ico">★</span>Favori</button>
-    <button data-nav="mkt" type="button"><span class="ico">📊</span>Piyasa</button>
+    <button data-nav="mkt" type="button"><span class="ico">📈</span>BIST100</button>
     <button data-nav="port" type="button"><span class="ico">💼</span>Portföy</button>
     <button data-nav="set" type="button"><span class="ico">⚙</span>Ayar</button>
   </nav>
@@ -212,6 +254,8 @@
   let daily = null, dash = null, filter = 'ALL', showAll = false, lastPanel = 'home';
   let activeMarket = 'BIST';
   let cryptoDash = null, cFilter = 'ALL', lastCryptoPanel = 'home', cryptoTf = '15m';
+  let bist100 = {companies: [], sectors: [], selected: null};
+  let tvWidget = null;
   const money = n => Number(n||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
   const pct = n => (n==null||n===undefined) ? '—' : `${n>=0?'+':''}${Number(n).toFixed(2)}%`;
 
@@ -658,6 +702,107 @@
       </div>`;
   }
 
+  function renderTradingView(company){
+    const title = document.getElementById('tvSymTitle');
+    const meta = document.getElementById('tvSymMeta');
+    const container = document.getElementById('tv_chart_container');
+    if(!company){
+      title.textContent = 'BIST 100';
+      meta.textContent = 'Listeden bir şirket seçin';
+      container.innerHTML = '<div class="empty">TradingView grafiği için şirket seçin</div>';
+      tvWidget = null;
+      return;
+    }
+    const tvSymbol = company.tradingview_symbol || ('BIST:' + company.ticker);
+    title.textContent = company.ticker;
+    meta.textContent = `${company.name} · ${company.sector} · ${tvSymbol}`;
+    container.innerHTML = '';
+    if(typeof TradingView === 'undefined' || !TradingView.widget){
+      container.innerHTML = `<div class="empty">TradingView yüklenemedi. Sembol: ${tvSymbol}</div>`;
+      return;
+    }
+    try{
+      tvWidget = new TradingView.widget({
+        autosize: true,
+        symbol: tvSymbol,
+        interval: 'D',
+        timezone: 'Europe/Istanbul',
+        theme: 'dark',
+        style: '1',
+        locale: 'tr',
+        toolbar_bg: '#15201b',
+        enable_publishing: false,
+        hide_top_toolbar: false,
+        hide_legend: false,
+        save_image: false,
+        container_id: 'tv_chart_container',
+        studies: ['Volume@tv-basicstudies']
+      });
+    }catch(err){
+      container.innerHTML = `<div class="empty">Grafik hatası: ${String(err&&err.message||err)}</div>`;
+    }
+  }
+
+  function renderBist100List(){
+    const q = (document.getElementById('b100q').value||'').trim().toLocaleLowerCase('tr-TR');
+    const sector = document.getElementById('b100Sector').value||'';
+    let rows = bist100.companies || [];
+    if(sector) rows = rows.filter(c => c.sector === sector);
+    if(q){
+      rows = rows.filter(c =>
+        (c.ticker||'').toLocaleLowerCase('tr-TR').includes(q) ||
+        (c.name||'').toLocaleLowerCase('tr-TR').includes(q) ||
+        (c.sector||'').toLocaleLowerCase('tr-TR').includes(q)
+      );
+    }
+    document.getElementById('b100Meta').textContent =
+      `${rows.length} / ${bist100.total||100} şirket · XU100 · Kaynak: bist100_companies.json`;
+    const list = document.getElementById('bist100List');
+    if(!rows.length){
+      list.innerHTML = '<div class="empty">Sonuç yok</div>';
+      return;
+    }
+    list.innerHTML = rows.map(c => `
+      <button type="button" class="bist100-item ${(bist100.selected&&bist100.selected.ticker===c.ticker)?'on':''}" data-b100="${c.ticker}">
+        <div>
+          <div class="t">${c.ticker}</div>
+          <div class="n">${c.name}</div>
+        </div>
+        <span class="sec">${c.sector}</span>
+      </button>`).join('');
+    list.querySelectorAll('[data-b100]').forEach(btn=>{
+      btn.onclick = ()=>{
+        const company = (bist100.companies||[]).find(x => x.ticker === btn.dataset.b100);
+        if(!company) return;
+        bist100.selected = company;
+        renderBist100List();
+        renderTradingView(company);
+      };
+    });
+  }
+
+  async function loadBist100(){
+    try{
+      const body = await (await fetch('/api/bist100')).json();
+      bist100.companies = body.companies || [];
+      bist100.total = body.total || body.count || 100;
+      bist100.sectors = body.sectors || [];
+      const sel = document.getElementById('b100Sector');
+      const current = sel.value;
+      sel.innerHTML = '<option value="">Tüm sektörler</option>' +
+        bist100.sectors.map(s => `<option value="${s}">${s}</option>`).join('');
+      if(current && bist100.sectors.includes(current)) sel.value = current;
+      if(!bist100.selected && bist100.companies.length){
+        bist100.selected = bist100.companies.find(c => c.ticker === 'THYAO') || bist100.companies[0];
+      }
+      renderBist100List();
+      if(bist100.selected) renderTradingView(bist100.selected);
+    }catch(e){
+      document.getElementById('b100Meta').textContent = 'BIST 100 listesi yüklenemedi';
+      document.getElementById('bist100List').innerHTML = '<div class="empty">API hatası</div>';
+    }
+  }
+
   async function load(){
     const res = await fetch('/api/daily');
     const data = await res.json();
@@ -666,8 +811,6 @@
     renderIntegrity(data.data_source||daily.integrity||{}, health);
     renderHome();
     document.getElementById('favHome').innerHTML = ((daily.sections||{}).favorites||[]).map(cardHtml).join('') || '<div class="empty">Favori yok — aramadan ★ ekleyin</div>';
-    const all = [...((daily.sections||{}).top_opportunities||[]), ...((daily.sections||{}).wait||[]), ...((daily.sections||{}).sell||[])];
-    document.getElementById('mktList').innerHTML = all.map(cardHtml).join('') || '<div class="empty">Piyasa verisi yok</div>';
     bindCards();
     // portfolio from dashboard light
     try {
@@ -720,8 +863,12 @@
   document.getElementById('cSearchBtn').onclick=()=>{setCryptoNav('home'); renderCryptoHome();};
   document.getElementById('q').oninput=()=>renderHome();
   document.getElementById('cq').oninput=()=>renderCryptoHome();
+  document.getElementById('b100SearchBtn').onclick=()=>renderBist100List();
+  document.getElementById('b100q').oninput=()=>renderBist100List();
+  document.getElementById('b100Sector').onchange=()=>renderBist100List();
   setMarket('BIST');
   load();
+  loadBist100();
   setInterval(()=>{ if(activeMarket==='BIST') load(); else loadCrypto(); }, 15000);
 })();
 </script>

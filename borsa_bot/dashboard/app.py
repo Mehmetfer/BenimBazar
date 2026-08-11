@@ -53,6 +53,38 @@ def markets() -> dict:
     return crypto_service.markets_catalog()
 
 
+@app.get("/api/bist100")
+def bist100_list(q: str | None = None, sector: str | None = None) -> dict:
+    """Filterable BIST 100 company catalog (metadata). Prices via TradingView."""
+    from universe.bist100 import catalog_payload
+
+    try:
+        return catalog_payload(q=q, sector=sector)
+    except FileNotFoundError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(500, str(exc)) from exc
+
+
+@app.get("/api/bist100/{ticker}")
+def bist100_company(ticker: str) -> dict:
+    """Single BIST 100 company + TradingView symbol."""
+    from universe.bist100 import get_company, load_bist100_dataset
+
+    company = get_company(ticker)
+    if company is None:
+        raise HTTPException(404, f"{ticker.upper()} is not in the BIST 100 dataset")
+    meta = load_bist100_dataset()
+    return {
+        "ok": True,
+        "index": meta.get("index", "XU100"),
+        "company": company.to_dict(),
+        "tradingview_symbol": company.tradingview_symbol,
+        "updated": meta.get("updated"),
+        "note": "Interactive chart uses TradingView widget (BIST:TICKER). Not a fabricated live quote.",
+    }
+
+
 @app.get("/api/crypto/status")
 def crypto_status() -> dict:
     """CRYPTO plane status. Never mixes into BIST TradingService."""
