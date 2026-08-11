@@ -84,6 +84,15 @@ class ExecutionRouter:
         if mode == "LIVE":
             if not bool(getattr(settings, "live_broker_enabled", False)):
                 return OrderResult(False, None, "BLOCKED", "LIVE_BROKER_ENABLED=false")
+            if bool(getattr(settings, "live_confirmation_required", True)) and not bool(
+                getattr(settings, "live_confirmed", False)
+            ):
+                return OrderResult(
+                    False,
+                    None,
+                    "BLOCKED",
+                    "LIVE_CONFIRMATION_REQUIRED — set LIVE_CONFIRMED=true after explicit human confirmation",
+                )
             # Idempotency: never blind-retry — query first if client_order_id set
             if order.client_order_id:
                 existing = self.live.get_order(order.client_order_id)

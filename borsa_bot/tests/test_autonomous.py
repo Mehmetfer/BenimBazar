@@ -40,7 +40,7 @@ def test_parse_modes_and_live_alias_blocked(tmp_mode: AutonomyModeStore):
 def test_discovery_bist100_marks_provider_md_only():
     provider = create_provider(settings.data_provider)
     discovered = discover_bist(provider_symbols=provider.list_symbols())
-    assert len(discovered) >= 100  # BIST100 catalog
+    assert len(discovered) >= 400  # tradeable catalog
     with_md = [d for d in discovered if d.has_market_data]
     # Simulated UNIVERSE is small — must not fabricate MD for all 100
     assert 0 < len(with_md) < 50
@@ -51,7 +51,7 @@ def test_fast_filter_logs_universe_stats():
     provider = create_provider(settings.data_provider)
     discovered = discover_bist(provider_symbols=provider.list_symbols())
     filt = fast_filter_bist(discovered, provider, favorites={"THYAO"}, max_deep=40)
-    assert filt.universe >= 100
+    assert filt.universe >= 400
     assert filt.with_market_data >= 1
     assert filt.fast_filter == len(filt.candidates)
     assert filt.fast_filter <= filt.with_market_data
@@ -111,9 +111,9 @@ def test_bist_cycle_paper_only_no_live(tmp_path: Path, tmp_audit: AutonomyAuditL
     assert report["live_broker"] == "DISABLED"
     assert report["status"] in {"OK", "KILL_SWITCH_ACTIVE", "BLOCKED_LIVE_MODE"}
     assert report["paper_orders"] == 0  # SEMI_AUTO never auto-fills
-    assert report["discovery"]["universe"] >= 100
+    assert report["discovery"]["universe"] >= 400
     filt = report["filter_stats"]
-    assert filt.get("UNIVERSE", 0) >= 100
+    assert filt.get("UNIVERSE", 0) >= 400
     assert filt.get("DEEP_ANALYSIS", 0) <= filt.get("WITH_MARKET_DATA", 99) + 5
 
 

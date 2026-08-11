@@ -18,7 +18,14 @@ class ExecutionMode(str, Enum):
 
 def parse_execution_mode(raw: str | None) -> ExecutionMode:
     key = (raw or "PAPER").strip().upper()
-    aliases = {"SIM": "PAPER", "SIMULATED": "PAPER", "WOULD": "SHADOW", "DRY": "SHADOW", "DRY_RUN": "SHADOW"}
+    aliases = {
+        "SIM": "PAPER",
+        "SIMULATED": "PAPER",
+        "WOULD": "SHADOW",
+        "DRY": "SHADOW",
+        "DRY_RUN": "SHADOW",
+        "DRYRUN": "SHADOW",
+    }
     key = aliases.get(key, key)
     try:
         return ExecutionMode(key)

@@ -7,6 +7,7 @@ from typing import Any
 
 from config.models import SignalAction, utc_now
 from config.settings import settings
+from data.integrity import MarketSession, bist_session_now
 
 
 ENTRY_OK = {SignalAction.BUY, SignalAction.STRONG_BUY, SignalAction.AL}
@@ -135,34 +136,46 @@ def evaluate_pretrade_gates(
     else:
         gates.append(GateResult("POSITION", True, "ok"))
 
-    # EXECUTION GATE — signal age + safety snapshot
+    # EXECUTION GATE — signal age + safety snapshot + market session
     age = signal_age_sec if signal_age_sec is not None else 0.0
     if age > max_age:
         gates.append(GateResult("EXECUTION", False, "SIGNAL_STALE", {"age_sec": age, "max": max_age}))
     else:
         try:
-            quote = trading.provider.get_quote(decision.symbol)
-            ok, reason = trading.safety.evaluate(
-                data_fresh=trading.provider.is_fresh(settings.data_freshness_sec)
-                or (trading.provider.source_meta(settings.data_freshness_sec).kind.value == "SIMULATED"),
-                api_ok=True,
-                order_status_ok=True,
-                spread_pct=float(quote.spread_pct or 0),
-                daily_loss_pct=trading.ledger.daily_loss_pct(),
-                clock_ok=True,
-                max_spread_pct=settings.max_spread_pct,
-            )
-            if not ok:
-                gates.append(GateResult("EXECUTION", False, reason))
+            session = bist_session_now()
+            if (
+                session == MarketSession.CLOSED
+                and bool(getattr(settings, "block_orders_when_market_closed", True))
+                and not bool(getattr(settings, "allow_paper_when_closed", True))
+            ):
+                gates.append(GateResult("EXECUTION", False, "MARKET_CLOSED", {"session": session.value}))
             else:
-                gates.append(
-                    GateResult(
-                        "EXECUTION",
-                        True,
-                        "ok",
-                        {"checked_at": utc_now().isoformat(), "spread_pct": quote.spread_pct},
-                    )
+                quote = trading.provider.get_quote(decision.symbol)
+                ok, reason = trading.safety.evaluate(
+                    data_fresh=trading.provider.is_fresh(settings.data_freshness_sec)
+                    or (trading.provider.source_meta(settings.data_freshness_sec).kind.value == "SIMULATED"),
+                    api_ok=True,
+                    order_status_ok=True,
+                    spread_pct=float(quote.spread_pct or 0),
+                    daily_loss_pct=trading.ledger.daily_loss_pct(),
+                    clock_ok=True,
+                    max_spread_pct=settings.max_spread_pct,
                 )
+                if not ok:
+                    gates.append(GateResult("EXECUTION", False, reason))
+                else:
+                    gates.append(
+                        GateResult(
+                            "EXECUTION",
+                            True,
+                            "ok",
+                            {
+                                "checked_at": utc_now().isoformat(),
+                                "spread_pct": quote.spread_pct,
+                                "market_session": session.value,
+                            },
+                        )
+                    )
         except Exception as exc:  # noqa: BLE001
             gates.append(GateResult("EXECUTION", False, f"EXEC_ERROR:{exc}"))
 

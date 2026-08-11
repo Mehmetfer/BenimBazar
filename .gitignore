@@ -12,6 +12,7 @@ borsa_bot/database/notification_settings.json
 borsa_bot/database/autonomy_mode.json
 borsa_bot/database/autonomy_audit.db
 borsa_bot/database/autonomy_events.db
+borsa_bot/database/auth_users.json
 borsa_bot/logs/*
 !borsa_bot/logs/.gitkeep
 

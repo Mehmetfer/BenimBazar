@@ -131,6 +131,16 @@ class Settings:
     execution_mode: str = os.getenv("EXECUTION_MODE", "PAPER").upper()
     # Hard lock for real broker — even EXECUTION_MODE=LIVE stays blocked when false
     live_broker_enabled: bool = _b("LIVE_BROKER_ENABLED", False)
+    live_confirmation_required: bool = _b("LIVE_CONFIRMATION_REQUIRED", True)
+    live_confirmed: bool = _b("LIVE_CONFIRMED", False)  # explicit human confirmation
+    # Paper FSM
+    paper_partial_fill_pct: float = _f("PAPER_PARTIAL_FILL_PCT", 1.0)
+    paper_cancel_race_fill_pct: float = _f("PAPER_CANCEL_RACE_FILL_PCT", 0.0)
+    block_orders_when_market_closed: bool = _b("BLOCK_ORDERS_WHEN_MARKET_CLOSED", True)
+    allow_paper_when_closed: bool = _b("ALLOW_PAPER_WHEN_CLOSED", True)
+    # Auth
+    auth_enabled: bool = _b("AUTH_ENABLED", False)
+    auth_session_ttl_sec: int = _i("AUTH_SESSION_TTL_SEC", 86400)
 
     @property
     def is_live(self) -> bool:

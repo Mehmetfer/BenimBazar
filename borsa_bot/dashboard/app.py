@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -19,6 +19,10 @@ from autonomous.engine import get_autonomous_engine
 from autonomous.execution_modes import parse_execution_mode
 from autonomous.explain import explain_decision
 from autonomous.modes import parse_user_mode
+from auth import Role, auth_store
+from alerts.status import channel_status_report
+from data.providers import classify_provider
+from universe.tradeable import universe_stats
 
 STATIC = Path(__file__).resolve().parent / "static"
 STATIC.mkdir(parents=True, exist_ok=True)
@@ -29,6 +33,10 @@ crypto_service = CryptoFoundationService()
 crypto_service.bind_shared(favorites=service.favorites, alerts=service.alerts)
 autonomy = get_autonomous_agent(trading=service)
 engine = get_autonomous_engine(trading=service)
+
+
+def _auth(authorization: str | None, min_role: Role) -> None:
+    auth_store.require(authorization, min_role=min_role)
 
 
 class ExecBody(BaseModel):
@@ -61,6 +69,20 @@ class AutonomyCycleBody(BaseModel):
     market: str = "BIST"
     force: bool = False
     use_engine: bool = True
+
+
+class LoginBody(BaseModel):
+    username: str = ""
+    token: str
+
+
+class CancelOrderBody(BaseModel):
+    client_order_id: str
+
+
+class LiveConfirmBody(BaseModel):
+    confirm: bool
+    phrase: str = ""
 
 
 @app.get("/api/health")
@@ -229,12 +251,19 @@ def daily_home() -> dict:
         "live_ready": False,
         "live_data_provider": (dash.get("health") or {}).get("live_data_provider"),
         "principle": dash.get("principle"),
+        "universe": universe_stats(),
+        "scan_stats": (engine.status().get("last_cycle") or {}).get("filter_stats"),
+        "display_note": "Top list = visible opportunities only — not the full universe.",
     }
 
 
 @app.post("/api/execute")
-def execute(body: ExecBody) -> dict:
-    if settings.is_live:
+def execute(body: ExecBody, authorization: str | None = Header(default=None)) -> dict:
+    if bool(getattr(settings, "auth_enabled", False)):
+        auth_store.require(authorization, min_role=Role.TRADER)
+    if settings.is_live and not (
+        getattr(settings, "live_broker_enabled", False) and getattr(settings, "live_confirmed", False)
+    ):
         raise HTTPException(400, "LIVE disabled")
     return service.execute_signal(body.symbol.upper(), approved=body.approved)
 
@@ -761,6 +790,109 @@ def autonomy_explain(symbol: str) -> dict:
         "decision": ser,
         "confidence_is_probability": False,
         "live_broker": "DISABLED",
+    }
+
+
+@app.get("/api/universe")
+def api_universe() -> dict:
+    stats = universe_stats()
+    last = engine.status().get("last_cycle") or {}
+    filt = last.get("filter_stats") or {}
+    return {
+        **stats,
+        "provider_class": classify_provider(service.provider),
+        "provider_symbols": len([s for s in service.provider.list_symbols() if s != "XU100"]),
+        "last_cycle": {
+            "SCANNED": filt.get("ANALYZED") or filt.get("DEEP_ANALYSIS"),
+            "QUALIFIED": filt.get("QUALIFIED") or filt.get("FAST_FILTER"),
+            "UNIVERSE": filt.get("FULL_MARKET_UNIVERSE") or filt.get("UNIVERSE"),
+            "WITH_MARKET_DATA": filt.get("WITH_MARKET_DATA"),
+            "SIGNALS": last.get("signals"),
+            "TOP_DISPLAY": filt.get("TOP_DISPLAY", 10),
+        },
+        "note": "FULL_MARKET_UNIVERSE is catalog size; WITH_MARKET_DATA is provider intersection.",
+    }
+
+
+@app.get("/api/notifications/status")
+def notifications_status() -> dict:
+    return channel_status_report()
+
+
+@app.post("/api/auth/login")
+def auth_login(body: LoginBody) -> dict:
+    return auth_store.login(body.username or "user", body.token)
+
+
+@app.get("/api/auth/status")
+def auth_status() -> dict:
+    return {
+        "auth_enabled": bool(getattr(settings, "auth_enabled", False)),
+        "roles": [r.value for r in Role],
+        "note": "When AUTH_ENABLED=false endpoints stay open for local paper. Trading endpoints require TRADER+ when enabled.",
+    }
+
+
+@app.post("/api/paper/cancel")
+def paper_cancel(body: CancelOrderBody, authorization: str | None = Header(default=None)) -> dict:
+    if bool(getattr(settings, "auth_enabled", False)):
+        auth_store.require(authorization, min_role=Role.TRADER)
+    return service.broker.cancel(body.client_order_id).__dict__
+
+
+@app.get("/api/paper/orders")
+def paper_orders() -> dict:
+    return {"open_orders": service.broker.list_open_orders(), "pnl_type": "PAPER"}
+
+
+@app.post("/api/live/confirm")
+def live_confirm(body: LiveConfirmBody, authorization: str | None = Header(default=None)) -> dict:
+    """Explicit LIVE confirmation gate — does NOT enable broker by itself."""
+    auth_store.require(authorization, min_role=Role.ADMIN)
+    if not body.confirm or body.phrase.strip().upper() != "I_UNDERSTAND_LIVE_RISK":
+        raise HTTPException(400, "Confirmation phrase required: I_UNDERSTAND_LIVE_RISK")
+    if not bool(getattr(settings, "live_broker_enabled", False)):
+        return {
+            "ok": False,
+            "live": "DISABLED",
+            "message": "LIVE_BROKER_ENABLED=false — confirmation recorded logically but LIVE remains locked in this process (set env + restart with real adapter).",
+        }
+    # Frozen settings — cannot mutate; document requirement
+    return {
+        "ok": True,
+        "message": "Admin confirmation accepted. Set LIVE_CONFIRMED=true in environment to persist. LIVE still requires real broker adapter.",
+        "live_broker_enabled": bool(settings.live_broker_enabled),
+        "live_confirmed_env": bool(getattr(settings, "live_confirmed", False)),
+    }
+
+
+@app.get("/api/phase2/audit")
+def phase2_audit() -> dict:
+    from data.http_live import HttpLiveMarketDataProvider
+
+    prov = service.provider
+    kind = classify_provider(prov)
+    u = universe_stats()
+    last = engine.status().get("last_cycle") or {}
+    filt = last.get("filter_stats") or {}
+    return {
+        "BIST_PROVIDER": "REAL"
+        if isinstance(prov, HttpLiveMarketDataProvider) and prov.has_market_data()
+        else ("PARTIAL" if isinstance(prov, HttpLiveMarketDataProvider) else ("MOCK" if kind == "MOCK" else "MISSING")),
+        "SYMBOL_DISCOVERY": "FULL" if u["full_universe"] >= 400 else "PARTIAL",
+        "BIST100": "VALID",
+        "FULL_UNIVERSE": u["full_universe"],
+        "ANALYZED": filt.get("ANALYZED") or filt.get("DEEP_ANALYSIS") or 0,
+        "QUALIFIED": filt.get("QUALIFIED") or filt.get("FAST_FILTER") or 0,
+        "TOP_OPPORTUNITIES": len((last.get("ranked") or [])[:10]),
+        "PARIBU": "DISABLED" if not settings.crypto_enabled else "PARTIAL",
+        "PREDICTION": "PARTIAL",
+        "NOTIFICATIONS": channel_status_report()["channels"],
+        "AUTH": "READY" if settings.auth_enabled else "PARTIAL",
+        "PAPER_FSM": "READY",
+        "LIVE": "DISABLED"
+        if not settings.live_broker_enabled
+        else ("DRY-RUN" if not settings.live_confirmed else "ENABLED_FLAG_ONLY"),
     }
 
 

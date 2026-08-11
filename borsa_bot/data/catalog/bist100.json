@@ -1,0 +1,512 @@
+{
+  "index": "XU100",
+  "index_name": "BIST 100",
+  "exchange": "BIST",
+  "currency": "TRY",
+  "tradingview_prefix": "BIST",
+  "count": 100,
+  "source_note": "Constituents aligned to publicly listed XU100 members (quarterly revisions apply; verify via KAP/Borsa İstanbul).",
+  "updated": "2026-08-11",
+  "companies": [
+    {
+      "ticker": "AEFES",
+      "name": "Anadolu Efes Biracılık ve Malt Sanayii A.Ş.",
+      "sector": "İçecek"
+    },
+    {
+      "ticker": "AKBNK",
+      "name": "Akbank T.A.Ş.",
+      "sector": "Bankacılık"
+    },
+    {
+      "ticker": "AKSA",
+      "name": "Aksa Akrilik Kimya Sanayii A.Ş.",
+      "sector": "Kimya"
+    },
+    {
+      "ticker": "AKSEN",
+      "name": "Aksa Enerji Üretim A.Ş.",
+      "sector": "Enerji"
+    },
+    {
+      "ticker": "ALARK",
+      "name": "Alarko Holding A.Ş.",
+      "sector": "Holding"
+    },
+    {
+      "ticker": "ALTNY",
+      "name": "Altınay Savunma Teknolojileri A.Ş.",
+      "sector": "Savunma"
+    },
+    {
+      "ticker": "ANSGR",
+      "name": "Anadolu Anonim Türk Sigorta Şirketi",
+      "sector": "Sigorta"
+    },
+    {
+      "ticker": "ARCLK",
+      "name": "Arçelik A.Ş.",
+      "sector": "Dayanıklı Tüketim"
+    },
+    {
+      "ticker": "ASELS",
+      "name": "Aselsan Elektronik Sanayi ve Ticaret A.Ş.",
+      "sector": "Savunma"
+    },
+    {
+      "ticker": "ASTOR",
+      "name": "Astor Enerji A.Ş.",
+      "sector": "Enerji"
+    },
+    {
+      "ticker": "BALSU",
+      "name": "Balsu Gıda Sanayi ve Ticaret A.Ş.",
+      "sector": "Gıda"
+    },
+    {
+      "ticker": "BERA",
+      "name": "Bera Holding A.Ş.",
+      "sector": "Holding"
+    },
+    {
+      "ticker": "BIMAS",
+      "name": "BİM Birleşik Mağazalar A.Ş.",
+      "sector": "Perakende"
+    },
+    {
+      "ticker": "BRSAN",
+      "name": "Borusan Birleşik Boru Fabrikaları Sanayi ve Ticaret A.Ş.",
+      "sector": "Sanayi"
+    },
+    {
+      "ticker": "BRYAT",
+      "name": "Borusan Yatırım ve Pazarlama A.Ş.",
+      "sector": "Yatırım"
+    },
+    {
+      "ticker": "BSOKE",
+      "name": "Batısöke Söke Çimento Sanayii T.A.Ş.",
+      "sector": "Çimento"
+    },
+    {
+      "ticker": "BTCIM",
+      "name": "Batıçim Batı Anadolu Çimento Sanayii A.Ş.",
+      "sector": "Çimento"
+    },
+    {
+      "ticker": "CANTE",
+      "name": "Çan2 Termik A.Ş.",
+      "sector": "Enerji"
+    },
+    {
+      "ticker": "CCOLA",
+      "name": "Coca-Cola İçecek A.Ş.",
+      "sector": "İçecek"
+    },
+    {
+      "ticker": "CIMSA",
+      "name": "Çimsa Çimento Sanayi ve Ticaret A.Ş.",
+      "sector": "Çimento"
+    },
+    {
+      "ticker": "CVKMD",
+      "name": "CVK Maden İşletmeleri Sanayi ve Ticaret A.Ş.",
+      "sector": "Madencilik"
+    },
+    {
+      "ticker": "CWENE",
+      "name": "CW Enerji Mühendislik Ticaret ve Sanayi A.Ş.",
+      "sector": "Enerji"
+    },
+    {
+      "ticker": "DAPGM",
+      "name": "DAP Gayrimenkul Geliştirme A.Ş.",
+      "sector": "Gayrimenkul"
+    },
+    {
+      "ticker": "DOAS",
+      "name": "Doğuş Otomotiv Servis ve Ticaret A.Ş.",
+      "sector": "Otomotiv"
+    },
+    {
+      "ticker": "DOHOL",
+      "name": "Doğan Şirketler Grubu Holding A.Ş.",
+      "sector": "Holding"
+    },
+    {
+      "ticker": "DSTKF",
+      "name": "Destek Finans Faktoring A.Ş.",
+      "sector": "Finans"
+    },
+    {
+      "ticker": "ECILC",
+      "name": "Eczacıbaşı İlaç, Sınai ve Finansal Yatırımlar Sanayi ve Ticaret A.Ş.",
+      "sector": "İlaç"
+    },
+    {
+      "ticker": "EFOR",
+      "name": "Efor Yatırım Holding A.Ş.",
+      "sector": "Yatırım"
+    },
+    {
+      "ticker": "EKGYO",
+      "name": "Emlak Konut Gayrimenkul Yatırım Ortaklığı A.Ş.",
+      "sector": "Gayrimenkul"
+    },
+    {
+      "ticker": "ENERY",
+      "name": "Enerya Enerji A.Ş.",
+      "sector": "Enerji"
+    },
+    {
+      "ticker": "ENJSA",
+      "name": "Enerjisa Enerji A.Ş.",
+      "sector": "Enerji"
+    },
+    {
+      "ticker": "ENKAI",
+      "name": "Enka İnşaat ve Sanayi A.Ş.",
+      "sector": "İnşaat"
+    },
+    {
+      "ticker": "EREGL",
+      "name": "Ereğli Demir ve Çelik Fabrikaları T.A.Ş.",
+      "sector": "Demir-Çelik"
+    },
+    {
+      "ticker": "ESEN",
+      "name": "Esenboğa Elektrik Üretim A.Ş.",
+      "sector": "Enerji"
+    },
+    {
+      "ticker": "EUPWR",
+      "name": "Europower Enerji ve Otomasyon Teknolojileri Sanayi Ticaret A.Ş.",
+      "sector": "Enerji"
+    },
+    {
+      "ticker": "EUREN",
+      "name": "Europen Endüstri İnşaat Sanayi ve Ticaret A.Ş.",
+      "sector": "Sanayi"
+    },
+    {
+      "ticker": "FENER",
+      "name": "Fenerbahçe Futbol A.Ş.",
+      "sector": "Spor"
+    },
+    {
+      "ticker": "FROTO",
+      "name": "Ford Otomotiv Sanayi A.Ş.",
+      "sector": "Otomotiv"
+    },
+    {
+      "ticker": "GARAN",
+      "name": "Türkiye Garanti Bankası A.Ş.",
+      "sector": "Bankacılık"
+    },
+    {
+      "ticker": "GENIL",
+      "name": "Gen İlaç ve Sağlık Ürünleri Sanayi ve Ticaret A.Ş.",
+      "sector": "İlaç"
+    },
+    {
+      "ticker": "GESAN",
+      "name": "Girişim Elektrik Taahhüt Ticaret ve Sanayi A.Ş.",
+      "sector": "Elektrik"
+    },
+    {
+      "ticker": "GLRMK",
+      "name": "Gülermak Ağır Sanayi İnşaat ve Taahhüt A.Ş.",
+      "sector": "İnşaat"
+    },
+    {
+      "ticker": "GRSEL",
+      "name": "Gür-Sel Turizm Taşımacılık ve Servis Ticaret A.Ş.",
+      "sector": "Ulaştırma"
+    },
+    {
+      "ticker": "GRTHO",
+      "name": "Grainturk Holding A.Ş.",
+      "sector": "Holding"
+    },
+    {
+      "ticker": "GSRAY",
+      "name": "Galatasaray Sportif Sınai ve Ticari Yatırımlar A.Ş.",
+      "sector": "Spor"
+    },
+    {
+      "ticker": "GUBRF",
+      "name": "Gübre Fabrikaları T.A.Ş.",
+      "sector": "Kimya"
+    },
+    {
+      "ticker": "HALKB",
+      "name": "Türkiye Halk Bankası A.Ş.",
+      "sector": "Bankacılık"
+    },
+    {
+      "ticker": "HEKTS",
+      "name": "Hektaş Ticaret T.A.Ş.",
+      "sector": "Tarım"
+    },
+    {
+      "ticker": "IEYHO",
+      "name": "Işıklar Enerji ve Yapı Holding A.Ş.",
+      "sector": "Holding"
+    },
+    {
+      "ticker": "ISCTR",
+      "name": "Türkiye İş Bankası A.Ş. (C)",
+      "sector": "Bankacılık"
+    },
+    {
+      "ticker": "ISMEN",
+      "name": "İş Yatırım Menkul Değerler A.Ş.",
+      "sector": "Finans"
+    },
+    {
+      "ticker": "IZENR",
+      "name": "İzdemir Enerji Elektrik Üretim A.Ş.",
+      "sector": "Enerji"
+    },
+    {
+      "ticker": "KCHOL",
+      "name": "Koç Holding A.Ş.",
+      "sector": "Holding"
+    },
+    {
+      "ticker": "KLRHO",
+      "name": "Kiler Holding A.Ş.",
+      "sector": "Holding"
+    },
+    {
+      "ticker": "KRDMD",
+      "name": "Kardemir Karabük Demir Çelik Sanayi ve Ticaret A.Ş. (D)",
+      "sector": "Demir-Çelik"
+    },
+    {
+      "ticker": "KTLEV",
+      "name": "Katılımevim Tasarruf Finansman A.Ş.",
+      "sector": "Finans"
+    },
+    {
+      "ticker": "KUYAS",
+      "name": "Kuyaş Yatırım Holding A.Ş.",
+      "sector": "Yatırım"
+    },
+    {
+      "ticker": "MAGEN",
+      "name": "Margün Enerji Üretim Sanayi ve Ticaret A.Ş.",
+      "sector": "Enerji"
+    },
+    {
+      "ticker": "MAVI",
+      "name": "Mavi Giyim Sanayi ve Ticaret A.Ş.",
+      "sector": "Perakende"
+    },
+    {
+      "ticker": "MGROS",
+      "name": "Migros Ticaret A.Ş.",
+      "sector": "Perakende"
+    },
+    {
+      "ticker": "MIATK",
+      "name": "Mia Teknoloji A.Ş.",
+      "sector": "Teknoloji"
+    },
+    {
+      "ticker": "MPARK",
+      "name": "MLP Sağlık Hizmetleri A.Ş.",
+      "sector": "Sağlık"
+    },
+    {
+      "ticker": "OBAMS",
+      "name": "Oba Makarnacılık Sanayi ve Ticaret A.Ş.",
+      "sector": "Gıda"
+    },
+    {
+      "ticker": "ODAS",
+      "name": "Odaş Elektrik Üretim Sanayi Ticaret A.Ş.",
+      "sector": "Enerji"
+    },
+    {
+      "ticker": "ODINE",
+      "name": "Odine Teknoloji Ticaret ve Sanayi A.Ş.",
+      "sector": "Teknoloji"
+    },
+    {
+      "ticker": "OTKAR",
+      "name": "Otokar Otomotiv ve Savunma Sanayi A.Ş.",
+      "sector": "Otomotiv"
+    },
+    {
+      "ticker": "OYAKC",
+      "name": "Oyak Çimento Fabrikaları A.Ş.",
+      "sector": "Çimento"
+    },
+    {
+      "ticker": "PAHOL",
+      "name": "Pasifik Holding A.Ş.",
+      "sector": "Holding"
+    },
+    {
+      "ticker": "PASEU",
+      "name": "Pasifik Eurasia Lojistik Dış Ticaret A.Ş.",
+      "sector": "Lojistik"
+    },
+    {
+      "ticker": "PATEK",
+      "name": "Pasifik Teknoloji A.Ş.",
+      "sector": "Teknoloji"
+    },
+    {
+      "ticker": "PETKM",
+      "name": "Petkim Petrokimya Holding A.Ş.",
+      "sector": "Petrokimya"
+    },
+    {
+      "ticker": "PGSUS",
+      "name": "Pegasus Hava Taşımacılığı A.Ş.",
+      "sector": "Havacılık"
+    },
+    {
+      "ticker": "PSGYO",
+      "name": "Pasifik Gayrimenkul Yatırım Ortaklığı A.Ş.",
+      "sector": "Gayrimenkul"
+    },
+    {
+      "ticker": "QUAGR",
+      "name": "Qua Granite Hayal Yapı Ürünleri Sanayi Ticaret A.Ş.",
+      "sector": "Sanayi"
+    },
+    {
+      "ticker": "RALYH",
+      "name": "Ral Yatırım Holding A.Ş.",
+      "sector": "Holding"
+    },
+    {
+      "ticker": "REEDR",
+      "name": "Reeder Teknoloji Sanayi ve Ticaret A.Ş.",
+      "sector": "Teknoloji"
+    },
+    {
+      "ticker": "SAHOL",
+      "name": "Hacı Ömer Sabancı Holding A.Ş.",
+      "sector": "Holding"
+    },
+    {
+      "ticker": "SARKY",
+      "name": "Sarkuysan Elektrolitik Bakır Sanayi ve Ticaret A.Ş.",
+      "sector": "Sanayi"
+    },
+    {
+      "ticker": "SASA",
+      "name": "SASA Polyester Sanayi A.Ş.",
+      "sector": "Kimya"
+    },
+    {
+      "ticker": "SISE",
+      "name": "Türkiye Şişe ve Cam Fabrikaları A.Ş.",
+      "sector": "Sanayi"
+    },
+    {
+      "ticker": "SKBNK",
+      "name": "Şekerbank T.A.Ş.",
+      "sector": "Bankacılık"
+    },
+    {
+      "ticker": "SOKM",
+      "name": "Şok Marketler Ticaret A.Ş.",
+      "sector": "Perakende"
+    },
+    {
+      "ticker": "TAVHL",
+      "name": "TAV Havalimanları Holding A.Ş.",
+      "sector": "Havacılık"
+    },
+    {
+      "ticker": "TCELL",
+      "name": "Turkcell İletişim Hizmetleri A.Ş.",
+      "sector": "Telekomünikasyon"
+    },
+    {
+      "ticker": "THYAO",
+      "name": "Türk Hava Yolları A.O.",
+      "sector": "Havacılık"
+    },
+    {
+      "ticker": "TKFEN",
+      "name": "Tekfen Holding A.Ş.",
+      "sector": "Holding"
+    },
+    {
+      "ticker": "TOASO",
+      "name": "Tofaş Türk Otomobil Fabrikası A.Ş.",
+      "sector": "Otomotiv"
+    },
+    {
+      "ticker": "TRALT",
+      "name": "Türk Altın İşletmeleri A.Ş.",
+      "sector": "Madencilik"
+    },
+    {
+      "ticker": "TRENJ",
+      "name": "TR Doğal Enerji Kaynakları Madencilik ve Petrol Arama Üretim A.Ş.",
+      "sector": "Enerji"
+    },
+    {
+      "ticker": "TRMET",
+      "name": "TR Anadolu Metal Madencilik Sanayi ve Ticaret A.Ş.",
+      "sector": "Madencilik"
+    },
+    {
+      "ticker": "TSKB",
+      "name": "Türkiye Sınai Kalkınma Bankası A.Ş.",
+      "sector": "Bankacılık"
+    },
+    {
+      "ticker": "TTKOM",
+      "name": "Türk Telekomünikasyon A.Ş.",
+      "sector": "Telekomünikasyon"
+    },
+    {
+      "ticker": "TUKAS",
+      "name": "Tukaş Gıda Sanayi ve Ticaret A.Ş.",
+      "sector": "Gıda"
+    },
+    {
+      "ticker": "TUPRS",
+      "name": "Türkiye Petrol Rafinerileri A.Ş.",
+      "sector": "Enerji"
+    },
+    {
+      "ticker": "TURSG",
+      "name": "Türkiye Sigorta A.Ş.",
+      "sector": "Sigorta"
+    },
+    {
+      "ticker": "ULKER",
+      "name": "Ülker Bisküvi Sanayi A.Ş.",
+      "sector": "Gıda"
+    },
+    {
+      "ticker": "VAKBN",
+      "name": "Türkiye Vakıflar Bankası T.A.O.",
+      "sector": "Bankacılık"
+    },
+    {
+      "ticker": "VESTL",
+      "name": "Vestel Elektronik Sanayi ve Ticaret A.Ş.",
+      "sector": "Elektronik"
+    },
+    {
+      "ticker": "YKBNK",
+      "name": "Yapı ve Kredi Bankası A.Ş.",
+      "sector": "Bankacılık"
+    },
+    {
+      "ticker": "ZOREN",
+      "name": "Zorlu Enerji Elektrik Üretim A.Ş.",
+      "sector": "Enerji"
+    }
+  ]
+}

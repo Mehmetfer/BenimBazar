@@ -292,9 +292,10 @@ class HttpLiveProviderStub:
 
 
 def create_provider(name: str = "simulated") -> MarketDataProvider:
-    """Factory. PRODUCTION mock/sim HARD BLOCKED. live/bist/http → STUB (not real).
+    """Factory. PRODUCTION mock/sim HARD BLOCKED. live/bist/http → HttpLiveMarketDataProvider.
 
     broker → RequiredLiveProvider (BROKER ≠ market-data provider).
+    HttpLiveProviderStub retained for tests / explicit stub use only.
     """
     from data.validation import (
         AppEnvironment,
@@ -339,7 +340,18 @@ def create_provider(name: str = "simulated") -> MarketDataProvider:
             return RequiredLiveProvider(
                 "DATA_PROVIDER=live ancak MARKET_DATA_URL / MARKET_DATA_TOKEN yok"
             )
-        return HttpLiveProviderStub(url, token)
+        from data.http_live import HttpLiveMarketDataProvider
+
+        provider = HttpLiveMarketDataProvider(url, token)
+        # Probe once — fail closed if unreachable (still returns provider; has_market_data=False)
+        try:
+            provider.tick()
+        except Exception:  # noqa: BLE001
+            pass
+        if not provider.has_market_data():
+            # Keep real provider instance (not stub) so readiness audits show REAL adapter present but disconnected
+            return provider
+        return provider
     if env == AppEnvironment.PRODUCTION:
         import logging
 
@@ -357,8 +369,12 @@ def create_provider(name: str = "simulated") -> MarketDataProvider:
 
 def classify_provider(provider: object) -> str:
     """REAL | STUB | MOCK — readiness audit helper."""
+    from data.http_live import HttpLiveMarketDataProvider
+
     if getattr(provider, "is_stub", False) or isinstance(provider, HttpLiveProviderStub):
         return "STUB"
+    if isinstance(provider, HttpLiveMarketDataProvider):
+        return "REAL"
     if getattr(provider, "kind", None) == DataSourceKind.SIMULATED:
         return "MOCK"
     if getattr(provider, "is_real_provider", False):

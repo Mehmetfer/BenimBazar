@@ -182,12 +182,24 @@ class PredictionStore:
             return None
         return self._pred_row(row)
 
-    def recent_predictions(self, symbol: str | None = None, limit: int = 50) -> list[dict]:
+    def recent_predictions(
+        self,
+        symbol: str | None = None,
+        limit: int = 50,
+        *,
+        market_type: str | None = None,
+    ) -> list[dict]:
         q = "SELECT * FROM predictions"
+        clauses: list[str] = []
         args: list[Any] = []
         if symbol:
-            q += " WHERE symbol=?"
+            clauses.append("symbol=?")
             args.append(symbol.upper())
+        if market_type:
+            clauses.append("UPPER(COALESCE(market_type,'BIST'))=?")
+            args.append(market_type.upper())
+        if clauses:
+            q += " WHERE " + " AND ".join(clauses)
         q += " ORDER BY timestamp DESC LIMIT ?"
         args.append(limit)
         with self._conn() as c:
@@ -291,30 +303,39 @@ class PredictionStore:
         regime: str | None = None,
         sector: str | None = None,
         model_version: str | None = None,
+        market_type: str | None = None,
         limit: int = 5000,
     ) -> list[dict]:
         clauses = []
         args: list[Any] = []
         if symbol:
-            clauses.append("symbol=?")
+            clauses.append("e.symbol=?")
             args.append(symbol.upper())
         if horizon:
-            clauses.append("horizon=?")
+            clauses.append("e.horizon=?")
             args.append(horizon)
         if strategy:
-            clauses.append("strategy=?")
+            clauses.append("e.strategy=?")
             args.append(strategy)
         if regime:
-            clauses.append("market_regime=?")
+            clauses.append("e.market_regime=?")
             args.append(regime)
         if sector:
-            clauses.append("sector=?")
+            clauses.append("e.sector=?")
             args.append(sector)
         if model_version:
-            clauses.append("model_version=?")
+            clauses.append("e.model_version=?")
             args.append(model_version)
+        join = ""
+        if market_type:
+            join = " JOIN predictions p ON p.prediction_id = e.prediction_id"
+            clauses.append("UPPER(COALESCE(p.market_type,'BIST'))=?")
+            args.append(market_type.upper())
         where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-        q = f"SELECT * FROM prediction_evaluations{where} ORDER BY evaluated_at DESC LIMIT ?"
+        q = (
+            f"SELECT e.* FROM prediction_evaluations e{join}{where} "
+            f"ORDER BY e.evaluated_at DESC LIMIT ?"
+        )
         args.append(limit)
         with self._conn() as c:
             rows = c.execute(q, args).fetchall()

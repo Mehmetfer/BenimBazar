@@ -253,9 +253,15 @@ class AutonomousTradingEngine:
         }
         report.filter_stats = {
             "UNIVERSE": filt.universe,
+            "FULL_MARKET_UNIVERSE": filt.universe,
             "WITH_MARKET_DATA": filt.with_market_data,
+            "ACTIVE_TRADEABLE_WITH_MD": filt.with_market_data,
             "FAST_FILTER": filt.fast_filter,
+            "QUALIFIED": filt.fast_filter,
             "DEEP_ANALYSIS": len(filt.candidates),
+            "ANALYZED": len(filt.candidates),
+            "TOP_DISPLAY": min(10, len(filt.candidates)),
+            "note": "UI top list ≠ full universe. Catalog may be 500+; MD subset is provider-limited.",
             **filt.stats,
         }
 

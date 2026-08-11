@@ -308,6 +308,7 @@ class PredictionTrackingService:
             model_version=model_version,
             regime=regime,
             sector=sector,
+            market_type="BIST",
         )
         if accuracy_bucket:
             rows = filter_rows_by_accuracy_bucket(rows, accuracy_bucket)

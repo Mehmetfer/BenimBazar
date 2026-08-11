@@ -94,16 +94,21 @@ def _bar(**kwargs) -> Bar:
 # --- PROVIDER ---
 
 
-def test_factory_live_bist_http_are_stub_not_real(monkeypatch):
+def test_factory_live_bist_http_are_real_adapter_fail_closed(monkeypatch):
+    """Phase 2: live/bist/http use HttpLiveMarketDataProvider (not stub). Unreachable → no data."""
+    from data.http_live import HttpLiveMarketDataProvider
+
     monkeypatch.setenv("MARKET_DATA_URL", "https://example.invalid")
     monkeypatch.setenv("MARKET_DATA_TOKEN", "tok")
     for name in ("live", "bist", "http"):
         p = create_provider(name)
-        assert isinstance(p, HttpLiveProviderStub)
-        assert classify_provider(p) == "STUB"
+        assert isinstance(p, HttpLiveMarketDataProvider)
+        assert not isinstance(p, HttpLiveProviderStub)
+        assert classify_provider(p) == "REAL"
         assert p.has_market_data() is False
-        assert p.kind == DataSourceKind.REQUIRED
-        assert p.is_real_provider is False
+        assert p.is_real_provider is True
+        # Disconnected → kind REQUIRED in source_meta
+        assert p.source_meta().kind in {DataSourceKind.REQUIRED, DataSourceKind.LIVE}
 
 
 def test_factory_broker_not_market_data_provider():
@@ -120,12 +125,12 @@ def test_production_guard_blocks_mock(monkeypatch):
     assert gate.signals_allowed is False
 
 
-def test_stub_not_accepted_as_real_in_scan(monkeypatch):
+def test_disconnected_live_provider_not_accepted_in_scan(monkeypatch):
     monkeypatch.setenv("MARKET_DATA_URL", "https://example.invalid")
     monkeypatch.setenv("MARKET_DATA_TOKEN", "tok")
-    stub = create_provider("live")
+    live = create_provider("live")
     for env in ("PRODUCTION", "DEVELOPMENT"):
-        gate = gate_market_data_for_scan(stub, app_env=env, max_age_sec=30)
+        gate = gate_market_data_for_scan(live, app_env=env, max_age_sec=30)
         assert gate.signals_allowed is False
         assert gate.code in {
             MarketDataGateCode.STUB_NOT_IMPLEMENTED,

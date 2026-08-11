@@ -71,7 +71,7 @@ def test_engine_cycle_paper_ok(engine: AutonomousTradingEngine, tmp_store: Auton
     report = engine.run_cycle("BIST", force=True)
     assert report["status"] in {"OK", "BLOCKED"}
     assert report["execution_mode"] == "PAPER"
-    assert report["discovery"]["universe"] >= 100
+    assert report["discovery"]["universe"] >= 400
     assert report["orders_submitted"] == 0  # SEMI_AUTO
 
 

@@ -825,6 +825,12 @@
     daily = data.daily||{};
     const health = data.health||{};
     renderIntegrity(data.data_source||daily.integrity||{}, health);
+    const uni = data.universe||{};
+    const ss = data.scan_stats||{};
+    const banner = document.getElementById('integrityBanner');
+    if(banner && uni.full_universe){
+      banner.textContent += ` · Universe ${uni.full_universe} · MD ${ss.WITH_MARKET_DATA??'—'} · Deep ${ss.DEEP_ANALYSIS??ss.ANALYZED??'—'} · UI top ≠ full scan`;
+    }
     renderHome();
     document.getElementById('favHome').innerHTML = ((daily.sections||{}).favorites||[]).map(cardHtml).join('') || '<div class="empty">Favori yok — aramadan ★ ekleyin</div>';
     bindCards();
