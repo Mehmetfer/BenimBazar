@@ -367,3 +367,11 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 companion/data/
+/opt/flutter
+
+# Flutter
+borsa_app/.dart_tool/
+borsa_app/.flutter-plugins
+borsa_app/.flutter-plugins-dependencies
+borsa_app/build/
+borsa_app/.packages

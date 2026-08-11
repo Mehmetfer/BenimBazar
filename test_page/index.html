@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0b1220" />
+  <title>Borsa Robot — Al / Sat / Bekle</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #101a28;
+      --ink: #e8eef8;
+      --mute: #8fa0b8;
+      --buy: #1f9d6a;
+      --sell: #c44b4b;
+      --hold: #d4a017;
+      --up: #3dd68c;
+      --down: #ff6b6b;
+      --line: rgba(232,238,248,.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(900px 420px at 10% -10%, rgba(31,157,106,.18), transparent 50%),
+                  radial-gradient(700px 380px at 100% 0%, rgba(212,160,23,.12), transparent 45%),
+                  var(--bg);
+      color: var(--ink);
+      min-height: 100dvh;
+      padding: 14px 12px calc(22px + env(safe-area-inset-bottom));
+    }
+    h1 { margin: 0; font-size: 1.85rem; letter-spacing: -.03em; }
+    .sub { color: var(--mute); margin: .3rem 0 .9rem; font-size: .92rem; }
+    .robot {
+      display: flex; gap: 10px; align-items: center;
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 16px; padding: 12px; margin-bottom: 12px;
+    }
+    .avatar {
+      width: 46px; height: 46px; border-radius: 14px;
+      background: linear-gradient(135deg, #1f9d6a, #0d6e4f);
+      display: grid; place-items: center; font-weight: 800; font-size: 1.1rem;
+      flex: 0 0 auto;
+    }
+    .robot b { display: block; }
+    .robot small { color: var(--mute); }
+    .card {
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 16px; padding: 12px; margin-bottom: 12px;
+    }
+    .equity strong { font-size: 1.2rem; display: block; }
+    .pnl.up { color: var(--up); } .pnl.down { color: var(--down); }
+    .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .tab, button, select, input { font: inherit; min-height: 46px; border-radius: 12px; }
+    .tab { border: 1px solid var(--line); background: transparent; color: var(--ink); }
+    .tab.active.buy { background: var(--buy); border: 0; }
+    .tab.active.sell { background: var(--sell); border: 0; }
+    label { display: block; color: var(--mute); font-size: .78rem; margin: 8px 0 4px; }
+    select, input {
+      width: 100%; border: 1px solid var(--line); background: #0a1018;
+      color: var(--ink); padding: 0 12px;
+    }
+    .meta { display: flex; justify-content: space-between; color: var(--mute); font-size: .88rem; margin: 10px 0; }
+    #go { width: 100%; border: 0; color: #fff; font-weight: 700; }
+    #go.buy { background: var(--buy); } #go.sell { background: var(--sell); }
+    .msg { min-height: 1.1rem; margin-top: 8px; font-size: .88rem; }
+    h2 { margin: 0 0 8px; font-size: .72rem; letter-spacing: .08em; color: var(--mute); text-transform: uppercase; }
+    .signal {
+      border-radius: 14px; padding: 12px; margin-bottom: 8px;
+      border: 1px solid var(--line); background: #0a121c;
+    }
+    .signal .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .badge {
+      font-size: .78rem; font-weight: 800; padding: 6px 10px; border-radius: 999px;
+      letter-spacing: .04em;
+    }
+    .badge.AL { background: rgba(31,157,106,.2); color: var(--up); }
+    .badge.SAT { background: rgba(196,75,75,.2); color: var(--down); }
+    .badge.BEKLE { background: rgba(212,160,23,.18); color: var(--hold); }
+    .signal .why { color: var(--mute); font-size: .84rem; margin-top: 6px; line-height: 1.35; }
+    .metrics { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .chip {
+      font-size: .72rem; color: var(--mute); border: 1px solid var(--line);
+      border-radius: 999px; padding: 4px 8px;
+    }
+    .row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 11px 0; border-bottom: 1px solid var(--line); gap: 8px;
+    }
+    .row:last-child { border-bottom: 0; }
+    .row small { color: var(--mute); display: block; }
+    .up { color: var(--up); } .down { color: var(--down); }
+    .note { color: var(--mute); font-size: .75rem; line-height: 1.35; margin-top: 6px; }
+    .btn-ghost {
+      width: 100%; border: 1px solid var(--line); background: transparent;
+      color: var(--ink); margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Borsa Robot</h1>
+  <p class="sub">Merdiven tarzı AI tavsiye · Al / Sat / Bekle</p>
+
+  <div class="robot">
+    <div class="avatar">AI</div>
+    <div>
+      <b>Merdiven Motoru</b>
+      <small>Stochastic + Bollinger · simülasyon</small>
+    </div>
+  </div>
+
+  <div class="card equity">
+    <span style="color:var(--mute);font-size:.78rem">Portföy</span>
+    <strong id="equity">—</strong>
+    <div id="pnl" class="pnl">—</div>
+    <div style="color:var(--mute);margin-top:4px" id="cash">Nakit: —</div>
+  </div>
+
+  <div class="card">
+    <h2>Robot tavsiyeleri</h2>
+    <div id="advice"></div>
+    <button class="btn-ghost" id="refreshAdvice" type="button">Tavsiyeleri yenile</button>
+    <p class="note">Yatırım tavsiyesi değildir. [ElifPinarBalbal/Merdiven] mantığından esinlenilmiştir: %K/%D kesişimi + Bollinger bantları.</p>
+  </div>
+
+  <div class="card">
+    <div class="tabs">
+      <button class="tab buy active" id="tabBuy" type="button">Al</button>
+      <button class="tab sell" id="tabSell" type="button">Sat</button>
+    </div>
+    <label for="symbol">Hisse</label>
+    <select id="symbol"></select>
+    <label for="qty">Lot</label>
+    <input id="qty" type="number" inputmode="numeric" min="1" step="1" value="10" />
+    <div class="meta">
+      <span id="price">Fiyat: —</span>
+      <span id="total">Toplam: —</span>
+    </div>
+    <button id="go" class="buy" type="button">Al</button>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>Piyasa</h2>
+    <div id="market"></div>
+  </div>
+
+  <div class="card">
+    <h2>Pozisyonlar</h2>
+    <div id="positions"></div>
+  </div>
+
+  <script>
+    /* Merdiven-inspired engine: Stochastic + Bollinger → AL / SAT / BEKLE */
+    const SEED = {
+      THYAO: ["Türk Hava Yolları", 312.5],
+      ASELS: ["Aselsan", 78.4],
+      GARAN: ["Garanti BBVA", 118.2],
+      EREGL: ["Erdemir", 54.75],
+      BIMAS: ["BİM", 542],
+      AKBNK: ["Akbank", 64.3],
+      SAHOL: ["Sabancı Holding", 98.1],
+      KCHOL: ["Koç Holding", 186.4],
+      TUPRS: ["Tüpraş", 168.9],
+      SISE: ["Şişecam", 49.85],
+    };
+
+    const history = {}; // symbol -> [{o,h,l,c}]
+    const positions = {};
+    let cash = 100000;
+    let side = "BUY";
+
+    function money(n) {
+      return Number(n).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TL";
+    }
+
+    function initHistory() {
+      for (const [sym, [, base]] of Object.entries(SEED)) {
+        const bars = [];
+        let p = base * (0.92 + Math.random() * 0.08);
+        for (let i = 0; i < 40; i++) {
+          const drift = (Math.random() - 0.48) * 0.02;
+          const o = p;
+          const c = +(p * (1 + drift)).toFixed(2);
+          const h = +Math.max(o, c) * (1 + Math.random() * 0.008);
+          const l = +Math.min(o, c) * (1 - Math.random() * 0.008);
+          bars.push({ o, h: +h.toFixed(2), l: +l.toFixed(2), c });
+          p = c;
+        }
+        history[sym] = bars;
+      }
+    }
+
+    function tick() {
+      for (const [sym, bars] of Object.entries(history)) {
+        const last = bars[bars.length - 1];
+        const drift = (Math.random() - 0.5) * 0.018;
+        const o = last.c;
+        const c = +(o * (1 + drift)).toFixed(2);
+        const h = +Math.max(o, c) * (1 + Math.random() * 0.006);
+        const l = +Math.min(o, c) * (1 - Math.random() * 0.006);
+        bars.push({ o, h: +h.toFixed(2), l: +l.toFixed(2), c });
+        if (bars.length > 60) bars.shift();
+      }
+    }
+
+    function stochastic(bars, periodK = 14, periodD = 3) {
+      if (bars.length < periodK + periodD) return null;
+      const rawK = [];
+      for (let i = periodK - 1; i < bars.length; i++) {
+        const win = bars.slice(i - periodK + 1, i + 1);
+        const hh = Math.max(...win.map((b) => b.h));
+        const ll = Math.min(...win.map((b) => b.l));
+        const k = hh === ll ? 50 : ((bars[i].c - ll) / (hh - ll)) * 100;
+        rawK.push(k);
+      }
+      const smoothed = rawK; // smoothK=1 like Merdiven default
+      const out = [];
+      for (let i = periodD - 1; i < smoothed.length; i++) {
+        const slice = smoothed.slice(i - periodD + 1, i + 1);
+        const d = slice.reduce((a, b) => a + b, 0) / periodD;
+        out.push({ percentK: smoothed[i], percentD: d });
+      }
+      return out;
+    }
+
+    function bollinger(bars, period = 20, factor = 2) {
+      const closes = bars.map((b) => b.c);
+      if (closes.length < period) return null;
+      const bands = [];
+      for (let i = period - 1; i < closes.length; i++) {
+        const slice = closes.slice(i - period + 1, i + 1);
+        const mean = slice.reduce((a, b) => a + b, 0) / period;
+        const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period;
+        const std = Math.sqrt(variance);
+        bands.push({ middle: mean, upper: mean + factor * std, lower: mean - factor * std });
+      }
+      return bands;
+    }
+
+    // Merdiven rules (adapted): AL / SAT / BEKLE
+    function advise(symbol) {
+      const bars = history[symbol];
+      const stoch = stochastic(bars);
+      const bb = bollinger(bars);
+      if (!stoch || !bb || stoch.length < 2 || bb.length < 2) {
+        return { action: "BEKLE", why: "Veri yetersiz", k: 0, d: 0, close: bars.at(-1).c, bb: null };
+      }
+      const now = stoch[stoch.length - 1];
+      const prev = stoch[stoch.length - 2];
+      const bbNow = bb[bb.length - 1];
+      const bbPrev = bb[bb.length - 2];
+      const close = bars[bars.length - 1].c;
+      const owned = !!positions[symbol];
+
+      const kCrossesAboveD = prev.percentK < prev.percentD && now.percentK > now.percentD;
+      const kCrossesBelowD = prev.percentK > prev.percentD && now.percentK < now.percentD;
+
+      const isBuy =
+        ((kCrossesAboveD && (close <= bbNow.lower || close <= bbPrev.lower) && prev.percentK <= 20 && prev.percentD <= 20) ||
+          close <= bbNow.lower) &&
+        !owned;
+
+      const isSell =
+        ((kCrossesBelowD && (close >= bbNow.upper || close >= bbPrev.upper) && prev.percentK >= 80 && prev.percentD >= 80) ||
+          close >= bbNow.upper) &&
+        owned;
+
+      if (isBuy) {
+        return {
+          action: "AL",
+          why: "Alt Bollinger + Stochastic toparlanması (Merdiven AL kuralı)",
+          k: now.percentK, d: now.percentD, close, bb: bbNow,
+        };
+      }
+      if (isSell) {
+        return {
+          action: "SAT",
+          why: "Üst Bollinger + Stochastic zayıflaması (Merdiven SAT kuralı)",
+          k: now.percentK, d: now.percentD, close, bb: bbNow,
+        };
+      }
+      // Soft hints when not owned / owned
+      if (!owned && now.percentK < 25 && close < bbNow.middle) {
+        return {
+          action: "BEKLE",
+          why: "Aşırı satım bölgesine yakın; net AL kesişimi yok — bekle",
+          k: now.percentK, d: now.percentD, close, bb: bbNow,
+        };
+      }
+      if (owned && now.percentK > 75 && close > bbNow.middle) {
+        return {
+          action: "BEKLE",
+          why: "Aşırı alım bölgesi; net SAT kesişimi yok — pozisyonu izle",
+          k: now.percentK, d: now.percentD, close, bb: bbNow,
+        };
+      }
+      return {
+        action: "BEKLE",
+        why: "Nötr bölge — güçlü AL/SAT sinyali yok",
+        k: now.percentK, d: now.percentD, close, bb: bbNow,
+      };
+    }
+
+    function quotes() {
+      return Object.keys(SEED).sort().map((s) => {
+        const base = SEED[s][1];
+        const price = history[s].at(-1).c;
+        return {
+          symbol: s,
+          name: SEED[s][0],
+          price,
+          change: +(((price - base) / base) * 100).toFixed(2),
+        };
+      });
+    }
+
+    function renderAdvice() {
+      const list = Object.keys(SEED).map((s) => ({ symbol: s, name: SEED[s][0], ...advise(s) }));
+      // Sort: AL first, SAT, then BEKLE
+      const rank = { AL: 0, SAT: 1, BEKLE: 2 };
+      list.sort((a, b) => rank[a.action] - rank[b.action] || a.symbol.localeCompare(b.symbol));
+      document.getElementById("advice").innerHTML = list.map((a) => `
+        <div class="signal" data-s="${a.symbol}" data-a="${a.action}">
+          <div class="top">
+            <div><b>${a.symbol}</b><div style="color:var(--mute);font-size:.8rem">${a.name}</div></div>
+            <span class="badge ${a.action}">${a.action}</span>
+          </div>
+          <div class="why">${a.why}</div>
+          <div class="metrics">
+            <span class="chip">Fiyat ${money(a.close)}</span>
+            <span class="chip">%K ${a.k.toFixed(1)}</span>
+            <span class="chip">%D ${a.d.toFixed(1)}</span>
+            ${a.bb ? `<span class="chip">BB ${a.bb.lower.toFixed(1)}–${a.bb.upper.toFixed(1)}</span>` : ""}
+          </div>
+        </div>
+      `).join("");
+      document.querySelectorAll(".signal").forEach((el) => {
+        el.onclick = () => {
+          document.getElementById("symbol").value = el.dataset.s;
+          if (el.dataset.a === "SAT") setSide("SELL");
+          else if (el.dataset.a === "AL") setSide("BUY");
+          renderTrade();
+        };
+      });
+    }
+
+    function renderTrade() {
+      const q = quotes();
+      const sel = document.getElementById("symbol");
+      const cur = sel.value;
+      sel.innerHTML = q.map((x) => `<option value="${x.symbol}">${x.symbol} — ${x.name}</option>`).join("");
+      if (cur) sel.value = cur;
+      const picked = q.find((x) => x.symbol === sel.value) || q[0];
+      const qty = Number(document.getElementById("qty").value || 0);
+      document.getElementById("price").textContent = "Fiyat: " + money(picked.price);
+      document.getElementById("total").textContent = "Toplam: " + money(picked.price * qty);
+
+      let hold = 0;
+      document.getElementById("positions").innerHTML =
+        Object.values(positions).map((p) => {
+          const mark = history[p.symbol].at(-1).c;
+          const pnl = (mark - p.avg) * p.qty;
+          hold += mark * p.qty;
+          return `<div class="row" data-s="${p.symbol}"><div><b>${p.symbol}</b><small>${p.qty} lot</small></div><div class="${pnl>=0?"up":"down"}">${money(pnl)}</div></div>`;
+        }).join("") || `<div style="color:var(--mute)">Pozisyon yok</div>`;
+
+      const equity = cash + hold;
+      const pnl = equity - 100000;
+      document.getElementById("equity").textContent = money(equity);
+      const pnlEl = document.getElementById("pnl");
+      pnlEl.textContent = (pnl >= 0 ? "+" : "") + money(pnl);
+      pnlEl.className = "pnl " + (pnl >= 0 ? "up" : "down");
+      document.getElementById("cash").textContent = "Nakit: " + money(cash);
+
+      document.getElementById("market").innerHTML = q.map((x) => {
+        const adv = advise(x.symbol).action;
+        const cls = x.change >= 0 ? "up" : "down";
+        return `<div class="row" data-s="${x.symbol}"><div><b>${x.symbol}</b><small>${adv}</small></div><div><div>${money(x.price)}</div><small class="${cls}">${x.change>=0?"+":""}${x.change}%</small></div></div>`;
+      }).join("");
+
+      document.querySelectorAll(".row[data-s]").forEach((el) => {
+        el.onclick = () => { sel.value = el.dataset.s; renderTrade(); };
+      });
+    }
+
+    function setSide(s) {
+      side = s;
+      document.getElementById("tabBuy").classList.toggle("active", s === "BUY");
+      document.getElementById("tabSell").classList.toggle("active", s === "SELL");
+      const go = document.getElementById("go");
+      go.textContent = s === "BUY" ? "Al" : "Sat";
+      go.className = s === "BUY" ? "buy" : "sell";
+    }
+
+    document.getElementById("tabBuy").onclick = () => setSide("BUY");
+    document.getElementById("tabSell").onclick = () => setSide("SELL");
+    document.getElementById("qty").oninput = renderTrade;
+    document.getElementById("symbol").onchange = renderTrade;
+    document.getElementById("refreshAdvice").onclick = () => { tick(); renderAdvice(); renderTrade(); };
+    document.getElementById("go").onclick = () => {
+      const symbol = document.getElementById("symbol").value;
+      const qty = Number(document.getElementById("qty").value);
+      const price = history[symbol].at(-1).c;
+      const total = qty * price;
+      const msg = document.getElementById("msg");
+      try {
+        if (!(qty > 0)) throw new Error("Lot gir");
+        if (side === "BUY") {
+          if (total > cash) throw new Error("Yetersiz bakiye");
+          cash -= total;
+          const p = positions[symbol];
+          if (!p) positions[symbol] = { symbol, qty, avg: price };
+          else {
+            const nq = p.qty + qty;
+            p.avg = (p.qty * p.avg + total) / nq;
+            p.qty = nq;
+          }
+          msg.textContent = `Alındı: ${qty} ${symbol} · Robot: ${advise(symbol).action}`;
+        } else {
+          const p = positions[symbol];
+          if (!p || p.qty < qty) throw new Error("Yetersiz lot");
+          cash += total;
+          p.qty -= qty;
+          if (p.qty <= 0) delete positions[symbol];
+          msg.textContent = `Satıldı: ${qty} ${symbol} · Robot: ${advise(symbol).action}`;
+        }
+        renderAdvice();
+        renderTrade();
+      } catch (e) {
+        msg.textContent = e.message;
+      }
+    };
+
+    initHistory();
+    renderAdvice();
+    renderTrade();
+    setInterval(() => { tick(); renderAdvice(); renderTrade(); }, 3000);
+  </script>
+</body>
+</html>
