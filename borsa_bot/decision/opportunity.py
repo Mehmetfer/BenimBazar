@@ -35,6 +35,27 @@ class RankedOpportunity:
         return asdict(self)
 
 
+def ranked_from_dict(d: dict[str, Any]) -> RankedOpportunity:
+    fields = RankedOpportunity.__dataclass_fields__
+    kwargs = {k: d[k] for k in fields if k in d}
+    # required minimums
+    kwargs.setdefault("symbol", str(d.get("symbol") or "?"))
+    kwargs.setdefault("market_type", str(d.get("market_type") or "BIST"))
+    kwargs.setdefault("action", str(d.get("action") or "WAIT"))
+    kwargs.setdefault("opportunity_score", float(d.get("opportunity_score") or 0))
+    for opt in (
+        "model_score",
+        "expected_value",
+        "expected_return_pct",
+        "expected_risk_pct",
+        "risk_reward",
+        "confidence",
+        "regime",
+    ):
+        kwargs.setdefault(opt, d.get(opt))
+    return RankedOpportunity(**kwargs)
+
+
 def _f(row: dict[str, Any], *keys: str, default: float | None = None) -> float | None:
     for k in keys:
         v = row.get(k)

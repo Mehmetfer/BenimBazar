@@ -203,6 +203,15 @@
       <div id="aiDecisionBody" class="meta" style="margin-top:8px">Yükleniyor…</div>
       <div class="meta" style="margin-top:6px">confidence ≠ probability · RiskEngine final · broker direct: HAYIR</div>
     </div>
+    <div class="card" style="cursor:default" id="aiCommandCard">
+      <div class="why"><b>AI COMMAND CENTER</b></div>
+      <div id="aiCommandBody" class="meta" style="margin-top:8px">Cycle çalıştırın…</div>
+      <div id="aiActivity" class="meta" style="margin-top:8px;max-height:140px;overflow:auto"></div>
+    </div>
+    <div class="card" style="cursor:default" id="aiAutonomyCard">
+      <div class="why"><b>AI AUTONOMY</b></div>
+      <div id="aiAutonomyBody" class="meta" style="margin-top:8px">—</div>
+    </div>
     <div class="card" style="cursor:default">
       <div class="why"><b>AI PERFORMANCE</b> — ana sayfada gösterilmez.</div>
       <div id="aiPerf" class="why" style="margin-top:8px">Yükleniyor…</div>
@@ -901,9 +910,24 @@
       document.getElementById('aiDecisionBody').innerHTML =
         `<b>${card.symbol||'—'}</b> · ${card.ai_decision||'NO_TRADE'} · conf ${card.confidence??'—'} (${card.confidence_label||'score≠P'})<br>`+
         `EV ${card.expected_value??'—'} · risk ${card.risk_pct??'—'} · RR ${card.risk_reward??'—'} · regime ${card.regime||'—'} · ${card.strategy||''}<br>`+
-        `Reasons: ${(card.reason_codes||[]).slice(0,6).join(', ')||'—'}<br>`+
-        `Counter: ${card.counter_argument||'—'}<br>`+
-        `Watchlist: ${(ai.watchlist||[]).slice(0,5).map(x=>x.symbol).join(', ')||'—'}`;
+        `Bull: ${(card.bull_case||[]).slice(0,3).join(', ')||'—'}<br>`+
+        `Bear: ${(card.bear_case||[]).slice(0,3).join(', ')||'—'}<br>`+
+        `Critic: ${(card.critic||[]).slice(0,2).join(' · ')||'—'}<br>`+
+        `Quality ${(card.quality||{}).total??'—'} · Gov ${(card.governor||{}).verdict||'—'} · risk_bypass=NO`;
+      const cc = await (await fetch('/api/ai/command-center')).json();
+      const c = cc.command_center||{};
+      const tops = (c.top||[]).map((t,i)=>`#${i+1} ${t.symbol||'—'} ${t.action||'—'} Q${t.quality??'—'}`).join('<br>');
+      document.getElementById('aiCommandBody').innerHTML =
+        `Market: <b>${c.market||'—'}</b> · Data: ${c.data||'—'}<br>`+
+        `Scanned: ${c.symbols_scanned??'—'} · Opportunities: ${c.opportunities??'—'} · Strong: ${c.strong_setups??0}<br>`+
+        `Governor: ${c.governor||'—'} · Health: ${c.health_score??'—'} · Fallback: ${c.fallback||ai.fallback||'QUANT'}<br>`+
+        (tops||'Top: —');
+      document.getElementById('aiActivity').innerHTML = (cc.activity||[]).slice(-8).map(e=>`${(e.ts||'').slice(11,19)} ${e.message}`).join('<br>')||'';
+      const aut = cc.autonomy||{};
+      document.getElementById('aiAutonomyBody').innerHTML =
+        `Level ${aut.autonomy_level??'?'} ${aut.autonomy_label||''} · TOTAL <b>${aut.total_autonomy??'—'}</b><br>`+
+        `Market ${aut.market_understanding??'—'} · Discovery ${aut.opportunity_discovery??'—'} · Reasoning ${aut.reasoning??'—'}<br>`+
+        `Risk ${aut.risk_awareness??'—'} · Pred ${aut.prediction_accuracy??'—'} · Adapt ${aut.adaptability??'—'} · Self ${aut.self_evaluation??'—'}`;
     }catch(e){
       document.getElementById('aiDecisionBody').textContent = 'AI API yok';
     }

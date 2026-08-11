@@ -770,6 +770,40 @@ def ai_cycle(body: AutonomyCycleBody | None = None) -> dict:
     }
 
 
+@app.get("/api/ai/command-center")
+def ai_command_center() -> dict:
+    st = engine.ai.status()
+    last = st.get("last_cycle") or {}
+    return {
+        "ok": True,
+        "command_center": last.get("command_center") or st.get("command_center") or {},
+        "autonomy": last.get("autonomy") or st.get("autonomy") or {},
+        "activity": (last.get("activity") or [])[-20:],
+        "governor": last.get("governor"),
+        "regime": last.get("regime"),
+        "ai_status": st.get("ai_status"),
+        "risk_bypass": False,
+        "note": "WHEN UNCERTAIN → DO NOT TRADE",
+    }
+
+
+@app.get("/api/ai/autonomy")
+def ai_autonomy_scores() -> dict:
+    st = engine.ai.status()
+    last = st.get("last_cycle") or {}
+    return {
+        "ok": True,
+        "autonomy": last.get("autonomy") or {},
+        "level_note": "Level 5–6 require shadow/live + calibrated models",
+    }
+
+
+@app.get("/api/ai/research/{symbol}")
+def ai_research(symbol: str) -> dict:
+    """Research mode — debate + plan for one symbol; no order."""
+    return engine.ai.analyze_symbol(symbol.upper())
+
+
 @app.get("/api/models")
 def list_models() -> dict:
     from ai.model_registry import model_registry
