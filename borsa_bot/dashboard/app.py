@@ -15,6 +15,8 @@ from walk_forward.runner import run_walk_forward
 from monte_carlo.simulator import run_monte_carlo
 from crypto.service import CryptoFoundationService
 from autonomous.agent import get_autonomous_agent
+from autonomous.engine import get_autonomous_engine
+from autonomous.execution_modes import parse_execution_mode
 from autonomous.explain import explain_decision
 from autonomous.modes import parse_user_mode
 
@@ -26,6 +28,7 @@ service = TradingService()
 crypto_service = CryptoFoundationService()
 crypto_service.bind_shared(favorites=service.favorites, alerts=service.alerts)
 autonomy = get_autonomous_agent(trading=service)
+engine = get_autonomous_engine(trading=service)
 
 
 class ExecBody(BaseModel):
@@ -50,9 +53,14 @@ class AutonomyModeBody(BaseModel):
     mode: str
 
 
+class AutonomyExecutionModeBody(BaseModel):
+    execution_mode: str
+
+
 class AutonomyCycleBody(BaseModel):
     market: str = "BIST"
     force: bool = False
+    use_engine: bool = True
 
 
 @app.get("/api/health")
@@ -655,31 +663,68 @@ def predictions_evaluate() -> dict:
 
 @app.get("/api/autonomy/status")
 def autonomy_status() -> dict:
-    """Phase 6 autonomy status — paper-only; LIVE broker locked."""
-    return autonomy.status()
+    """Autonomous engine status — PAPER/SHADOW/LIVE venue; live broker locked by default."""
+    st = engine.status()
+    legacy = autonomy.status()
+    st["user_trading_mode"] = legacy.get("user_trading_mode") or st.get("user_trading_mode")
+    return st
 
 
 @app.post("/api/autonomy/mode")
 def autonomy_set_mode(body: AutonomyModeBody) -> dict:
     raw = (body.mode or "").strip().upper()
     if raw in {"LIVE", "LIVE_BROKER", "REAL", "REAL_MONEY"}:
-        raise HTTPException(400, "LIVE broker is locked (Phase 7). Use PAPER | SEMI_AUTO | AUTO | PAUSED.")
-    parse_user_mode(body.mode)  # normalize / validate aliases
-    return autonomy.set_user_mode(body.mode)
+        raise HTTPException(
+            400,
+            "Use execution_mode for PAPER|SHADOW|LIVE. UserTradingMode LIVE alias is blocked. "
+            "LIVE broker requires LIVE_BROKER_ENABLED.",
+        )
+    parse_user_mode(body.mode)
+    out = autonomy.set_user_mode(body.mode)
+    engine.modes.set(body.mode)
+    return out
+
+
+@app.post("/api/autonomy/execution-mode")
+def autonomy_set_execution_mode(body: AutonomyExecutionModeBody) -> dict:
+    m = parse_execution_mode(body.execution_mode)
+    if m.value == "LIVE" and not bool(getattr(settings, "live_broker_enabled", False)):
+        # Allow selecting LIVE for readiness testing but keep broker blocked
+        out = engine.set_execution_mode("LIVE")
+        out["warning"] = "LIVE selected but LIVE_BROKER_ENABLED=false — orders remain BLOCKED"
+        return out
+    return engine.set_execution_mode(m.value)
 
 
 @app.post("/api/autonomy/cycle")
 def autonomy_cycle(body: AutonomyCycleBody | None = None) -> dict:
-    """Run one autonomous cycle. AUTO executes paper only; never live broker."""
-    if settings.is_live:
-        raise HTTPException(400, "LIVE mode blocked — autonomy is paper-only")
+    """Run one autonomous cycle via AutonomousTradingEngine (BIST)."""
+    if settings.is_live and not bool(getattr(settings, "live_broker_enabled", False)):
+        raise HTTPException(400, "settings.MODE=LIVE blocked without LIVE_BROKER_ENABLED")
     payload = body or AutonomyCycleBody()
     market = (payload.market or "BIST").upper()
     if market == "CRYPTO":
         return autonomy.run_crypto_cycle(force=bool(payload.force))
     if market != "BIST":
         raise HTTPException(400, "market must be BIST or CRYPTO")
+    if payload.use_engine:
+        return engine.run_cycle("BIST", force=bool(payload.force))
     return autonomy.run_bist_cycle(force=bool(payload.force))
+
+
+@app.get("/api/autonomy/events")
+def autonomy_events(limit: int = 100, cycle_id: str | None = None) -> dict:
+    return {
+        "events": engine.events.recent(limit=limit, cycle_id=cycle_id),
+        "live_broker": "DISABLED" if not settings.live_broker_enabled else "FLAG_ON",
+    }
+
+
+@app.get("/api/autonomy/health")
+def autonomy_health() -> dict:
+    from autonomous.health import run_health_check
+
+    return run_health_check(service, execution_mode=engine.execution_mode().value).to_dict()
 
 
 @app.get("/api/autonomy/audit")

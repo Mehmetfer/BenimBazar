@@ -120,12 +120,17 @@ class Settings:
     crypto_atr_cap_pct: float = _f("CRYPTO_ATR_CAP_PCT", 8.0)
     crypto_scan_max_symbols: int = _i("CRYPTO_SCAN_MAX_SYMBOLS", 40)
     crypto_paper_trading_enabled: bool = _b("CRYPTO_PAPER_TRADING_ENABLED", False)
-    # Phase 6 autonomy — AUTO = automated PAPER only; LIVE broker stays locked
+    # Phase 6–7 autonomy
     user_trading_mode: str = os.getenv("USER_TRADING_MODE", "PAPER").upper()
     autonomy_enabled: bool = _b("AUTONOMY_ENABLED", True)
+    autonomous_mode: bool = _b("AUTONOMOUS_MODE", True)  # alias of autonomy_enabled
     autonomy_deep_max: int = _i("AUTONOMY_DEEP_MAX", 40)
     autonomy_scan_cooldown_seconds: float = _f("AUTONOMY_SCAN_COOLDOWN_SECONDS", 25.0)
     autonomy_idempotency_minutes: int = _i("AUTONOMY_IDEMPOTENCY_MINUTES", 15)
+    # Execution venue: PAPER | SHADOW | LIVE (default PAPER — safe)
+    execution_mode: str = os.getenv("EXECUTION_MODE", "PAPER").upper()
+    # Hard lock for real broker — even EXECUTION_MODE=LIVE stays blocked when false
+    live_broker_enabled: bool = _b("LIVE_BROKER_ENABLED", False)
 
     @property
     def is_live(self) -> bool:

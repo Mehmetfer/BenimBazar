@@ -183,15 +183,20 @@
     <h2>⚙ Sistem</h2>
     <div class="card" id="sysHealth" style="cursor:default"></div>
     <div class="card" style="cursor:default" id="autonomyCard">
-      <div class="why"><b>AUTONOMY</b> — AUTO = otomatik paper (canlı broker kilitli)</div>
+      <div class="why"><b>AUTONOMY</b> — SIGNAL ≠ ORDER · LIVE broker kilitli</div>
       <div class="filters" id="autonomyModes" style="margin-top:8px">
         <button class="filter" data-amode="PAPER" type="button">PAPER</button>
         <button class="filter" data-amode="SEMI_AUTO" type="button">SEMI</button>
         <button class="filter" data-amode="AUTO" type="button">AUTO</button>
         <button class="filter" data-amode="PAUSED" type="button">PAUSE</button>
       </div>
+      <div class="filters" id="execModes" style="margin-top:6px">
+        <button class="filter" data-emode="PAPER" type="button">Exec PAPER</button>
+        <button class="filter" data-emode="SHADOW" type="button">SHADOW</button>
+        <button class="filter" data-emode="LIVE" type="button">LIVE*</button>
+      </div>
       <div id="autonomyMeta" class="meta" style="margin-top:8px">—</div>
-      <button class="more" id="autonomyCycleBtn" type="button" style="margin-top:8px">BIST cycle çalıştır</button>
+      <button class="more" id="autonomyCycleBtn" type="button" style="margin-top:8px">Engine cycle (BIST)</button>
     </div>
     <div class="card" style="cursor:default">
       <div class="why"><b>AI PERFORMANCE</b> — ana sayfada gösterilmez.</div>
@@ -859,12 +864,17 @@
     try{
       const st = await (await fetch('/api/autonomy/status')).json();
       const mode = st.user_trading_mode||'PAPER';
+      const em = st.execution_mode||'PAPER';
       document.querySelectorAll('#autonomyModes .filter').forEach(b=>{
         b.classList.toggle('on', b.dataset.amode===mode);
       });
+      document.querySelectorAll('#execModes .filter').forEach(b=>{
+        b.classList.toggle('on', b.dataset.emode===em);
+      });
       const last = st.last_cycle||{};
+      const acc = st.account||{};
       document.getElementById('autonomyMeta').textContent =
-        `Mode ${mode} · LIVE broker ${st.live_broker||'DISABLED'} · last ${last.status||'—'} · paper orders ${last.paper_orders??0} · ${st.note||''}`;
+        `User ${mode} · Exec ${em} · blocked=${st.blocked} · equity ${acc.equity??'—'} · cash ${acc.cash??'—'} · LIVE ${st.live_broker||'DISABLED'} · last ${last.status||'—'}`;
     }catch(e){
       document.getElementById('autonomyMeta').textContent = 'Autonomy API yok';
     }
@@ -875,6 +885,7 @@
   document.querySelectorAll('.filter').forEach(b=>b.onclick=()=>{
     if(b.closest('#cFilters')) return;
     if(b.closest('#autonomyModes')) return;
+    if(b.closest('#execModes')) return;
     document.querySelectorAll('#filters .filter').forEach(x=>x.classList.remove('on'));
     b.classList.add('on'); filter=b.dataset.f; renderHome();
   });
@@ -886,12 +897,16 @@
     await fetch('/api/autonomy/mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:b.dataset.amode})});
     await loadAutonomy();
   });
+  document.querySelectorAll('#execModes .filter').forEach(b=>b.onclick=async()=>{
+    await fetch('/api/autonomy/execution-mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({execution_mode:b.dataset.emode})});
+    await loadAutonomy();
+  });
   document.getElementById('autonomyCycleBtn').onclick=async()=>{
-    document.getElementById('autonomyMeta').textContent = 'Cycle çalışıyor…';
-    const r = await (await fetch('/api/autonomy/cycle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({market:'BIST',force:true})})).json();
+    document.getElementById('autonomyMeta').textContent = 'Engine cycle…';
+    const r = await (await fetch('/api/autonomy/cycle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({market:'BIST',force:true,use_engine:true})})).json();
     const f = r.filter_stats||{};
     document.getElementById('autonomyMeta').textContent =
-      `${r.status} · UNIVERSE=${f.UNIVERSE??'—'} FAST=${f.FAST_FILTER??'—'} DEEP=${f.DEEP_ANALYSIS??r.deep_count??'—'} SIGNALS=${JSON.stringify(r.signals||{})} · LIVE=${r.live_broker||'DISABLED'}`;
+      `${r.status} · exec=${r.execution_mode} · UNIVERSE=${f.UNIVERSE??'—'} DEEP=${f.DEEP_ANALYSIS??r.symbols_scanned??'—'} orders=${r.orders_submitted??0} shadow=${(r.shadow_intents||[]).length} · LIVE=${r.live_broker||'DISABLED'}`;
   };
   document.getElementById('moreBtn').onclick=()=>{showAll=true; renderHome();};
   document.getElementById('refresh').onclick=load;

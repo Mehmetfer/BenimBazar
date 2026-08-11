@@ -1178,6 +1178,7 @@ class TradingService:
                 reason=d.explanation,
                 stop_price=rd.stop_price,
                 target_price=rd.target_price,
+                client_order_id=f"MANUAL-BUY:{symbol}:{utc_now().strftime('%Y%m%d%H%M')}",
             )
             result = self.broker.submit(order, quote.sector)
             self.pending_approvals.pop(symbol, None)
@@ -1200,6 +1201,7 @@ class TradingService:
                 quantity=rd.quantity,
                 price=quote.price,
                 reason=d.explanation,
+                client_order_id=f"MANUAL-SELL:{symbol}:{utc_now().strftime('%Y%m%d%H%M')}",
             )
             result = self.broker.submit(order, quote.sector)
             self.pending_approvals.pop(symbol, None)
