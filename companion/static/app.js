@@ -1,78 +1,162 @@
-const transcript = document.getElementById("transcript");
-const composer = document.getElementById("composer");
-const messageInput = document.getElementById("message");
-const sendButton = document.getElementById("send");
-const statusEl = document.getElementById("status");
+const symbolEl = document.getElementById("symbol");
+const quantityEl = document.getElementById("quantity");
+const livePrice = document.getElementById("livePrice");
+const liveTotal = document.getElementById("liveTotal");
+const submitBtn = document.getElementById("submitBtn");
+const orderMsg = document.getElementById("orderMsg");
+const marketBody = document.getElementById("marketBody");
+const posBody = document.getElementById("posBody");
+const tradeBody = document.getElementById("tradeBody");
+const equityValue = document.getElementById("equityValue");
+const equityPnl = document.getElementById("equityPnl");
+const cashLine = document.getElementById("cashLine");
+const orderForm = document.getElementById("orderForm");
+const tabBuy = document.getElementById("tabBuy");
+const tabSell = document.getElementById("tabSell");
 
-function addBubble(role, text, meta) {
-  const bubble = document.createElement("div");
-  bubble.className = `bubble bubble--${role}`;
-  bubble.textContent = text;
-  if (meta) {
-    const metaEl = document.createElement("span");
-    metaEl.className = "bubble__meta";
-    metaEl.textContent = meta;
-    bubble.appendChild(metaEl);
-  }
-  transcript.appendChild(bubble);
-  transcript.scrollTop = transcript.scrollHeight;
+let side = "BUY";
+let quotes = [];
+
+function money(n) {
+  return Number(n).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " TL";
 }
 
-async function refreshStatus() {
-  try {
-    const res = await fetch("/api/health");
-    const data = await res.json();
-    if (data.ai) {
-      statusEl.textContent = `AI hazır · ${data.provider} · ${data.model}`;
-    } else {
-      statusEl.textContent = "AI çevrimdışı · Ollama veya OPENAI_API_KEY gerekli";
-    }
-  } catch {
-    statusEl.textContent = "Sunucuya ulaşılamadı";
-  }
+function setSide(next) {
+  side = next;
+  tabBuy.classList.toggle("is-active", side === "BUY");
+  tabSell.classList.toggle("is-active", side === "SELL");
+  submitBtn.textContent = side === "BUY" ? "Al" : "Sat";
+  submitBtn.className = side === "BUY" ? "btn-buy" : "btn-sell";
+  updateTotals();
 }
 
-composer.addEventListener("submit", async (event) => {
+tabBuy.addEventListener("click", () => setSide("BUY"));
+tabSell.addEventListener("click", () => setSide("SELL"));
+
+function selectedQuote() {
+  return quotes.find((q) => q.symbol === symbolEl.value);
+}
+
+function updateTotals() {
+  const q = selectedQuote();
+  const qty = Number(quantityEl.value || 0);
+  if (!q) {
+    livePrice.textContent = "Fiyat: —";
+    liveTotal.textContent = "Toplam: —";
+    return;
+  }
+  livePrice.textContent = `Fiyat: ${money(q.price)}`;
+  liveTotal.textContent = `Toplam: ${money(q.price * qty)}`;
+}
+
+symbolEl.addEventListener("change", updateTotals);
+quantityEl.addEventListener("input", updateTotals);
+
+async function loadMarket() {
+  const res = await fetch("/api/market");
+  const data = await res.json();
+  quotes = data.quotes || [];
+  const current = symbolEl.value;
+  symbolEl.innerHTML = quotes
+    .map((q) => `<option value="${q.symbol}">${q.symbol} — ${q.name}</option>`)
+    .join("");
+  if (current && quotes.some((q) => q.symbol === current)) symbolEl.value = current;
+  marketBody.innerHTML = quotes
+    .map((q) => {
+      const cls = q.change_pct >= 0 ? "up" : "down";
+      const sign = q.change_pct >= 0 ? "+" : "";
+      return `<tr class="row-click" data-symbol="${q.symbol}"><td>${q.symbol}<br><small style="color:var(--mute)">${q.name}</small></td><td>${money(q.price)}</td><td class="${cls}">${sign}${q.change_pct}%</td></tr>`;
+    })
+    .join("");
+  marketBody.querySelectorAll("tr[data-symbol]").forEach((row) => {
+    row.addEventListener("click", () => {
+      symbolEl.value = row.dataset.symbol;
+      updateTotals();
+    });
+  });
+  updateTotals();
+}
+
+async function loadPortfolio() {
+  const res = await fetch("/api/portfolio");
+  const data = await res.json();
+  equityValue.textContent = money(data.equity);
+  equityPnl.textContent = `${data.pnl >= 0 ? "+" : ""}${money(data.pnl)}`;
+  equityPnl.className = `equity__pnl ${data.pnl >= 0 ? "up" : "down"}`;
+  cashLine.textContent = `Nakit: ${money(data.cash)}`;
+
+  posBody.innerHTML = (data.positions || []).length
+    ? data.positions
+        .map((p) => {
+          const cls = p.pnl >= 0 ? "up" : "down";
+          return `<tr class="row-click" data-symbol="${p.symbol}"><td>${p.symbol}</td><td>${p.quantity}</td><td>${money(p.avg_cost)}</td><td class="${cls}">${money(p.pnl)} (${p.pnl_pct}%)</td></tr>`;
+        })
+        .join("")
+    : `<tr><td colspan="4" style="color:var(--mute)">Pozisyon yok</td></tr>`;
+
+  posBody.querySelectorAll("tr[data-symbol]").forEach((row) => {
+    row.addEventListener("click", () => {
+      symbolEl.value = row.dataset.symbol;
+      setSide("SELL");
+    });
+  });
+
+  tradeBody.innerHTML = (data.trades || []).length
+    ? data.trades
+        .map((t) => {
+          const cls = t.side === "BUY" ? "up" : "down";
+          const label = t.side === "BUY" ? "AL" : "SAT";
+          return `<tr><td class="${cls}">${label}</td><td>${t.symbol}</td><td>${t.quantity}</td><td>${money(t.price)}</td></tr>`;
+        })
+        .join("")
+    : `<tr><td colspan="4" style="color:var(--mute)">İşlem yok</td></tr>`;
+}
+
+orderForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const message = messageInput.value.trim();
-  if (!message) return;
-
-  addBubble("user", message);
-  messageInput.value = "";
-  sendButton.disabled = true;
-
+  orderMsg.textContent = "";
+  submitBtn.disabled = true;
   try {
-    const res = await fetch("/api/chat", {
+    const endpoint = side === "BUY" ? "/api/buy" : "/api/sell";
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({
+        symbol: symbolEl.value,
+        quantity: Number(quantityEl.value),
+      }),
     });
-    if (!res.ok) {
-      throw new Error("İstek başarısız");
-    }
     const data = await res.json();
-    const meta = data.ai
-      ? `${data.intent} · ${data.provider}`
-      : `${data.intent} · ${data.source}`;
-    addBubble("assistant", data.reply, meta);
-  } catch (error) {
-    addBubble("assistant", "Bir sorun oldu. Biraz sonra tekrar dene.");
+    if (!res.ok) throw new Error(data.detail || "Emir reddedildi");
+    const o = data.order;
+    orderMsg.textContent = `${o.side === "BUY" ? "Alındı" : "Satıldı"}: ${o.quantity} ${o.symbol} @ ${money(o.price)}`;
+    await Promise.all([loadMarket(), loadPortfolio()]);
+  } catch (err) {
+    orderMsg.textContent = err.message || "Hata";
   } finally {
-    sendButton.disabled = false;
-    messageInput.focus();
-    refreshStatus();
+    submitBtn.disabled = false;
   }
 });
 
-messageInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && !event.shiftKey) {
-    event.preventDefault();
-    composer.requestSubmit();
-  }
+document.getElementById("refreshBtn").addEventListener("click", () => {
+  loadMarket();
+  loadPortfolio();
 });
 
-addBubble(
-  "assistant",
-  "Merhaba. Ben Borsa — AI tabanlı borsa asistanın. Yatırım tavsiyesi vermem; hisse, risk ve portföyü birlikte çerçeveleyebiliriz."
-);
-refreshStatus();
+document.getElementById("resetBtn").addEventListener("click", async () => {
+  if (!confirm("Portföy sıfırlansın mı?")) return;
+  await fetch("/api/reset", { method: "POST" });
+  await Promise.all([loadMarket(), loadPortfolio()]);
+  orderMsg.textContent = "Portföy sıfırlandı.";
+});
+
+async function boot() {
+  await loadMarket();
+  await loadPortfolio();
+  setInterval(() => {
+    loadMarket();
+    loadPortfolio();
+  }, 4000);
+}
+
+boot();
