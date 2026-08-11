@@ -25,6 +25,8 @@ def _b(name: str, default: bool = False) -> bool:
 
 @dataclass(frozen=True)
 class Settings:
+    """Dual objective: capital protection first, then risk-adjusted profit."""
+
     mode: str = os.getenv("MODE", "PAPER").upper()
     starting_cash: float = _f("STARTING_CASH", 100_000)
     max_portfolio_risk_pct: float = _f("MAX_PORTFOLIO_RISK_PCT", 1.0)
@@ -34,16 +36,27 @@ class Settings:
     daily_max_loss_pct: float = _f("DAILY_MAX_LOSS_PCT", 2.0)
     weekly_max_loss_pct: float = _f("WEEKLY_MAX_LOSS_PCT", 5.0)
     max_drawdown_pct: float = _f("MAX_DRAWDOWN_PCT", 12.0)
+    defensive_dd_pct: float = _f("DEFENSIVE_DD_PCT", 4.0)
+    high_risk_dd_pct: float = _f("HIGH_RISK_DD_PCT", 7.0)
+    capital_protection_dd_pct: float = _f("CAPITAL_PROTECTION_DD_PCT", 10.0)
     atr_stop_mult: float = _f("ATR_STOP_MULT", 2.0)
     atr_take_mult: float = _f("ATR_TAKE_MULT", 3.0)
+    atr_trail_mult: float = _f("ATR_TRAIL_MULT", 2.0)
+    breakeven_r_multiple: float = _f("BREAKEVEN_R_MULTIPLE", 1.0)
     min_risk_reward: float = _f("MIN_RISK_REWARD", 1.5)
     preferred_risk_reward: float = _f("PREFERRED_RISK_REWARD", 2.0)
+    min_expected_value: float = _f("MIN_EXPECTED_VALUE", 0.0)
     buy_score_threshold: float = _f("BUY_SCORE_THRESHOLD", 80)
     strong_buy_threshold: float = _f("STRONG_BUY_THRESHOLD", 90)
     watch_threshold: float = _f("WATCH_THRESHOLD", 65)
     sell_score_threshold: float = _f("SELL_SCORE_THRESHOLD", 75)
     consecutive_loss_reduce: int = _i("CONSECUTIVE_LOSS_REDUCE", 3)
     consecutive_loss_pause: int = _i("CONSECUTIVE_LOSS_PAUSE", 5)
+    tp1_exit_pct: float = _f("TP1_EXIT_PCT", 0.25)
+    tp2_exit_pct: float = _f("TP2_EXIT_PCT", 0.25)
+    tp3_exit_pct: float = _f("TP3_EXIT_PCT", 0.25)
+    trail_exit_pct: float = _f("TRAIL_EXIT_PCT", 0.25)
+    allow_dca: bool = _b("ALLOW_DCA", False)
     commission_pct: float = _f("COMMISSION_PCT", 0.002)
     slippage_pct: float = _f("SLIPPAGE_PCT", 0.0005)
     max_spread_pct: float = _f("MAX_SPREAD_PCT", 0.8)
@@ -61,3 +74,9 @@ class Settings:
 
 
 settings = Settings()
+
+SYSTEM_OBJECTIVES = (
+    "1) Sermaye koruma  2) Risk-ayarlı kâr üretme. "
+    "Minimum gereksiz risk ile maksimum sürdürülebilir risk-ayarlı getiri. "
+    "Kâr garantisi yoktur; geçmiş performans geleceği garanti etmez."
+)

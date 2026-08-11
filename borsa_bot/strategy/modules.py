@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from config.models import IndicatorSet
+from config.models import IndicatorSet, MarketRegime
+from strategy.ranking import REGIME_STRATEGY_WEIGHTS, vote_pullback
 
 
 def vote_trend_following(ind: IndicatorSet) -> str:
@@ -59,4 +60,21 @@ def ensemble_votes(ind: IndicatorSet, close: float, volume: float) -> dict[str, 
         "mean_reversion": vote_mean_reversion(ind),
         "breakout": vote_breakout(ind, close),
         "volume_breakout": vote_volume_breakout(ind, volume, close),
+        "pullback": vote_pullback(ind, close),
     }
+
+
+def regime_weights(regime: MarketRegime) -> dict[str, float]:
+    return dict(REGIME_STRATEGY_WEIGHTS.get(regime, REGIME_STRATEGY_WEIGHTS[MarketRegime.NEUTRAL]))
+
+
+def weighted_ensemble_bias(votes: dict[str, str], weights: dict[str, float]) -> float:
+    """Positive => buy bias, negative => sell. Not a trade permission."""
+    score = 0.0
+    for name, vote in votes.items():
+        w = weights.get(name, 0.5)
+        if vote == "AL":
+            score += w
+        elif vote == "SAT":
+            score -= w
+    return round(score, 3)

@@ -134,3 +134,65 @@ def test_backtest_metrics():
 
 def test_lookahead_guard():
     assert assert_no_lookahead([1, 2, 3], [1, 2, 3]) is True
+
+
+def test_negative_ev_rejected():
+    from config.models import OpportunityMetrics, TradePlan
+    tmp = Path(tempfile.mkdtemp()) / "ev.db"
+    led = PortfolioLedger(tmp)
+    eng = RiskEngine(led)
+    p = SimulatedProvider(seed=8)
+    ind = compute_indicators(p.get_bars("THYAO", 220))
+    assert ind is not None
+    plan = TradePlan(entry=100, stop=98, target1=103, target2=104, target3=106, risk_reward=1.5)
+    opp = OpportunityMetrics(
+        p_win=0.3, expected_return_pct=3, expected_loss_pct=2, risk_reward=1.5,
+        expected_value=-0.5, volatility_pct=2.0, drawdown_impact=0.5, position_size_mult=1.0, confidence=50,
+    )
+    rd = eng.evaluate_entry(
+        symbol="THYAO", sector="ULASTIRMA", price=100, ind=ind, action=SignalAction.BUY,
+        plan=plan, opportunity=opp,
+    )
+    assert rd.allowed is False
+    assert rd.reason == "negative_or_zero_ev"
+
+
+def test_no_add_to_losing_position():
+    from profit.protection import refuse_add_to_loser, update_profit_protection, initial_protect
+    assert refuse_add_to_loser(avg_cost=100, price=95) is True
+    assert refuse_add_to_loser(avg_cost=100, price=105) is False
+    p = SimulatedProvider(seed=9)
+    ind = compute_indicators(p.get_bars("GARAN", 220))
+    assert ind is not None
+    st = initial_protect(100, 96)
+    st2, _ = update_profit_protection(
+        entry=100, price=90, stop=96, ind=ind, t1=104, t2=108, t3=112, state=st, momentum_ok=False,
+    )
+    assert st2.stop >= 96  # never widen
+
+
+def test_risk_adjusted_ranking_prefers_lower_dd():
+    from strategy.ranking import StrategyPerf, rank_strategies, example_ranking_report
+    ranked = rank_strategies([
+        StrategyPerf("A", 80, 45, 0.8, 1.0, 1.8, 1.4, 120),
+        StrategyPerf("B", 45, 12, 1.4, 1.8, 3.7, 1.7, 90),
+        StrategyPerf("C", 38, 8, 1.6, 2.1, 4.7, 1.9, 70),
+    ])
+    assert ranked[0].name == "C"
+    assert example_ranking_report()[0]["name"] == "C_conservative"
+
+
+def test_capital_mode_strong_bear():
+    from profit.modes import select_capital_mode
+    from config.models import CapitalMode, MarketRegime
+    tmp = Path(tempfile.mkdtemp()) / "cm.db"
+    led = PortfolioLedger(tmp)
+    mode = select_capital_mode(led, regime=MarketRegime.STRONG_BEAR, atr_index_pct=2.0, liquidity_ok=True)
+    assert mode == CapitalMode.CAPITAL_PROTECTION
+
+
+def test_dashboard_exposes_opportunity():
+    svc = TradingService()
+    dash = svc.dashboard()
+    assert dash["health"]["capital_mode"]
+    assert "opportunity" in dash["universe"][0] or dash["universe"][0]["decision"]

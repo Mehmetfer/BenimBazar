@@ -25,12 +25,24 @@ class SignalAction(str, Enum):
     SAT = "SAT"
     BEKLE = "BEKLE"
     ALMA = "ALMA"
-    BUY = "BUY"
     STRONG_BUY = "STRONG_BUY"
+    BUY = "BUY"
     WATCH = "WATCH"
-    HOLD = "HOLD"
-    AVOID = "AVOID"
+    WAIT = "WAIT"
     SELL = "SELL"
+    STRONG_SELL = "STRONG_SELL"
+    NO_TRADE = "NO_TRADE"
+    # legacy aliases
+    HOLD = "WAIT"
+    AVOID = "NO_TRADE"
+
+
+class CapitalMode(str, Enum):
+    NORMAL = "NORMAL"
+    DEFENSIVE = "DEFENSIVE"
+    HIGH_RISK = "HIGH_RISK"
+    CAPITAL_PROTECTION = "CAPITAL_PROTECTION"
+    KILL_SWITCH = "KILL_SWITCH"
 
 
 class RiskLevel(str, Enum):
@@ -140,6 +152,23 @@ class TradePlan:
     target3: float
     risk_reward: float
     quantity: float = 0.0
+    t1_exit_pct: float = 0.25
+    t2_exit_pct: float = 0.25
+    t3_exit_pct: float = 0.25
+    trail_remainder_pct: float = 0.25
+
+
+@dataclass
+class OpportunityMetrics:
+    p_win: float
+    expected_return_pct: float
+    expected_loss_pct: float
+    risk_reward: float
+    expected_value: float
+    volatility_pct: float
+    drawdown_impact: float
+    position_size_mult: float
+    confidence: float
 
 
 @dataclass
@@ -160,10 +189,14 @@ class SymbolDecision:
     explanation: str
     scores: ScoreBundle | None = None
     trade_plan: TradePlan | None = None
+    opportunity: OpportunityMetrics | None = None
+    capital_mode: CapitalMode = CapitalMode.NORMAL
+    decision: SignalAction = SignalAction.WAIT
     reasons: list[str] = field(default_factory=list)
     risks: list[str] = field(default_factory=list)
     indicators: dict[str, float] = field(default_factory=dict)
     strategy_votes: dict[str, str] = field(default_factory=dict)
+    strategy_weights: dict[str, float] = field(default_factory=dict)
     mtf: dict[str, str] = field(default_factory=dict)
     conflict: bool = False
 

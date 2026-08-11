@@ -14,7 +14,7 @@
     .kpi b{display:block;font-size:1.02rem}.kpi span{color:var(--mute);font-size:.7rem}
     .up{color:var(--up)}.down{color:var(--down)}
     .badge{font-size:.75rem;font-weight:800;padding:5px 9px;border-radius:999px}
-    .AL,.BUY,.STRONG_BUY{background:rgba(31,157,106,.2);color:var(--up)}.SAT,.SELL{background:rgba(196,75,75,.2);color:var(--down)}.BEKLE,.ALMA,.WATCH,.HOLD,.AVOID{background:rgba(212,160,23,.18);color:var(--hold)}
+    .AL,.BUY,.STRONG_BUY{background:rgba(31,157,106,.2);color:var(--up)}.SAT,.SELL,.STRONG_SELL{background:rgba(196,75,75,.2);color:var(--down)}.BEKLE,.ALMA,.WATCH,.WAIT,.HOLD,.AVOID,.NO_TRADE{background:rgba(212,160,23,.18);color:var(--hold)}
     .row{border-bottom:1px solid var(--line);padding:12px 0}.row:last-child{border-bottom:0}
     .why{color:var(--mute);font-size:.78rem;line-height:1.4;margin-top:6px}
     .scores{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:8px;font-size:.74rem;color:var(--mute)}
@@ -37,7 +37,7 @@
       <div class="kpi"><span>Drawdown</span><b id="dd">—</b></div>
       <div class="kpi"><span>Nakit</span><b id="cash">—</b></div>
       <div class="kpi"><span>AL / SAT / BEKLE</span><b id="counts">—</b></div>
-      <div class="kpi"><span>Kill / Pause</span><b id="gates">—</b></div>
+      <div class="kpi"><span>Kill / Mode</span><b id="gates">—</b></div>
       <div class="kpi"><span>Sektör</span><b id="sectors">—</b></div>
     </div>
   </div>
@@ -57,7 +57,7 @@
       const res = await fetch('/api/dashboard');
       const data = await res.json();
       const h = data.health || {};
-      document.getElementById('sys').textContent = `Sistem: ${h.status} · Mod: ${h.mode} · Veri: ${h.data_fresh?'taze':'eski'} · Onay: ${h.manual_approval?'manuel':'otomatik'}`;
+      document.getElementById('sys').textContent = `Sistem: ${h.status} · Mod: ${h.mode} · Capital: ${h.capital_mode||'—'} · Veri: ${h.data_fresh?'taze':'eski'}`;
       const p = data.portfolio || {};
       document.getElementById('equity').textContent = money(p.equity||0);
       const d = document.getElementById('daily'); d.textContent = money(p.daily_pnl||0); d.className=(p.daily_pnl||0)>=0?'up':'down';
@@ -65,19 +65,21 @@
       document.getElementById('dd').textContent = `%${Number(p.drawdown_pct||0).toFixed(2)}`;
       document.getElementById('cash').textContent = money(p.cash||0);
       const sig = data.signals || {};
-      document.getElementById('counts').textContent = `${(sig.AL||[]).length} / ${(sig.SAT||[]).length} / ${(sig.BEKLE||[]).length}`;
-      document.getElementById('gates').textContent = `${h.kill_switch?'ON':'OFF'} / ${h.paused?'PAUSE':'OK'}`;
+      document.getElementById('counts').textContent = `${(sig.BUY||[]).length+(sig.STRONG_BUY||[]).length} / ${(sig.SELL||[]).length} / ${(sig.WAIT||[]).length+(sig.WATCH||[]).length}`;
+      document.getElementById('gates').textContent = `${h.kill_switch?'ON':'OFF'} / ${h.capital_mode||'NORMAL'}`;
       const se = p.sector_exposure || {};
       document.getElementById('sectors').textContent = Object.keys(se).length ? Object.entries(se).map(([k,v])=>`${k}:${v}`).join(' ') : '—';
       document.getElementById('list').innerHTML = (data.universe||[]).map(u => {
         const s = u.scores || {};
         const tp = u.trade_plan || {};
+        const o = u.opportunity || {};
+        const dec = u.decision || u.signal;
         return `<div class="row">
           <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
             <div><b>${u.symbol}</b> <span style="color:var(--mute)">${u.price}</span>
-              <div style="color:var(--mute);font-size:.78rem">${u.regime} · ${u.trend} · Risk ${u.risk}${u.conflict?' · CONFLICT':''}</div>
+              <div style="color:var(--mute);font-size:.78rem">${u.regime} · ${u.capital_mode||''} · Risk ${u.risk}${u.conflict?' · CONFLICT':''}</div>
             </div>
-            <span class="badge ${u.signal}">${u.signal}</span>
+            <span class="badge ${dec}">${dec}</span>
           </div>
           <div class="scores">
             <div>TECH <b>${s.technical??'—'}</b></div><div>FUND <b>${s.fundamental??'—'}</b></div>
@@ -85,6 +87,11 @@
             <div>VOL <b>${s.volume??'—'}</b></div><div>LIQ <b>${s.liquidity??'—'}</b></div>
             <div>NEWS <b>${s.news??'—'}</b></div><div>AI <b>${s.ai_confidence??u.ai_confidence}</b></div>
             <div>RISK <b>${s.risk??'—'}</b></div><div>FINAL <b>${s.final??u.buy_score}</b></div>
+          </div>
+          <div class="scores">
+            <div>P(win) <b>${o.p_win!=null?o.p_win:'—'}</b></div><div>EV <b>${o.expected_value!=null?o.expected_value:'—'}</b></div>
+            <div>E[+%] <b>${o.expected_return_pct??'—'}</b></div><div>E[-%] <b>${o.expected_loss_pct??'—'}</b></div>
+            <div>Size× <b>${o.position_size_mult??'—'}</b></div><div>DDimp <b>${o.drawdown_impact??'—'}</b></div>
           </div>
           <div class="scores">
             <div>ENTRY <b>${tp.entry??u.price}</b></div><div>STOP <b>${tp.stop??u.stop_price??'—'}</b></div>

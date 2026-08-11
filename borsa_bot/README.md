@@ -1,17 +1,34 @@
 # Borsa Bot
 
-Sermaye koruma öncelikli BIST **AL / SAT / BEKLE** paper trading sistemi.
+İki temel hedef:
 
-## Felsefe
+1. **Sermaye koruma**
+2. **Risk-ayarlı kâr üretme**
 
-1. Önce sermayeyi koru  
-2. Emin değilsen **BEKLE**  
-3. Risk Engine sinyal motorundan üstündür  
-4. AI karar verici değil, analiz yardımcısıdır  
-5. Skor tek başına emir açtırmaz  
-6. LIVE varsayılan kapalı; manuel onay açık  
+Öncelik sırası: Sermaye koruma → risk kontrolü → kayıp kontrolü → yüksek olasılıklı fırsatlar → R/R optimizasyonu → kâr maksimizasyonu.
 
-Zarar etmeyen / kâr garantili sistem iddiası yoktur.
+Amaç: *Minimum gereksiz risk ile maksimum sürdürülebilir risk-ayarlı getiri.*  
+Aşırı pasif değil; agresif getiri botu da değil. **NO_TRADE / WAIT** birinci sınıf çıktıdır.
+
+Kâr garantisi yoktur. Geçmiş performans geleceği garanti etmez. LIVE öncesi paper trading zorunludur.
+
+## Yeni karar katmanları
+
+- **Expected Value:** negatif EV otomatik red; pozitif EV tek başına yetmez
+- **Dinamik sizing:** confidence × vol × stop × regime × capital mode
+- **Partial TP:** T1/T2/T3 %25 + trailing kalan (config)
+- **Profit protection:** breakeven → ATR/EMA trailing; stop asla genişlemez
+- **No DCA default:** kaybeden pozisyona ekleme yok
+- **Capital modes:** NORMAL → DEFENSIVE → HIGH_RISK → CAPITAL_PROTECTION → KILL_SWITCH
+- **Risk-adjusted strategy ranking:** yüksek getiri + yüksek DD cezalı
+
+## Çalıştır / Test
+
+```bash
+export PYTHONPATH=/workspace/borsa_bot
+uvicorn dashboard.app:app --app-dir borsa_bot --host 0.0.0.0 --port 8090
+pytest borsa_bot/tests -q
+```
 
 ## Çalıştır
 
