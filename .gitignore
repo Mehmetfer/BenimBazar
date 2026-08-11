@@ -8,6 +8,7 @@
 .env.local
 borsa_bot/.env
 borsa_bot/database/*.db
+borsa_bot/database/notification_settings.json
 borsa_bot/logs/*
 !borsa_bot/logs/.gitkeep
 
