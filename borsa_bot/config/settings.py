@@ -94,6 +94,11 @@ class Settings:
     pred_sample_provisional: int = _i("PRED_SAMPLE_PROVISIONAL", 100)
     pred_sample_validated: int = _i("PRED_SAMPLE_VALIDATED", 500)
     prediction_degradation_drop_pp: float = _f("PRED_DEGRADATION_DROP_PP", 10.0)
+    # Daily dashboard / data integrity (§105)
+    data_freshness_sec: float = _f("DATA_FRESHNESS_SEC", 30.0)
+    signal_ttl_sec: float = _f("SIGNAL_TTL_SEC", 3600.0)
+    daily_top_n: int = _i("DAILY_TOP_N", 8)
+    allow_simulated_paper: bool = _b("ALLOW_SIMULATED_PAPER", True)
 
     @property
     def is_live(self) -> bool:

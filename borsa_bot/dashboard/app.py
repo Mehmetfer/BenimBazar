@@ -54,6 +54,23 @@ def dashboard() -> dict:
     return service.dashboard()
 
 
+@app.get("/api/daily")
+def daily_home() -> dict:
+    """Simple live trading home — integrity-first, daily opportunities."""
+    try:
+        service.monitor_exits()
+    except Exception:  # noqa: BLE001
+        pass
+    dash = service.dashboard()
+    return {
+        "daily": dash.get("daily"),
+        "health": dash.get("health"),
+        "data_source": dash.get("data_source"),
+        "live_ready": False,
+        "principle": dash.get("principle"),
+    }
+
+
 @app.post("/api/execute")
 def execute(body: ExecBody) -> dict:
     if settings.is_live:
@@ -199,8 +216,57 @@ def test_notification(kind: str = "BUY_SIGNAL", symbol: str = "THYAO") -> dict:
     return {"ok": True, "event_id": ev.event_id, "type": et.value}
 
 
+@app.get("/api/symbol/{symbol}")
+def symbol_detail(symbol: str) -> dict:
+    """Detail screen — chart placeholders, plan, forecast, integrity."""
+    symbol = symbol.upper()
+    decisions = {d.symbol: d for d in service.scan()}
+    d = decisions.get(symbol)
+    meta = service.provider.source_meta(settings.data_freshness_sec)
+    if not d:
+        return {
+            "ok": False,
+            "symbol": symbol,
+            "message": "VERİ YOK" if not service.provider.has_market_data() else "symbol not found",
+            "data_source": meta.to_dict(),
+            "live_ready": False,
+        }
+    ser = service._serialize(d)
+    return {
+        "ok": True,
+        "symbol": symbol,
+        "detail": ser,
+        "ai_trade_plan": ser.get("ai_trade_plan"),
+        "ai_forecast": ser.get("ai_forecast"),
+        "ai_reliability": ser.get("ai_reliability"),
+        "prediction_history": service.predictions.history(symbol, limit=20),
+        "prediction_timeline": service.predictions.timeline(symbol, limit=20),
+        "news": {"available": False, "source": "UNAVAILABLE", "items": [], "note": "Gerçek haber kaynağı yok"},
+        "kap": {"available": False, "source": "UNAVAILABLE", "items": [], "note": "KAP bağlantısı yok"},
+        "data_source": meta.to_dict(),
+        "live_ready": False,
+        "note": "Detay ekranı. Ana sayfada yalnızca karar alanları gösterilir.",
+    }
+
+
 @app.get("/api/trade-plan/{symbol}")
 def trade_plan(symbol: str) -> dict:
+    """Full AI trade plan for one symbol. Plan ≠ order. LIVE default OFF."""
+    decisions = {d.symbol: d for d in service.scan()}
+    d = decisions.get(symbol.upper())
+    if not d:
+        raise HTTPException(404, "symbol not found")
+    ser = service._serialize(d)
+    return {
+        "symbol": symbol.upper(),
+        "decision": ser.get("decision"),
+        "final_decision": ser.get("final_decision"),
+        "signal": ser.get("signal"),
+        "ai_trade_plan": ser.get("ai_trade_plan"),
+        "trade_plan_legacy": ser.get("trade_plan"),
+        "note": "Trade plan is not an order. Requires Risk Engine + approval. No profit guarantee.",
+        "live": False,
+    }
     """Full AI trade plan for one symbol. Plan ≠ order. LIVE default OFF."""
     decisions = {d.symbol: d for d in service.scan()}
     d = decisions.get(symbol.upper())

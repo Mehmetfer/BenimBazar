@@ -15,8 +15,14 @@ _FAKE: dict[str, dict] = {
 
 
 def get_fundamentals(symbol: str) -> FundamentalSnapshot:
+    """Return fundamentals only when marked. Fake table is SYNTHETIC — not live KAP."""
     raw = _FAKE.get(symbol)
     if not raw:
+        return FundamentalSnapshot(symbol=symbol, available=False)
+    # available=False for live claims: synthetic paper aids only when explicitly allowed
+    from config.settings import settings
+
+    if getattr(settings, "data_provider", "simulated") != "simulated":
         return FundamentalSnapshot(symbol=symbol, available=False)
     return FundamentalSnapshot(symbol=symbol, available=True, **raw)
 

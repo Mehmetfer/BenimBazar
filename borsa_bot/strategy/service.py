@@ -66,6 +66,9 @@ from favorites import (
     sort_rank_key,
 )
 from prediction import PredictionTrackingService
+from dashboard.daily import build_daily_home
+from data.integrity import FreshnessStatus, format_age_tr
+from config.models import utc_now
 
 
 def _to_exec_signal(decision: SignalAction) -> SignalAction:
@@ -107,16 +110,22 @@ class TradingService:
         return self.multi.run()
 
     def health(self) -> dict:
-        fresh = self.provider.is_fresh(60)
+        meta = self.provider.source_meta(settings.data_freshness_sec)
+        has_data = self.provider.has_market_data()
+        fresh = bool(meta.is_live_market or meta.freshness.value == "FRESH_SIMULATED")
+        # Safety: simulated is OK for paper; live/required disconnect is not
+        data_fresh_for_safety = fresh if has_data else False
         ok, reason = self.safety.evaluate(
-            data_fresh=fresh,
-            api_ok=True,
+            data_fresh=data_fresh_for_safety,
+            api_ok=has_data or meta.kind.value == "SIMULATED",
             order_status_ok=True,
             spread_pct=0.0,
             daily_loss_pct=self.ledger.daily_loss_pct(),
             clock_ok=True,
             max_spread_pct=settings.max_spread_pct,
         )
+        if meta.kind.value in {"REQUIRED", "UNAVAILABLE"} or not has_data:
+            ok, reason = False, "DATA_SOURCE_REQUIRED"
         self.risk.refresh_pause_state()
         if settings.kill_switch or self.capital_mode == CapitalMode.KILL_SWITCH:
             status = "KILL_SWITCH"
@@ -129,8 +138,13 @@ class TradingService:
         else:
             status = self.system_status
         live_ok, live_failed = self.risk.preflight_live(
-            data_fresh=fresh, api_ok=True, market_open=True
+            data_fresh=bool(meta.is_live_market), api_ok=meta.is_live_market, market_open=meta.market_session.value == "OPEN"
         )
+        # Never LIVE READY without verified live feed
+        live_ready = False
+        live_failed = list(live_failed) + ["NO_VERIFIED_LIVE_MARKET_DATA"]
+        if not meta.is_live_market:
+            live_ok = False
         # Alert layer observes state — never changes decisions
         if settings.kill_switch or self.capital_mode == CapitalMode.KILL_SWITCH:
             if not self._kill_switch_alerted:
@@ -138,9 +152,9 @@ class TradingService:
                 self._kill_switch_alerted = True
         else:
             self._kill_switch_alerted = False
-        if not fresh:
+        if meta.freshness == FreshnessStatus.STALE or meta.freshness == FreshnessStatus.DISCONNECTED:
             emit_risk_alert(self.alerts, "data feed failure / stale data")
-        if not ok and reason in {"STALE_DATA", "ABNORMAL_SPREAD", "BROKER_API_FAILURE", "DATA_FEED_FAILURE"}:
+        if not ok and reason in {"STALE_DATA", "ABNORMAL_SPREAD", "BROKER_API_FAILURE", "DATA_FEED_FAILURE", "DATA_SOURCE_REQUIRED"}:
             emit_risk_alert(self.alerts, reason)
         if self.risk.paused and self.risk.pause_reason != self._last_risk_alert_reason:
             detail = {
@@ -156,23 +170,34 @@ class TradingService:
             "status": status,
             "mode": settings.mode,
             "capital_mode": self.capital_mode.value,
-            "data_fresh": fresh,
+            "data_fresh": data_fresh_for_safety,
             "kill_switch": settings.kill_switch,
             "paused": self.risk.paused,
             "safety_ok": ok,
             "live_preflight_ok": live_ok,
             "live_preflight_failed": live_failed,
+            "live_ready": live_ready,
             "manual_approval": settings.require_manual_approval,
             "error": self.last_error,
             "objectives": SYSTEM_OBJECTIVES,
             "philosophy": (
-                "Sermaye koruma → risk kontrolü → yüksek olasılıklı fırsat → "
-                "risk-ayarlı getiri. NO_TRADE birinci sınıf. AI emir vermez. "
-                "Kâr garantisi yok; paper trading LIVE öncesi zorunlu. "
-                "Bildirimler trading kararını değiştirmez (SIGNAL ≠ EXECUTION). "
-                "Prediction tracking ÖLÇER; TAHMİN OLASILIĞI ≠ GEÇMİŞ DOĞRULUK."
+                "LESS DATA, MORE DECISION. "
+                "Sermaye koruma → risk kontrolü → yüksek olasılıklı fırsat. "
+                "NO_TRADE birinci sınıf. Uydurma veri yasak. "
+                "SİMÜLE ≠ CANLI. TAHMİN OLASILIĞI ≠ GEÇMİŞ DOĞRULUK. "
+                "LIVE READY yalnızca doğrulanmış piyasa + broker ile."
             ),
             "strategy_ranking_example": example_ranking_report(),
+            "data_source": meta.to_dict(),
+            "system_health": {
+                "market_data": "CONNECTED" if meta.connected and has_data else "DISCONNECTED",
+                "broker": "PAPER" if not settings.is_live else "BLOCKED",
+                "ai": "READY" if has_data else "PAUSED",
+                "notifications": "CONNECTED",
+                "last_update": meta.last_update,
+                "last_update_ago": format_age_tr(meta.age_seconds),
+                "price_label": meta.price_label,
+            },
             "alerts": {
                 "unread": len(self.alerts.log.inbox(limit=20, unread_only=True)),
                 "sms_on": self.alerts.settings_store.get().sms_on,
@@ -185,6 +210,9 @@ class TradingService:
 
     def scan(self) -> list[SymbolDecision]:
         self.tick()
+        # No fabricated scan when live source required / unavailable
+        if not self.provider.has_market_data():
+            return []
         # Evaluate matured forecasts against current marks (measurement only)
         try:
             def _px(sym: str) -> float | None:
@@ -729,10 +757,24 @@ class TradingService:
         favorites = [u for u in universe if u.get("is_favorite")]
         favorites_sorted = sorted(favorites, key=lambda x: sort_rank_key(x, FavoriteSort.PRIORITY), reverse=True)
         top_ops = [u for u in universe if u.get("scanner_class") in {"STRONG_OPPORTUNITY", "OPPORTUNITY"}][:8]
+        meta = self.provider.source_meta(settings.data_freshness_sec)
+        signals_paused = meta.freshness in {
+            FreshnessStatus.STALE,
+            FreshnessStatus.DISCONNECTED,
+            FreshnessStatus.NO_DATA,
+        } or not self.provider.has_market_data()
+        daily = build_daily_home(
+            universe,
+            meta,
+            signal_ttl_sec=settings.signal_ttl_sec,
+            top_n=settings.daily_top_n,
+            signals_paused=signals_paused,
+        )
 
         return {
             "health": health,
-            "principle": "FAVORITE ≠ BUY · FAVORITE = PRIORITY ANALYSIS",
+            "principle": "LESS DATA, MORE DECISION · FAVORITE ≠ BUY · SİMÜLE ≠ CANLI",
+            "daily": daily,
             "favorites": favorites_sorted,
             "favorites_summary": [
                 {
@@ -785,6 +827,8 @@ class TradingService:
             },
             "universe": universe,
             "favorite_performance": self.favorites.performance(),
+            "data_source": meta.to_dict(),
+            "live_ready": False,
         }
 
     def _serialize(self, d: SymbolDecision) -> dict:
@@ -793,12 +837,18 @@ class TradingService:
         in_portfolio = self.ledger.get_position(d.symbol) is not None
         pos = self.ledger.get_position(d.symbol)
         change_pct = 0.0
+        prev_close = None
+        quote_ts = None
         try:
             bars = self.provider.get_bars(d.symbol, 3)
+            if bars:
+                quote_ts = bars[-1].ts.isoformat() if hasattr(bars[-1].ts, "isoformat") else str(bars[-1].ts)
             if len(bars) >= 2 and bars[-2].close:
+                prev_close = round(bars[-2].close, 2)
                 change_pct = (bars[-1].close / bars[-2].close - 1) * 100
         except Exception:  # noqa: BLE001
             change_pct = 0.0
+            prev_close = None
         ps = float(
             getattr(d, "_priority_score", None)
             or compute_priority_score(
@@ -820,7 +870,10 @@ class TradingService:
             "name": d.name,
             "sector": d.sector,
             "price": d.price,
+            "prev_close": prev_close,
             "change_pct": round(change_pct, 2),
+            "quote_ts": quote_ts,
+            "signal_timestamp": utc_now().isoformat(),
             "trend": d.trend,
             "buy_score": d.buy_score,
             "sell_score": d.sell_score,
@@ -856,6 +909,11 @@ class TradingService:
             "strategy_preference": fav_rec.strategy_preference if fav_rec else [],
             "favorite_groups": fav_rec.groups if fav_rec else [],
             "watchlist_priority": fav_rec.priority if fav_rec else None,
+            "news_source": "UNAVAILABLE",
+            "kap_source": "UNAVAILABLE",
+            "fundamental_source": (
+                "SYNTHETIC_PAPER" if settings.data_provider == "simulated" else "UNAVAILABLE"
+            ),
         }
         if pos:
             mark = self.ledger.mark_prices.get(pos.symbol, pos.avg_cost)
@@ -946,6 +1004,19 @@ class TradingService:
     def execute_signal(self, symbol: str, approved: bool = False) -> dict:
         if settings.is_live:
             return {"ok": False, "message": "LIVE mode blocked — paper trading zorunlu"}
+        if not self.provider.has_market_data():
+            return {
+                "ok": False,
+                "message": "DATA SOURCE REQUIRED — canlı/paper veri yok, emir yok",
+                "auto_trading": False,
+            }
+        meta = self.provider.source_meta(settings.data_freshness_sec)
+        if meta.freshness.value in {"STALE", "DISCONNECTED", "NO_DATA"}:
+            return {
+                "ok": False,
+                "message": "STALE/DISCONNECTED data — auto trading disabled",
+                "auto_trading": False,
+            }
         if settings.require_manual_approval and not approved:
             decisions = {d.symbol: d for d in self.scan()}
             d = decisions.get(symbol)

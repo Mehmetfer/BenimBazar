@@ -1,11 +1,20 @@
+"""Market data providers — honesty first. Simulated ≠ live."""
+
 from __future__ import annotations
 
 import math
+import os
 import random
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
 from config.models import Bar, QuoteSnapshot
+from data.integrity import (
+    DataSourceKind,
+    DataSourceMeta,
+    FreshnessStatus,
+    build_source_meta,
+)
 
 
 UNIVERSE: dict[str, tuple[str, str, float]] = {
@@ -29,10 +38,16 @@ class MarketDataProvider(Protocol):
     def list_symbols(self) -> list[str]: ...
     def tick(self) -> None: ...
     def is_fresh(self, max_age_sec: float = 30.0) -> bool: ...
+    def source_meta(self, max_age_sec: float = 30.0) -> DataSourceMeta: ...
+    def has_market_data(self) -> bool: ...
 
 
 class SimulatedProvider:
-    """Deterministic-ish OHLCV simulator for paper trading MVP."""
+    """Paper-only OHLCV simulator. MUST NEVER be labeled as live BIST data."""
+
+    provider_id = "simulated"
+    kind = DataSourceKind.SIMULATED
+    display_name = "SimulatedProvider (paper only)"
 
     def __init__(self, seed: int = 42) -> None:
         self._rng = random.Random(seed)
@@ -119,9 +134,151 @@ class SimulatedProvider:
         age = (datetime.now(timezone.utc) - self._last_tick).total_seconds()
         return age <= max_age_sec
 
+    def has_market_data(self) -> bool:
+        return True
+
+    def source_meta(self, max_age_sec: float = 30.0) -> DataSourceMeta:
+        return build_source_meta(
+            provider_id=self.provider_id,
+            kind=self.kind,
+            display_name=self.display_name,
+            connected=True,
+            last_update=self._last_tick,
+            max_age_sec=max_age_sec,
+            live_ready=False,
+        )
+
+
+class RequiredLiveProvider:
+    """Fail-closed live provider when credentials/URL are missing.
+
+    Returns no prices — UI must show VERİ YOK / DATA SOURCE REQUIRED.
+    Never fabricates quotes.
+    """
+
+    provider_id = "live_required"
+    kind = DataSourceKind.REQUIRED
+    display_name = "Live market data (not configured)"
+
+    def __init__(self, reason: str = "MARKET_DATA_URL / credentials missing") -> None:
+        self.reason = reason
+        self._last_attempt = datetime.now(timezone.utc)
+
+    def tick(self) -> None:
+        self._last_attempt = datetime.now(timezone.utc)
+
+    def get_bars(self, symbol: str, lookback: int = 220) -> list[Bar]:
+        return []
+
+    def get_quote(self, symbol: str) -> QuoteSnapshot:
+        # Honest empty quote — price None is not available on QuoteSnapshot (float).
+        # Callers must check has_market_data() / source_meta before using price.
+        raise RuntimeError("NO_MARKET_DATA: canlı veri kaynağı yapılandırılmadı")
+
+    def list_symbols(self) -> list[str]:
+        # Universe list for search UI only — not prices
+        return [s for s in UNIVERSE if s != "XU100"]
+
+    def is_fresh(self, max_age_sec: float = 30.0) -> bool:
+        return False
+
+    def has_market_data(self) -> bool:
+        return False
+
+    def source_meta(self, max_age_sec: float = 30.0) -> DataSourceMeta:
+        return build_source_meta(
+            provider_id=self.provider_id,
+            kind=self.kind,
+            display_name=self.display_name,
+            connected=False,
+            last_update=None,
+            max_age_sec=max_age_sec,
+            live_ready=False,
+            note=f"DATA SOURCE REQUIRED — {self.reason}",
+        )
+
+
+class HttpLiveProviderStub:
+    """Skeleton for a licensed HTTP market-data API.
+
+    Without MARKET_DATA_URL + MARKET_DATA_TOKEN this stays disconnected and
+    never invents prices. When configured, fetch must succeed or report NO_DATA.
+    """
+
+    provider_id = "http_live"
+    kind = DataSourceKind.LIVE
+    display_name = "HTTP Market Data API"
+
+    def __init__(self, base_url: str, token: str) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.token = token
+        self._last_ok: datetime | None = None
+        self._connected = False
+        self._error = "not_fetched_yet"
+        self._quotes: dict[str, QuoteSnapshot] = {}
+        self._bars: dict[str, list[Bar]] = {}
+
+    def tick(self) -> None:
+        # Real fetch would go here. Without a working endpoint, stay disconnected.
+        # Do NOT fall back to simulated prices.
+        if not self.base_url or not self.token:
+            self._connected = False
+            self._error = "missing_url_or_token"
+            return
+        # Placeholder: no fabricated response parsing — require real HTTP success later.
+        self._connected = False
+        self._error = "LIVE_ADAPTER_NOT_IMPLEMENTED — gerçek endpoint bağlanana kadar VERİ YOK"
+
+    def get_bars(self, symbol: str, lookback: int = 220) -> list[Bar]:
+        return list(self._bars.get(symbol, [])[-lookback:])
+
+    def get_quote(self, symbol: str) -> QuoteSnapshot:
+        q = self._quotes.get(symbol)
+        if q is None:
+            raise RuntimeError("NO_MARKET_DATA: canlı kotasyon yok")
+        return q
+
+    def list_symbols(self) -> list[str]:
+        return [s for s in UNIVERSE if s != "XU100"]
+
+    def is_fresh(self, max_age_sec: float = 30.0) -> bool:
+        if not self._last_ok:
+            return False
+        return (datetime.now(timezone.utc) - self._last_ok).total_seconds() <= max_age_sec
+
+    def has_market_data(self) -> bool:
+        return self._connected and bool(self._quotes)
+
+    def source_meta(self, max_age_sec: float = 30.0) -> DataSourceMeta:
+        kind = DataSourceKind.LIVE if self._connected else DataSourceKind.REQUIRED
+        return build_source_meta(
+            provider_id=self.provider_id,
+            kind=kind,
+            display_name=self.display_name,
+            connected=self._connected,
+            last_update=self._last_ok,
+            max_age_sec=max_age_sec,
+            live_ready=False,
+            note=self._error,
+        )
+
 
 def create_provider(name: str = "simulated") -> MarketDataProvider:
-    if name == "simulated":
+    """Factory. Unknown/live without credentials → RequiredLiveProvider (no fake prices)."""
+    key = (name or "simulated").strip().lower()
+    if key in {"simulated", "sim", "paper"}:
         return SimulatedProvider()
-    # Future: yahoo/kap/broker adapters plug in here.
-    raise ValueError(f"Unknown data provider: {name}")
+    if key in {"required", "none", "off"}:
+        return RequiredLiveProvider("DATA_PROVIDER=required — canlı kaynak bekleniyor")
+    if key in {"live", "bist", "broker", "http"}:
+        url = os.getenv("MARKET_DATA_URL", "").strip()
+        token = os.getenv("MARKET_DATA_TOKEN", "").strip()
+        if not url or not token:
+            return RequiredLiveProvider(
+                "DATA_PROVIDER=live ancak MARKET_DATA_URL / MARKET_DATA_TOKEN yok"
+            )
+        return HttpLiveProviderStub(url, token)
+    raise ValueError(
+        f"Unknown data provider: {name}. "
+        "Use simulated | required | live (needs MARKET_DATA_URL + MARKET_DATA_TOKEN)."
+    )

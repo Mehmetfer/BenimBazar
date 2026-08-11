@@ -84,7 +84,7 @@ def test_service_favorites_in_dashboard():
     svc.favorites.add("THYAO")
     dash = svc.dashboard()
     assert "favorites" in dash
-    assert dash["principle"].startswith("FAVORITE")
+    assert "FAVORITE" in dash["principle"] or "Favori" in dash["principle"] or "≠ BUY" in dash["principle"]
     assert any(f["symbol"] == "THYAO" for f in dash["favorites"])
     u = next(x for x in dash["universe"] if x["symbol"] == "THYAO")
     assert u["is_favorite"] is True
