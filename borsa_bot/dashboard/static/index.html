@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0b1220" />
+  <title>Borsa Bot — AL/SAT/BEKLE</title>
+  <style>
+    :root{--bg:#0b1220;--panel:#101a28;--ink:#e8eef8;--mute:#8fa0b8;--buy:#1f9d6a;--sell:#c44b4b;--hold:#d4a017;--up:#3dd68c;--down:#ff6b6b;--line:rgba(232,238,248,.12)}
+    *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink);min-height:100dvh;padding:14px 12px 28px}
+    h1{margin:0;font-size:1.7rem} .sub{color:var(--mute);margin:.3rem 0 .8rem;font-size:.9rem}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px;margin-bottom:12px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .kpi b{display:block;font-size:1.05rem}.kpi span{color:var(--mute);font-size:.72rem}
+    .up{color:var(--up)}.down{color:var(--down)}
+    .badge{font-size:.75rem;font-weight:800;padding:5px 9px;border-radius:999px}
+    .AL{background:rgba(31,157,106,.2);color:var(--up)}.SAT{background:rgba(196,75,75,.2);color:var(--down)}.BEKLE,.ALMA{background:rgba(212,160,23,.18);color:var(--hold)}
+    .row{border-bottom:1px solid var(--line);padding:10px 0}.row:last-child{border-bottom:0}
+    .why{color:var(--mute);font-size:.8rem;line-height:1.35;margin-top:4px}
+    button{min-height:44px;border-radius:12px;border:0;font:inherit;font-weight:700}
+    .btn{width:100%;background:var(--buy);color:#fff;margin-top:8px}.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+    .status{font-size:.8rem;color:var(--mute)}
+    h2{margin:0 0 8px;font-size:.72rem;letter-spacing:.08em;color:var(--mute);text-transform:uppercase}
+  </style>
+</head>
+<body>
+  <h1>Borsa Bot</h1>
+  <p class="sub">Sermaye koruma öncelikli · Paper trading</p>
+  <div class="card status" id="sys">Sistem: …</div>
+  <div class="card">
+    <div class="grid">
+      <div class="kpi"><span>Portföy</span><b id="equity">—</b></div>
+      <div class="kpi"><span>Günlük P&L</span><b id="daily">—</b></div>
+      <div class="kpi"><span>Toplam P&L</span><b id="total">—</b></div>
+      <div class="kpi"><span>Nakit</span><b id="cash">—</b></div>
+      <div class="kpi"><span>AL / SAT / BEKLE</span><b id="counts">—</b></div>
+      <div class="kpi"><span>Kill / LIVE</span><b id="gates">—</b></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Sinyaller</h2>
+    <div id="list"></div>
+    <button class="btn ghost" id="refresh" type="button">Yenile</button>
+    <button class="btn ghost" id="reset" type="button">Portföyü Sıfırla</button>
+  </div>
+  <div class="card">
+    <h2>Açık pozisyonlar</h2>
+    <div id="pos"></div>
+  </div>
+  <script>
+    const money = n => Number(n).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' TL';
+    async function load(){
+      const res = await fetch('/api/dashboard');
+      const data = await res.json();
+      const h = data.health || {};
+      document.getElementById('sys').textContent = `Sistem: ${h.status} · Mod: ${h.mode} · Veri: ${h.data_fresh?'taze':'eski'}`;
+      const p = data.portfolio || {};
+      document.getElementById('equity').textContent = money(p.equity||0);
+      const d = document.getElementById('daily'); d.textContent = money(p.daily_pnl||0); d.className=(p.daily_pnl||0)>=0?'up':'down';
+      const t = document.getElementById('total'); t.textContent = money(p.total_pnl||0); t.className=(p.total_pnl||0)>=0?'up':'down';
+      document.getElementById('cash').textContent = money(p.cash||0);
+      const sig = data.signals || {};
+      document.getElementById('counts').textContent = `${(sig.AL||[]).length} / ${(sig.SAT||[]).length} / ${(sig.BEKLE||[]).length}`;
+      document.getElementById('gates').textContent = `${h.kill_switch?'ON':'OFF'} / ${(h.live_preflight_ok?'OK':'BLOCK')}`;
+      document.getElementById('list').innerHTML = (data.universe||[]).map(u => `
+        <div class="row">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+            <div><b>${u.symbol}</b> <span style="color:var(--mute)">${u.price}</span><div style="color:var(--mute);font-size:.78rem">${u.trend} · Risk ${u.risk}</div></div>
+            <span class="badge ${u.signal}">${u.signal}</span>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:6px;color:var(--mute);font-size:.78rem">
+            <span>BUY ${u.buy_score}</span><span>SELL ${u.sell_score}</span><span>AI ${u.ai_confidence}</span>
+          </div>
+          <div class="why">${u.explanation||''}</div>
+          ${(u.signal==='AL'||u.signal==='SAT') ? `<button class="btn" data-sym="${u.symbol}">Paper ${u.signal}</button>`:''}
+        </div>`).join('');
+      document.querySelectorAll('button[data-sym]').forEach(btn=>{
+        btn.onclick = async ()=>{
+          btn.disabled = true;
+          const r = await fetch('/api/execute',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:btn.dataset.sym})});
+          const j = await r.json();
+          alert(j.ok ? 'Emir OK' : (j.message||j.result?.message||'Red'));
+          load();
+        };
+      });
+      document.getElementById('pos').innerHTML = (p.open_positions||[]).length
+        ? p.open_positions.map(x=>`<div class="row"><b>${x.symbol}</b><div style="color:var(--mute)">${x.quantity} lot · maliyet ${x.avg_cost}</div></div>`).join('')
+        : '<div style="color:var(--mute)">Pozisyon yok</div>';
+    }
+    document.getElementById('refresh').onclick = load;
+    document.getElementById('reset').onclick = async ()=>{ await fetch('/api/reset',{method:'POST'}); load(); };
+    load();
+    setInterval(load, 8000);
+  </script>
+</body>
+</html>
