@@ -302,6 +302,20 @@ def structure_label(bars: Sequence[Bar], lookback: int = 30) -> str:
 def compute_indicators(bars: Sequence[Bar]) -> IndicatorSet | None:
     if len(bars) < 210:
         return None
+    # Indicator provenance inherits bar source; mixed families → reject
+    from data.provenance import (
+        MixedProvenanceError,
+        assert_homogeneous_provenance,
+        kind_of,
+    )
+
+    try:
+        src = assert_homogeneous_provenance(
+            [kind_of(b) for b in bars],
+            context="indicators/OHLCV",
+        )
+    except MixedProvenanceError:
+        return None
     closes = _closes(bars)
     volumes = [b.volume for b in bars]
     e9 = ema(closes, 9)
@@ -375,4 +389,5 @@ def compute_indicators(bars: Sequence[Bar]) -> IndicatorSet | None:
         resistance=resistance,
         pivot=pivot,
         structure=structure,
+        data_source_kind=src.value,
     )

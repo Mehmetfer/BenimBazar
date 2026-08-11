@@ -62,11 +62,16 @@ def daily_home() -> dict:
     except Exception:  # noqa: BLE001
         pass
     dash = service.dashboard()
+    # Strip any accidental client-shaped fields; source is backend-owned
+    src = dash.get("data_source") or {}
     return {
         "daily": dash.get("daily"),
         "health": dash.get("health"),
-        "data_source": dash.get("data_source"),
+        "data_source": src,
+        "data_source_kind": src.get("data_source_kind") or src.get("kind"),
+        "tradeable": bool(src.get("tradeable")),
         "live_ready": False,
+        "live_data_provider": (dash.get("health") or {}).get("live_data_provider"),
         "principle": dash.get("principle"),
     }
 
@@ -87,7 +92,12 @@ def reset() -> dict:
 @app.get("/api/backtest")
 def backtest(symbol: str = "THYAO") -> dict:
     m = run_simple_backtest(symbol.upper())
-    return m.__dict__
+    payload = m.to_dict() if hasattr(m, "to_dict") else dict(m.__dict__)
+    payload["data_source_kind"] = "BACKTEST"
+    payload["excluded_from_live_win_rate"] = True
+    payload["performance_category"] = "BACKTEST"
+    payload["note"] = "BACKTEST ≠ LIVE WIN RATE / LIVE performance"
+    return payload
 
 
 @app.get("/api/opportunities")
@@ -111,6 +121,8 @@ def walk_forward(symbol: str = "THYAO") -> dict:
         "note": rep.note,
         "folds": [f.__dict__ for f in rep.folds],
         "live_allowed": False,  # hard rule: never auto-enable LIVE
+        "data_source_kind": "BACKTEST",
+        "excluded_from_live_win_rate": True,
     }
 
 
@@ -382,9 +394,11 @@ def predictions_report(
     model_version: str | None = None,
     regime: str | None = None,
     sector: str | None = None,
+    accuracy_bucket: str | None = None,
 ) -> dict:
     from prediction.rating import calibration_buckets
 
+    # Client cannot force LIVE accuracy via query pretending source — bucket filter is server-side
     rows = service.predictions.store.list_evaluations(
         symbol=symbol.upper() if symbol else None,
         strategy=strategy,
@@ -400,11 +414,22 @@ def predictions_report(
         model_version=model_version,
         regime=regime,
         sector=sector,
+        accuracy_bucket=accuracy_bucket,
+    )
+    by_source = service.predictions.accuracy_by_source(
+        symbol=symbol.upper() if symbol else None
     )
     return {
         **rep.to_dict(),
         "calibration_buckets": calibration_buckets(rows),
-        "principle": "TAHMİN OLASILIĞI ≠ GEÇMİŞ DOĞRULUK. Prediction tracking does not decide trades.",
+        "accuracy_by_source": by_source,
+        "live_accuracy": by_source.get("LIVE"),
+        "principle": (
+            "TAHMİN OLASILIĞI ≠ GEÇMİŞ DOĞRULUK. "
+            "SIMULATED accuracy ≠ LIVE accuracy. "
+            "LIVE ACCURACY shows INSUFFICIENT DATA when no LIVE history exists (not 0%). "
+            "Prediction tracking does not decide trades."
+        ),
     }
 
 

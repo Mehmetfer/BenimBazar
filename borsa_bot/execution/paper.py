@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from config.models import OrderRequest, OrderResult
 from config.settings import settings
+from data.provenance import parse_data_source_kind
 from portfolio.ledger import PortfolioLedger
 
 
@@ -13,6 +14,7 @@ from portfolio.ledger import PortfolioLedger
 class PaperBroker:
     ledger: PortfolioLedger
     recent_keys: dict[str, float] = field(default_factory=dict)
+    data_source_kind: str = "SIMULATED"  # paper path — never claim LIVE
 
     def _duplicate(self, key: str) -> bool:
         now = time.time()
@@ -33,6 +35,11 @@ class PaperBroker:
         if self._duplicate(key):
             return OrderResult(False, None, "DUPLICATE", "duplicate order protection")
 
+        # Client cannot override source via order.details — backend stamps paper as SIMULATED
+        dsk = parse_data_source_kind(self.data_source_kind).value
+        if dsk in {"LIVE", "DELAYED", "BROKER"}:
+            dsk = "SIMULATED"
+
         slip = settings.slippage_pct + settings.commission_pct
         if order.side == "BUY":
             fill = order.price * (1 + slip)
@@ -46,6 +53,7 @@ class PaperBroker:
                     order_id,
                     order.stop_price,
                     order.target_price,
+                    data_source_kind=dsk,
                 )
             except ValueError as exc:
                 return OrderResult(False, None, "REJECTED", str(exc))
@@ -54,7 +62,9 @@ class PaperBroker:
         fill = order.price * (1 - slip)
         order_id = f"P-{uuid.uuid4().hex[:10]}"
         try:
-            pnl = self.ledger.apply_sell(order.symbol, order.quantity, fill, order_id)
+            pnl = self.ledger.apply_sell(
+                order.symbol, order.quantity, fill, order_id, data_source_kind=dsk
+            )
         except ValueError as exc:
             return OrderResult(False, None, "REJECTED", str(exc))
         return OrderResult(True, order_id, "FILLED", f"paper sell filled pnl={pnl:.2f}", fill, order.quantity, {"pnl": pnl})

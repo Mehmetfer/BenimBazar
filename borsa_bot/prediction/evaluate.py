@@ -79,6 +79,8 @@ def evaluate_horizon(
     model_version: str,
     features: dict | None = None,
     target_return_pct: float | None = None,
+    market_data_source: str = "UNKNOWN",
+    actual_result_source: str = "UNKNOWN",
 ) -> HorizonEvaluation:
     if price_at_prediction <= 0:
         actual_ret = 0.0
@@ -135,6 +137,9 @@ def evaluate_horizon(
         model_version=model_version,
         prediction_quality_score=q,
         error_category=cat,
+        market_data_source=market_data_source,
+        actual_result_source=actual_result_source,
+        data_source_kind=market_data_source,
     )
 
 

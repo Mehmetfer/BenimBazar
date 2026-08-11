@@ -40,6 +40,9 @@ _BLOCKED_PROVIDER_TOKENS = frozenset(
 _BLOCKED_KINDS_PRODUCTION = frozenset(
     {
         DataSourceKind.SIMULATED,
+        DataSourceKind.TEST,
+        DataSourceKind.UNKNOWN,
+        DataSourceKind.BACKTEST,
         DataSourceKind.UNAVAILABLE,
     }
 )
@@ -210,6 +213,8 @@ def validate_quote(
     require_verified_source: bool | None = None,
 ) -> MarketDataGateResult:
     """Validate a quote before it may drive signals/trading."""
+    from data.provenance import is_never_tradeable, parse_data_source_kind
+
     require_verified = (
         (env == AppEnvironment.PRODUCTION) if require_verified_source is None else require_verified_source
     )
@@ -232,19 +237,37 @@ def validate_quote(
     else:
         return _reject(env, MarketDataGateCode.INVALID_MARKET_DATA, "timestamp type invalid")
 
+    q_kind = parse_data_source_kind(getattr(quote, "data_source_kind", None))
+    if q_kind == DataSourceKind.UNKNOWN and require_verified:
+        return _reject(env, MarketDataGateCode.UNKNOWN_SOURCE, "UNKNOWN data_source_kind — NOT TRADEABLE")
+    if require_verified and is_never_tradeable(q_kind) and q_kind != DataSourceKind.REQUIRED:
+        # REQUIRED handled via meta / NO_MARKET_DATA
+        if q_kind in _BLOCKED_KINDS_PRODUCTION:
+            return _reject(
+                env,
+                MarketDataGateCode.PRODUCTION_MARKET_DATA_VIOLATION
+                if env == AppEnvironment.PRODUCTION
+                else MarketDataGateCode.DATA_NOT_VERIFIED,
+                f"non-tradeable source kind={q_kind.value}",
+            )
+
     if meta is not None:
         if meta.freshness == FreshnessStatus.STALE:
             return _reject(env, MarketDataGateCode.STALE_DATA, meta.note)
         if meta.freshness in {FreshnessStatus.NO_DATA, FreshnessStatus.DISCONNECTED}:
             return _reject(env, MarketDataGateCode.NO_MARKET_DATA, meta.note)
-        if meta.kind == DataSourceKind.SIMULATED or meta.freshness == FreshnessStatus.FRESH_SIMULATED:
+        if meta.kind in {
+            DataSourceKind.SIMULATED,
+            DataSourceKind.TEST,
+            DataSourceKind.BACKTEST,
+        } or meta.freshness == FreshnessStatus.FRESH_SIMULATED:
             if require_verified or env == AppEnvironment.PRODUCTION:
                 return _reject(
                     env,
                     MarketDataGateCode.PRODUCTION_MARKET_DATA_VIOLATION
                     if env == AppEnvironment.PRODUCTION
                     else MarketDataGateCode.DATA_NOT_VERIFIED,
-                    "simulated source",
+                    f"simulated/test source kind={meta.kind.value}",
                 )
         if require_verified and not meta.is_live_market:
             return _reject(
@@ -253,7 +276,7 @@ def validate_quote(
                 "DATA NOT VERIFIED — source is not live/broker/delayed fresh feed",
             )
         if meta.kind not in _VERIFIED_KINDS and require_verified:
-            if meta.kind in {DataSourceKind.REQUIRED, DataSourceKind.UNAVAILABLE}:
+            if meta.kind in {DataSourceKind.REQUIRED, DataSourceKind.UNAVAILABLE, DataSourceKind.UNKNOWN}:
                 return _reject(env, MarketDataGateCode.NO_MARKET_DATA, meta.note)
             return _reject(env, MarketDataGateCode.UNKNOWN_SOURCE, f"unknown source kind={meta.kind.value}")
 
@@ -264,6 +287,8 @@ def validate_quote(
 
 
 def validate_bars(bars: list[Bar] | None, *, env: AppEnvironment) -> MarketDataGateResult:
+    from data.provenance import MixedProvenanceError, assert_homogeneous_provenance, kind_of
+
     if not bars:
         return _reject(env, MarketDataGateCode.NO_MARKET_DATA, "empty OHLCV")
     last = bars[-1]
@@ -275,7 +300,31 @@ def validate_bars(bars: list[Bar] | None, *, env: AppEnvironment) -> MarketDataG
         return _reject(env, MarketDataGateCode.INVALID_MARKET_DATA, "OHLCV high < low")
     if getattr(last, "ts", None) is None:
         return _reject(env, MarketDataGateCode.INVALID_MARKET_DATA, "OHLCV missing timestamp")
+    try:
+        assert_homogeneous_provenance([kind_of(b) for b in bars], context="OHLCV bars")
+    except MixedProvenanceError as exc:
+        return _reject(env, MarketDataGateCode.INVALID_MARKET_DATA, str(exc))
     return _allow(env, "ohlcv ok")
+
+
+def validate_quote_bars_homogeneous(
+    quote: QuoteSnapshot,
+    bars: list[Bar],
+    *,
+    env: AppEnvironment,
+    indicator_kind: str | None = None,
+) -> MarketDataGateResult:
+    """Reject LIVE price + SIMULATED volume/OHLC/indicator mixes."""
+    from data.provenance import MixedProvenanceError, assert_homogeneous_provenance, kind_of
+
+    kinds = [kind_of(quote), *[kind_of(b) for b in bars]]
+    if indicator_kind is not None:
+        kinds.append(indicator_kind)
+    try:
+        assert_homogeneous_provenance(kinds, context="quote+bars+indicator")
+    except MixedProvenanceError as exc:
+        return _reject(env, MarketDataGateCode.INVALID_MARKET_DATA, str(exc))
+    return _allow(env, "homogeneous provenance")
 
 
 def gate_market_data_for_scan(

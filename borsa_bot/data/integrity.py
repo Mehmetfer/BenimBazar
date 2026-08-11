@@ -12,10 +12,20 @@ IST = ZoneInfo("Europe/Istanbul")
 
 
 class DataSourceKind(str, Enum):
+    """Canonical market-data provenance (Phase 2).
+
+    Primary: LIVE | SIMULATED | TEST | UNKNOWN
+    Also: DELAYED/BROKER (live-family), BACKTEST, UNAVAILABLE/REQUIRED.
+    Tradeability rules live in data.provenance — do not scatter string checks.
+    """
+
     LIVE = "LIVE"  # verified real-time market feed
     DELAYED = "DELAYED"
     BROKER = "BROKER"
     SIMULATED = "SIMULATED"  # paper / demo only — NEVER label as CANLI
+    TEST = "TEST"
+    UNKNOWN = "UNKNOWN"
+    BACKTEST = "BACKTEST"
     UNAVAILABLE = "UNAVAILABLE"
     REQUIRED = "REQUIRED"  # config asks for live but credentials/provider missing
 
@@ -52,10 +62,16 @@ class DataSourceMeta:
     price_label: str  # e.g. "CANLI FİYAT" | "SİMÜLE FİYAT" | "VERİ YOK"
 
     def to_dict(self) -> dict[str, Any]:
+        from data.provenance import provenance_payload, tradeable_flag
+
         d = asdict(self)
         d["kind"] = self.kind.value
+        d["data_source_kind"] = self.kind.value
         d["freshness"] = self.freshness.value
         d["market_session"] = self.market_session.value
+        # Backend-owned tradeability — never trust client overrides
+        d["tradeable"] = tradeable_flag(self.kind, verified=self.is_live_market)
+        d.update(provenance_payload(self.kind, verified=self.is_live_market))
         return d
 
 
@@ -98,14 +114,14 @@ def build_source_meta(
     session = bist_session_now()
     is_real = kind in {DataSourceKind.LIVE, DataSourceKind.DELAYED, DataSourceKind.BROKER}
 
-    if kind in {DataSourceKind.UNAVAILABLE, DataSourceKind.REQUIRED} or not connected:
+    if kind in {DataSourceKind.UNAVAILABLE, DataSourceKind.REQUIRED, DataSourceKind.UNKNOWN} or not connected:
         freshness = FreshnessStatus.DISCONNECTED if kind == DataSourceKind.REQUIRED else FreshnessStatus.NO_DATA
         price_label = "VERİ YOK"
         is_live = False
         default_note = (
             "DATA SOURCE REQUIRED — canlı piyasa sağlayıcısı yapılandırılmadı. "
-            "Uydurma fiyat gösterilmez."
-            if kind == DataSourceKind.REQUIRED
+            "Uydurma fiyat gösterilmez. LIVE DATA: UNAVAILABLE."
+            if kind in {DataSourceKind.REQUIRED, DataSourceKind.UNKNOWN}
             else "Canlı veri alınamıyor."
         )
     elif age is None:
@@ -118,13 +134,17 @@ def build_source_meta(
         price_label = "ESKİ VERİ" if is_real else "SİMÜLE (ESKİ)"
         is_live = False
         default_note = f"STALE DATA — son güncelleme {int(age)} sn önce (eşik {int(max_age_sec)} sn)."
-    elif kind == DataSourceKind.SIMULATED:
+    elif kind in {DataSourceKind.SIMULATED, DataSourceKind.TEST, DataSourceKind.BACKTEST}:
         freshness = FreshnessStatus.FRESH_SIMULATED
-        price_label = "SİMÜLE FİYAT"
+        price_label = (
+            "TEST FİYAT"
+            if kind == DataSourceKind.TEST
+            else ("BACKTEST" if kind == DataSourceKind.BACKTEST else "SİMÜLE FİYAT")
+        )
         is_live = False
         default_note = (
-            "PAPER / SİMÜLE — CANLI PİYASA DEĞİL. "
-            "Bu fiyatlar gerçek BIST kotasyonu değildir."
+            "PAPER / SİMÜLE / TEST / BACKTEST — CANLI PİYASA DEĞİL. "
+            "Bu fiyatlar gerçek BIST kotasyonu değildir. NEVER TRADEABLE as LIVE."
         )
     else:
         freshness = FreshnessStatus.LIVE

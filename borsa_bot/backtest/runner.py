@@ -27,6 +27,39 @@ class BacktestMetrics:
     average_holding_time: float
     consecutive_losses_max: float
     buy_hold_return: float
+    data_source_kind: str = "BACKTEST"  # never LIVE performance
+
+    def is_live_performance(self) -> bool:
+        return False
+
+    def to_dict(self) -> dict:
+        from dataclasses import asdict
+
+        d = asdict(self)
+        d["data_source_kind"] = "BACKTEST"
+        d["performance_category"] = "BACKTEST"
+        d["excluded_from_live_win_rate"] = True
+        return d
+
+
+def exclude_backtest_from_live(metrics_list: list) -> list:
+    """Backtest results must never mix into LIVE WIN RATE / LIVE performance."""
+    from data.provenance import accuracy_bucket_for_source, kind_of
+
+    out = []
+    for m in metrics_list:
+        if isinstance(m, BacktestMetrics):
+            continue
+        if isinstance(m, dict):
+            if accuracy_bucket_for_source(m.get("data_source_kind")) == "BACKTEST":
+                continue
+            if str(m.get("performance_category") or "").upper() == "BACKTEST":
+                continue
+        else:
+            if kind_of(m) and accuracy_bucket_for_source(kind_of(m)) == "BACKTEST":
+                continue
+        out.append(m)
+    return out
 
 
 def assert_no_lookahead(feature_ts: list[int], label_ts: list[int]) -> bool:
@@ -157,4 +190,5 @@ def run_simple_backtest(symbol: str = "THYAO", steps: int = 80) -> BacktestMetri
         average_holding_time=round(avg_hold, 2),
         consecutive_losses_max=float(max_consec),
         buy_hold_return=round(bh, 2),
+        data_source_kind="BACKTEST",
     )

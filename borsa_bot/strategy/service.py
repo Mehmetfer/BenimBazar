@@ -25,6 +25,17 @@ from config.models import (
 )
 from config.settings import SYSTEM_OBJECTIVES, settings
 from data.providers import MarketDataProvider, create_provider
+from data.integrity import FreshnessStatus, format_age_tr
+from data.provenance import (
+    MixedProvenanceError,
+    assert_homogeneous_provenance,
+    is_live_provider_configured,
+    kind_of,
+    live_provider_status,
+    provenance_payload,
+    tradeable_flag,
+)
+from data.validation import gate_market_data_for_scan, normalize_app_env, validate_quote_bars_homogeneous
 from execution.paper import PaperBroker
 from execution.safety import SafetyGate
 from factors.engine import compute_factors
@@ -67,8 +78,6 @@ from favorites import (
 )
 from prediction import PredictionTrackingService
 from dashboard.daily import build_daily_home
-from data.integrity import FreshnessStatus, format_age_tr
-from data.validation import gate_market_data_for_scan, normalize_app_env
 from config.models import utc_now
 
 
@@ -194,6 +203,10 @@ class TradingService:
             ),
             "strategy_ranking_example": example_ranking_report(),
             "data_source": meta.to_dict(),
+            "live_data_provider": live_provider_status(
+                configured=is_live_provider_configured(),
+                connected=bool(meta.is_live_market and meta.connected),
+            ),
             "system_health": {
                 "market_data": "CONNECTED" if meta.connected and has_data else "DISCONNECTED",
                 "broker": "PAPER" if not settings.is_live else "BLOCKED",
@@ -238,7 +251,8 @@ class TradingService:
                 except Exception:  # noqa: BLE001
                     return None
 
-            self.predictions.evaluate_due(_px)
+            meta_kind = kind_of(self.provider.source_meta(settings.data_freshness_sec))
+            self.predictions.evaluate_due(_px, actual_result_source=meta_kind.value)
         except Exception:  # noqa: BLE001
             pass
         regime = detect_regime(self.provider)
@@ -278,9 +292,30 @@ class TradingService:
             marks[symbol] = quote.price
             uni = universe_map.get(symbol)
             bars = self.provider.get_bars(symbol, 240)
+            # Mixed LIVE + SIMULATED (etc.) must not enter one calculation
+            env = normalize_app_env(settings.app_env)
+            try:
+                assert_homogeneous_provenance(
+                    [kind_of(quote), *[kind_of(b) for b in bars]],
+                    context=f"scan/{symbol}",
+                )
+            except MixedProvenanceError:
+                continue
+            hom = validate_quote_bars_homogeneous(quote, bars, env=env)
+            if not hom.ok:
+                continue
             ind = compute_indicators(bars)
             if ind is None:
                 continue
+            try:
+                src_kind = assert_homogeneous_provenance(
+                    [kind_of(quote), kind_of(ind)],
+                    context=f"scan/{symbol}/indicator",
+                )
+            except MixedProvenanceError:
+                continue
+            # UNKNOWN / non-live never tradeable for live signals; paper may still record SIMULATED
+            src_tradeable = tradeable_flag(src_kind, verified=False)
             owned = self.ledger.get_position(symbol) is not None
             mtf = analyze_mtf(bars, base_tf_minutes=15)
             mtf_conflict, mtf_penalty, mtf_note = mtf_conflict_risk(mtf)
@@ -641,6 +676,8 @@ class TradingService:
                 risk_verdict=risk_verdict,
                 ai_trade_plan=ai_plan,
                 final_decision=final_decision_str,
+                data_source_kind=src_kind.value,
+                tradeable=src_tradeable,
             )
             # Deeper analysis for favorites only (FAVORITE ≠ BUY boost)
             if symbol in fav_set:
@@ -676,6 +713,7 @@ class TradingService:
                     opp=opp,
                     plan=ai_plan,
                     is_favorite=symbol in fav_set,
+                    market_data_source=src_kind.value,
                     features_snapshot={
                         "expected_return_pct": round(opp.expected_return_pct, 4) if opp else None,
                         "expected_value": round(opp.expected_value, 4) if opp else None,
@@ -686,6 +724,8 @@ class TradingService:
                         "rsi": round(ind.rsi14, 2),
                         "structure": getattr(ind, "structure", None),
                         "final_decision": final_decision_str,
+                        "data_source_kind": src_kind.value,
+                        "tradeable": src_tradeable,
                     },
                 )
                 card = self.predictions.symbol_card(symbol, latest=pred)
@@ -707,6 +747,7 @@ class TradingService:
                     "explanation": d.explanation,
                     "stop_price": d.stop_price,
                     "target_price": d.target_price,
+                    "data_source_kind": d.data_source_kind,
                 }
             )
         self.ledger.set_marks(marks)
@@ -954,6 +995,9 @@ class TradingService:
             "fundamental_source": (
                 "SYNTHETIC_PAPER" if settings.data_provider == "simulated" else "UNAVAILABLE"
             ),
+            "data_source_kind": getattr(d, "data_source_kind", None) or "UNKNOWN",
+            "tradeable": bool(getattr(d, "tradeable", False)),
+            **provenance_payload(getattr(d, "data_source_kind", None) or "UNKNOWN", verified=False),
         }
         if pos:
             mark = self.ledger.mark_prices.get(pos.symbol, pos.avg_cost)

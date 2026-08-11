@@ -154,17 +154,18 @@
     const pill = document.getElementById('mktText');
     const dot = document.getElementById('mktDot');
     const clock = document.getElementById('clockLine');
-    const kind = (m&&m.kind) || 'UNAVAILABLE';
+    const kind = (m&& (m.data_source_kind||m.kind)) || 'UNAVAILABLE';
     const session = (m&&m.market_session) || 'UNKNOWN';
     const live = !!(m&&m.is_live_market);
     const ago = (daily&&daily.market&&daily.market.last_update_ago) || '—';
-    clock.textContent = `Son veri: ${ago} · Kaynak: ${(m&&m.display_name)||'—'}`;
-    if(kind==='SIMULATED'){
+    const ui = (m&&m.ui_status) || (kind==='SIMULATED'?'◐ SIMULATED':(live?'● LIVE':'⚠ DATA UNAVAILABLE'));
+    clock.textContent = `Son veri: ${ago} · Kaynak: ${(m&&m.display_name)||'—'} · ${ui}`;
+    if(kind==='SIMULATED' || kind==='TEST' || kind==='BACKTEST'){
       banner.className='banner sim';
-      banner.textContent='SİMÜLE VERİ · CANLI PİYASA DEĞİL — Paper / demo fiyatlar. LIVE READY değil.';
-      pill.textContent = `BIST · SİMÜLE · ${session==='OPEN'?'seans': 'kapalı'}`;
+      banner.textContent=`${ui} · CANLI PİYASA DEĞİL — Paper / demo. Tradeable: hayır. LIVE READY değil.`;
+      pill.textContent = `BIST · ${kind} · ${session==='OPEN'?'seans': 'kapalı'}`;
       dot.className='dot sim';
-    } else if(kind==='REQUIRED' || kind==='UNAVAILABLE' || !(m&&m.connected)){
+    } else if(kind==='REQUIRED' || kind==='UNAVAILABLE' || kind==='UNKNOWN' || !(m&&m.connected)){
       banner.className='banner bad';
       const gateMsg = (daily&&daily.market_data_gate&&daily.market_data_gate.ui_message) || 'MARKET DATA UNAVAILABLE';
       const code = (daily&&daily.market_data_gate&&daily.market_data_gate.code) || '';
@@ -178,7 +179,7 @@
       dot.className='dot bad';
     } else {
       banner.className='banner ok';
-      banner.textContent=`${m.price_label} · ${m.note||''}`;
+      banner.textContent=`${ui} · ${m.price_label||''} · ${m.note||''}`;
       pill.textContent=`BIST · ${session==='OPEN'?'● PİYASA AÇIK':'● PİYASA KAPALI'}`;
       dot.className = session==='OPEN'?'dot open':'dot closed';
     }

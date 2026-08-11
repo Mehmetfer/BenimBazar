@@ -112,6 +112,10 @@ class PredictionRecord:
     features_snapshot: dict[str, Any]
     forecasts: list[HorizonForecast]
     is_favorite: bool = False
+    # Provenance — set at insert; never rewrite SIMULATED → LIVE
+    market_data_source: str = "UNKNOWN"
+    prediction_source: str = "UNKNOWN"
+    data_source_kind: str = "UNKNOWN"
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -144,6 +148,9 @@ class HorizonEvaluation:
     model_version: str
     prediction_quality_score: float
     error_category: str | None = None
+    market_data_source: str = "UNKNOWN"
+    actual_result_source: str = "UNKNOWN"
+    data_source_kind: str = "UNKNOWN"
 
 
 @dataclass

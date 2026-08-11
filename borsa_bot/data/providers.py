@@ -77,6 +77,7 @@ class SimulatedProvider:
                         close=round(c, 2),
                         volume=round(vol, 0),
                         trades=trades,
+                        data_source_kind=DataSourceKind.SIMULATED.value,
                     )
                 )
                 price = c
@@ -102,6 +103,7 @@ class SimulatedProvider:
                     close=round(c, 2),
                     volume=round(vol, 0),
                     trades=int(700 + self._rng.random() * 2500),
+                    data_source_kind=DataSourceKind.SIMULATED.value,
                 )
             )
             if len(bars) > 300:
@@ -125,6 +127,7 @@ class SimulatedProvider:
             volume=bar.volume,
             trades=bar.trades,
             ts=bar.ts,
+            data_source_kind=DataSourceKind.SIMULATED.value,
         )
 
     def list_symbols(self) -> list[str]:

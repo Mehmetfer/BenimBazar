@@ -44,6 +44,7 @@ class _VerifiedLiveProvider:
                 close=100.5,
                 volume=1_000_000,
                 trades=1000,
+                data_source_kind=DataSourceKind.LIVE.value,
             )
         ]
 
@@ -65,6 +66,7 @@ class _VerifiedLiveProvider:
             volume=1_000_000,
             trades=1000,
             ts=self._ts,
+            data_source_kind=DataSourceKind.LIVE.value,
         )
 
     def list_symbols(self) -> list[str]:

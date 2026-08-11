@@ -49,7 +49,10 @@ class PredictionStore:
                     strategy_version TEXT,
                     features_snapshot TEXT,
                     forecasts_json TEXT NOT NULL,
-                    is_favorite INTEGER DEFAULT 0
+                    is_favorite INTEGER DEFAULT 0,
+                    market_data_source TEXT DEFAULT 'UNKNOWN',
+                    prediction_source TEXT DEFAULT 'UNKNOWN',
+                    data_source_kind TEXT DEFAULT 'UNKNOWN'
                 );
                 CREATE TABLE IF NOT EXISTS prediction_evaluations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,6 +79,9 @@ class PredictionStore:
                     model_version TEXT,
                     prediction_quality_score REAL,
                     error_category TEXT,
+                    market_data_source TEXT DEFAULT 'UNKNOWN',
+                    actual_result_source TEXT DEFAULT 'UNKNOWN',
+                    data_source_kind TEXT DEFAULT 'UNKNOWN',
                     UNIQUE(prediction_id, horizon)
                 );
                 CREATE TABLE IF NOT EXISTS forecast_revisions (
@@ -99,24 +105,42 @@ class PredictionStore:
                 CREATE INDEX IF NOT EXISTS idx_eval_symbol_h ON prediction_evaluations(symbol, horizon);
                 """
             )
+            from database.migrate_provenance import migrate_predictions_db
+
+            migrate_predictions_db(c)
 
     def insert_prediction(self, rec: PredictionRecord) -> str:
-        # Immutable insert — reject updates
+        # Immutable insert — reject updates / source mutation
+        from data.provenance import SourceMutationError, parse_data_source_kind
+
         with self._conn() as c:
             existing = c.execute(
-                "SELECT prediction_id FROM predictions WHERE prediction_id=?",
+                "SELECT prediction_id, market_data_source, data_source_kind FROM predictions WHERE prediction_id=?",
                 (rec.prediction_id,),
             ).fetchone()
             if existing:
+                # Refuse SIMULATED → LIVE style mutation via re-insert
+                old_kind = parse_data_source_kind(
+                    existing["data_source_kind"] or existing["market_data_source"]
+                )
+                new_kind = parse_data_source_kind(rec.data_source_kind or rec.market_data_source)
+                if old_kind != new_kind:
+                    raise SourceMutationError(
+                        f"prediction source immutable: {old_kind.value} → {new_kind.value}"
+                    )
                 return rec.prediction_id
+            mds = parse_data_source_kind(rec.market_data_source).value
+            ps = parse_data_source_kind(rec.prediction_source or rec.market_data_source).value
+            dsk = parse_data_source_kind(rec.data_source_kind or rec.market_data_source).value
             c.execute(
                 """
                 INSERT INTO predictions(
                     prediction_id, timestamp, symbol, price_at_prediction, signal, confidence,
                     probability, entry_price, stop_loss, target_1, target_2, target_3, strategy,
                     market_regime, sector, time_horizon_primary, model_version, strategy_version,
-                    features_snapshot, forecasts_json, is_favorite
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    features_snapshot, forecasts_json, is_favorite,
+                    market_data_source, prediction_source, data_source_kind
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     rec.prediction_id,
@@ -140,6 +164,9 @@ class PredictionStore:
                     json.dumps(rec.features_snapshot, default=str),
                     json.dumps([f.__dict__ if hasattr(f, "__dict__") else f for f in rec.forecasts]),
                     1 if rec.is_favorite else 0,
+                    mds,
+                    ps,
+                    dsk,
                 ),
             )
         return rec.prediction_id
@@ -196,6 +223,11 @@ class PredictionStore:
         return out
 
     def insert_evaluation(self, ev: HorizonEvaluation) -> None:
+        from data.provenance import parse_data_source_kind
+
+        mds = parse_data_source_kind(ev.market_data_source).value
+        ars = parse_data_source_kind(ev.actual_result_source).value
+        dsk = parse_data_source_kind(ev.data_source_kind or ev.market_data_source).value
         with self._conn() as c:
             c.execute(
                 """
@@ -204,8 +236,9 @@ class PredictionStore:
                     forecast_price, forecast_return_pct, actual_price, actual_return_pct,
                     return_error_pp, direction_forecast, direction_actual, direction_correct,
                     target_hit, abs_error_pct, confidence, probability, strategy, market_regime,
-                    sector, model_version, prediction_quality_score, error_category
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    sector, model_version, prediction_quality_score, error_category,
+                    market_data_source, actual_result_source, data_source_kind
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     ev.prediction_id,
@@ -231,8 +264,19 @@ class PredictionStore:
                     ev.model_version,
                     ev.prediction_quality_score,
                     ev.error_category,
+                    mds,
+                    ars,
+                    dsk,
                 ),
             )
+
+    def update_prediction_source(self, prediction_id: str, new_kind: str) -> None:
+        """Blocked in trading path — source is immutable."""
+        from data.provenance import SourceMutationError
+
+        raise SourceMutationError(
+            f"Cannot update prediction {prediction_id} data_source_kind to {new_kind}"
+        )
 
     def list_evaluations(
         self,

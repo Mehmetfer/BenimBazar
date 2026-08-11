@@ -27,7 +27,9 @@ from prediction.models import (
     HORIZON_SECONDS,
     HorizonForecast,
     PredictionRecord,
+    ReliabilityGrade,
     ReliabilityReport,
+    SampleTier,
     TimeHorizon,
     TradePlanOutcome,
 )
@@ -78,12 +80,22 @@ class PredictionTrackingService:
         is_favorite: bool = False,
         features_snapshot: dict[str, Any] | None = None,
         primary_horizon: str = "1D",
+        market_data_source: str | None = None,
     ) -> PredictionRecord | None:
         """Create immutable PREDICTION_RECORD. No look-ahead: only T-available inputs."""
+        from data.provenance import is_never_tradeable, parse_data_source_kind, tradeable_flag
+
         # Skip pure noise; still record WAIT/NO_TRADE when confidence meaningful
         sig = (signal or "").upper()
         if sig in {"HOLD"} and confidence < 40:
             return None
+
+        # Provenance from indicator/bars — never trust caller LIVE without provider seal
+        ind_src = parse_data_source_kind(getattr(ind, "data_source_kind", None))
+        mds = parse_data_source_kind(market_data_source or ind_src)
+        # Caller cannot elevate to LIVE via argument if indicator is simulated
+        if is_never_tradeable(ind_src) and not is_never_tradeable(mds):
+            mds = ind_src
 
         # Throttle identical re-scans (dashboard poll) — still immutable when we do write
         prev = self.store.latest_for_symbol(symbol)
@@ -148,16 +160,29 @@ class PredictionTrackingService:
             time_horizon_primary=primary_horizon,
             model_version=self.model_version,
             strategy_version=self.strategy_version,
-            features_snapshot=dict(features_snapshot or {}),
+            features_snapshot={
+                **dict(features_snapshot or {}),
+                "tradeable": tradeable_flag(mds, verified=False),
+            },
             forecasts=forecasts,
             is_favorite=is_favorite,
+            market_data_source=mds.value,
+            prediction_source=mds.value,
+            data_source_kind=mds.value,
         )
         self.store.insert_prediction(rec)
         self._latest_by_symbol[rec.symbol] = rec
         return rec
 
-    def evaluate_due(self, price_lookup: Callable[[str], float | None]) -> int:
+    def evaluate_due(
+        self,
+        price_lookup: Callable[[str], float | None],
+        *,
+        actual_result_source: str | None = None,
+    ) -> int:
         """Evaluate matured horizons against actual market prices."""
+        from data.provenance import parse_data_source_kind
+
         pending = self.store.pending_evaluations()
         # Group for trade-plan outcomes
         by_pred: dict[str, list[tuple[dict, dict]]] = {}
@@ -170,6 +195,10 @@ class PredictionTrackingService:
             actual = price_lookup(pred["symbol"])
             if actual is None or actual <= 0:
                 continue
+            pred_src = parse_data_source_kind(pred.get("market_data_source") or pred.get("data_source_kind"))
+            # Actual source: explicit from caller (provider), else inherit prediction source
+            # Never silently promote to LIVE
+            ars = parse_data_source_kind(actual_result_source or pred_src)
             for pred, fc in items:
                 target_ret = None
                 if pred.get("target_1") and pred.get("price_at_prediction"):
@@ -193,6 +222,8 @@ class PredictionTrackingService:
                     model_version=str(pred.get("model_version") or ""),
                     features=pred.get("features_snapshot") if isinstance(pred.get("features_snapshot"), dict) else {},
                     target_return_pct=target_ret,
+                    market_data_source=pred_src.value,
+                    actual_result_source=ars.value,
                 )
                 self.store.insert_evaluation(ev)
                 count += 1
@@ -266,7 +297,10 @@ class PredictionTrackingService:
         sector: str | None = None,
         scope: str = "overall",
         key: str = "OVERALL",
+        accuracy_bucket: str | None = None,
     ) -> ReliabilityReport:
+        from data.provenance import filter_rows_by_accuracy_bucket, live_accuracy_display
+
         rows = self.store.list_evaluations(
             symbol=symbol,
             strategy=strategy,
@@ -275,13 +309,55 @@ class PredictionTrackingService:
             regime=regime,
             sector=sector,
         )
-        parts = [p for p in [symbol, strategy, horizon, model_version, regime, sector] if p]
-        return build_reliability_report(
+        if accuracy_bucket:
+            rows = filter_rows_by_accuracy_bucket(rows, accuracy_bucket)
+        parts = [p for p in [symbol, strategy, horizon, model_version, regime, sector, accuracy_bucket] if p]
+        rep = build_reliability_report(
             rows,
             scope=scope if not parts else "/".join(parts),
             key=key if not parts else "/".join(parts),
             cfg=self.settings,
         )
+        if accuracy_bucket and accuracy_bucket.upper() == "LIVE":
+            live = live_accuracy_display(rows if accuracy_bucket else self.store.list_evaluations())
+            if live["status"] == "INSUFFICIENT DATA":
+                rep.historical_accuracy_pct = None
+                rep.directional_accuracy = None
+                rep.sample_tier = SampleTier.INSUFFICIENT.value
+                rep.grade = ReliabilityGrade.INSUFFICIENT.value
+                rep.note = "LIVE ACCURACY: INSUFFICIENT DATA — henüz ölçülecek LIVE veri yok (0% değildir)."
+        return rep
+
+    def accuracy_by_source(self, *, symbol: str | None = None) -> dict[str, Any]:
+        """LIVE / SIMULATED / TEST / BACKTEST accuracy kept separate."""
+        from data.provenance import filter_rows_by_accuracy_bucket, live_accuracy_display
+
+        rows = self.store.list_evaluations(symbol=symbol)
+        out: dict[str, Any] = {
+            "LIVE": live_accuracy_display(rows),
+            "SIMULATED": None,
+            "TEST": None,
+            "BACKTEST": None,
+        }
+        for bucket in ("SIMULATED", "TEST", "BACKTEST"):
+            subset = filter_rows_by_accuracy_bucket(rows, bucket)
+            if not subset:
+                out[bucket] = {
+                    "bucket": bucket,
+                    "status": "INSUFFICIENT DATA",
+                    "historical_accuracy_pct": None,
+                    "sample_size": 0,
+                }
+            else:
+                hits = sum(1 for r in subset if r.get("direction_correct"))
+                n = len(subset)
+                out[bucket] = {
+                    "bucket": bucket,
+                    "status": "OK",
+                    "historical_accuracy_pct": round(hits / n * 100, 1),
+                    "sample_size": n,
+                }
+        return out
 
     def symbol_card(self, symbol: str, latest: PredictionRecord | dict | None = None) -> dict[str, Any]:
         """AI FORECAST + AI RELIABILITY payload with explicit metric labels."""
@@ -354,6 +430,15 @@ class PredictionTrackingService:
             "forecast_bias": bias,
             "signal": pred_dict.get("signal") if pred_dict else None,
             "timestamp": pred_dict.get("timestamp") if pred_dict else None,
+            "market_data_source": (pred_dict or {}).get("market_data_source") or "UNKNOWN",
+            "prediction_source": (pred_dict or {}).get("prediction_source") or "UNKNOWN",
+            "data_source_kind": (pred_dict or {}).get("data_source_kind") or "UNKNOWN",
+            "tradeable": False
+            if not pred_dict
+            else (
+                str(pred_dict.get("data_source_kind") or pred_dict.get("market_data_source") or "")
+                in {"LIVE", "DELAYED", "BROKER"}
+            ),
             "ai_forecast": forecast_rows,
             "current_forecast_probability": round(float(pred_dict.get("probability") or 0) * 100)
             if pred_dict
@@ -376,6 +461,7 @@ class PredictionTrackingService:
                 "degradation_alert": overall.degradation,
                 "mae": overall.mae,
                 "note": overall.note,
+                "by_source": self.accuracy_by_source(symbol=sym),
             },
             "decomposition": {
                 "expected_return_pct": (pred_dict or {}).get("features_snapshot", {}).get("expected_return_pct")
@@ -389,6 +475,7 @@ class PredictionTrackingService:
             },
             "principle": (
                 "TAHMİN OLASILIĞI ≠ GEÇMİŞ DOĞRULUK. "
+                "SIMULATED accuracy ≠ LIVE accuracy. "
                 "Prediction tracking MEASURES only — does not decide trades."
             ),
         }

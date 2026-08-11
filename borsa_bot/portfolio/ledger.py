@@ -75,10 +75,14 @@ class PortfolioLedger:
                     risk TEXT,
                     explanation TEXT,
                     stop_price REAL,
-                    target_price REAL
+                    target_price REAL,
+                    data_source_kind TEXT DEFAULT 'UNKNOWN'
                 );
                 """
             )
+            from database.migrate_provenance import migrate_paper_db
+
+            migrate_paper_db(conn)
             row = conn.execute("SELECT cash FROM account WHERE id=1").fetchone()
             if row is None:
                 today = date.today().isoformat()
@@ -204,7 +208,11 @@ class PortfolioLedger:
         order_id: str,
         stop: float | None,
         target: float | None,
+        data_source_kind: str = "UNKNOWN",
     ) -> None:
+        from data.provenance import parse_data_source_kind
+
+        dsk = parse_data_source_kind(data_source_kind).value
         total = quantity * price
         with self._connect() as conn:
             cash = float(conn.execute("SELECT cash FROM account WHERE id=1").fetchone()["cash"])
@@ -225,11 +233,21 @@ class PortfolioLedger:
                     (symbol, sector, quantity, price, stop, target),
                 )
             conn.execute(
-                "INSERT INTO trades(ts,side,symbol,quantity,price,pnl,order_id) VALUES(?,?,?,?,?,?,?)",
-                (_utc(), "BUY", symbol, quantity, price, 0, order_id),
+                "INSERT INTO trades(ts,side,symbol,quantity,price,pnl,order_id,data_source_kind) VALUES(?,?,?,?,?,?,?,?)",
+                (_utc(), "BUY", symbol, quantity, price, 0, order_id, dsk),
             )
 
-    def apply_sell(self, symbol: str, quantity: float, price: float, order_id: str) -> float:
+    def apply_sell(
+        self,
+        symbol: str,
+        quantity: float,
+        price: float,
+        order_id: str,
+        data_source_kind: str = "UNKNOWN",
+    ) -> float:
+        from data.provenance import parse_data_source_kind
+
+        dsk = parse_data_source_kind(data_source_kind).value
         with self._connect() as conn:
             existing = conn.execute("SELECT * FROM positions WHERE symbol=?", (symbol,)).fetchone()
             if not existing or float(existing["quantity"]) < quantity:
@@ -244,17 +262,20 @@ class PortfolioLedger:
             else:
                 conn.execute("UPDATE positions SET quantity=? WHERE symbol=?", (left, symbol))
             conn.execute(
-                "INSERT INTO trades(ts,side,symbol,quantity,price,pnl,order_id) VALUES(?,?,?,?,?,?,?)",
-                (_utc(), "SELL", symbol, quantity, price, pnl, order_id),
+                "INSERT INTO trades(ts,side,symbol,quantity,price,pnl,order_id,data_source_kind) VALUES(?,?,?,?,?,?,?,?)",
+                (_utc(), "SELL", symbol, quantity, price, pnl, order_id, dsk),
             )
             return pnl
 
     def log_decision(self, payload: dict) -> None:
+        from data.provenance import parse_data_source_kind
+
+        dsk = parse_data_source_kind(payload.get("data_source_kind")).value
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO decision_log(ts,symbol,price,signal,buy_score,sell_score,ai_confidence,risk,explanation,stop_price,target_price)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                INSERT INTO decision_log(ts,symbol,price,signal,buy_score,sell_score,ai_confidence,risk,explanation,stop_price,target_price,data_source_kind)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     _utc(),
@@ -268,6 +289,7 @@ class PortfolioLedger:
                     payload.get("explanation"),
                     payload.get("stop_price"),
                     payload.get("target_price"),
+                    dsk,
                 ),
             )
 

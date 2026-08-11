@@ -194,6 +194,9 @@ def simplify_card(item: dict[str, Any], source: DataSourceMeta) -> dict[str, Any
             "change_pct": None,
             "price_label": source.price_label,
             "data_status": source.freshness.value,
+            "data_source_kind": source.kind.value,
+            "tradeable": False,
+            "ui_status": "⚠ DATA UNAVAILABLE",
             "note": source.note,
             "sources": {
                 "price": source.display_name,
@@ -238,6 +241,13 @@ def simplify_card(item: dict[str, Any], source: DataSourceMeta) -> dict[str, Any
         "quote_ts": item.get("quote_ts"),
         "data_status": source.freshness.value,
         "data_age": format_age_tr(source.age_seconds),
+        "data_source_kind": source.kind.value,
+        "tradeable": bool(source.is_live_market and source.kind.value in {"LIVE", "DELAYED", "BROKER"}),
+        "ui_status": (
+            "● LIVE"
+            if source.is_live_market
+            else ("◐ SIMULATED" if source.kind.value == "SIMULATED" else "⚠ DATA UNAVAILABLE")
+        ),
         "plan_invalid": plan_invalid,
         "plan_note": item.get("plan_note"),
         "forecast_short": short_fc,

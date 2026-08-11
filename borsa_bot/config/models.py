@@ -107,6 +107,7 @@ class Bar:
     close: float
     volume: float
     trades: int = 0
+    data_source_kind: str = "UNKNOWN"  # LIVE | SIMULATED | TEST | UNKNOWN | …
 
 
 @dataclass
@@ -120,6 +121,7 @@ class QuoteSnapshot:
     volume: float
     trades: int
     ts: datetime
+    data_source_kind: str = "UNKNOWN"
 
     @property
     def spread(self) -> float:
@@ -166,6 +168,7 @@ class IndicatorSet:
     resistance: float
     pivot: float
     structure: str  # HH_HL / LH_LL / RANGE
+    data_source_kind: str = "UNKNOWN"  # inherited from bars — indicator provenance
 
 
 @dataclass
@@ -345,6 +348,8 @@ class SymbolDecision:
     risk_verdict: str = ""
     ai_trade_plan: Any | None = None  # AITradePlan — typed loosely to avoid cycle
     final_decision: str = ""
+    data_source_kind: str = "UNKNOWN"
+    tradeable: bool = False
 
 
 @dataclass
