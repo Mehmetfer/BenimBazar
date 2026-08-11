@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b1220" />
   <title>Borsa Bot — Sermaye Koruma</title>
   <style>
-    :root{--bg:#0b1220;--panel:#101a28;--ink:#e8eef8;--mute:#8fa0b8;--buy:#1f9d6a;--sell:#c44b4b;--hold:#d4a017;--up:#3dd68c;--down:#ff6b6b;--line:rgba(232,238,248,.12)}
+    :root{--bg:#0b1220;--panel:#101a28;--ink:#e8eef8;--mute:#8fa0b8;--buy:#1f9d6a;--sell:#c44b4b;--hold:#d4a017;--up:#3dd68c;--down:#ff6b6b;--line:rgba(232,238,248,.12);--crit:#ff3b3b}
     *{box-sizing:border-box}body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;background:radial-gradient(1200px 600px at 10% -10%,#15233a,transparent),var(--bg);color:var(--ink);min-height:100dvh;padding:14px 12px 28px}
     h1{margin:0;font-size:1.55rem;letter-spacing:-.02em} .sub{color:var(--mute);margin:.3rem 0 .8rem;font-size:.88rem;line-height:1.35}
     .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px;margin-bottom:12px}
@@ -15,6 +15,7 @@
     .up{color:var(--up)}.down{color:var(--down)}
     .badge{font-size:.75rem;font-weight:800;padding:5px 9px;border-radius:999px}
     .AL,.BUY,.STRONG_BUY{background:rgba(31,157,106,.2);color:var(--up)}.SAT,.SELL,.STRONG_SELL{background:rgba(196,75,75,.2);color:var(--down)}.BEKLE,.ALMA,.WATCH,.WAIT,.HOLD,.AVOID,.NO_TRADE{background:rgba(212,160,23,.18);color:var(--hold)}
+    .CRITICAL{background:rgba(255,59,59,.25);color:#ff8a8a}.HIGH{background:rgba(212,160,23,.2);color:var(--hold)}
     .row{border-bottom:1px solid var(--line);padding:12px 0}.row:last-child{border-bottom:0}
     .why{color:var(--mute);font-size:.78rem;line-height:1.4;margin-top:6px}
     .scores{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:8px;font-size:.74rem;color:var(--mute)}
@@ -23,11 +24,17 @@
     .btn{width:100%;background:var(--buy);color:#fff;margin-top:8px}.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
     .status{font-size:.8rem;color:var(--mute)}
     h2{margin:0 0 8px;font-size:.72rem;letter-spacing:.08em;color:var(--mute);text-transform:uppercase}
+    .tog{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:.85rem}
+    .tog:last-child{border-bottom:0}
+    label.sw{display:flex;gap:8px;align-items:center;color:var(--mute);font-size:.78rem}
+    .alert-item{padding:10px 0;border-bottom:1px solid var(--line)}
+    .alert-item .t{font-weight:700;font-size:.9rem}
+    .alert-item .m{color:var(--mute);font-size:.78rem;margin-top:4px;line-height:1.35}
   </style>
 </head>
 <body>
   <h1>Borsa Bot</h1>
-  <p class="sub">LONG · SWING · DAY ayrı motorlar. SCAN agresif · FILTER agresif · TRADE seçici. Sermaye kolları ayrılır. LIVE kapalı. Kâr garantisi yok.</p>
+  <p class="sub">LONG · SWING · DAY. Bildirimler karar değiştirmez (SIGNAL ≠ EXECUTION). LIVE kapalı. Kâr garantisi yok.</p>
   <div class="card status" id="sys">Sistem: …</div>
   <div class="card">
     <div class="grid">
@@ -41,7 +48,27 @@
       <div class="kpi"><span>Sektör</span><b id="sectors">—</b></div>
       <div class="kpi"><span>LT / SW / DAY sleeves</span><b id="sleeves">—</b></div>
       <div class="kpi"><span>AI Primary</span><b id="primary">—</b></div>
+      <div class="kpi"><span>Okunmamış alert</span><b id="unread">—</b></div>
+      <div class="kpi"><span>Ses / TTS</span><b id="audioFlags">—</b></div>
     </div>
+  </div>
+  <div class="card">
+    <h2>Bildirimler (uygulama içi)</h2>
+    <div id="alerts" class="why">Yükleniyor…</div>
+    <button class="btn ghost" id="markRead" type="button">Tümünü okundu işaretle</button>
+    <button class="btn ghost" id="dailySum" type="button">Günlük özet bildirimi</button>
+    <button class="btn ghost" id="testBuy" type="button">Test AL alarmı</button>
+  </div>
+  <div class="card">
+    <h2>Bildirim ayarları</h2>
+    <div class="tog"><span>Push</span><label class="sw"><input type="checkbox" id="pushOn"/> ON</label></div>
+    <div class="tog"><span>SMS</span><label class="sw"><input type="checkbox" id="smsOn"/> ON</label></div>
+    <div class="tog"><span>Ses</span><label class="sw"><input type="checkbox" id="soundOn"/> ON</label></div>
+    <div class="tog"><span>Sesli (TTS TR)</span><label class="sw"><input type="checkbox" id="ttsOn"/> ON</label></div>
+    <div class="tog"><span>Quiet hours</span><label class="sw"><input type="checkbox" id="quietOn"/> ON</label></div>
+    <div class="tog"><span>Ses seviyesi</span><input id="vol" type="range" min="0" max="1" step="0.05" style="width:50%"/></div>
+    <button class="btn ghost" id="saveSettings" type="button">Ayarları kaydet</button>
+    <div class="why" id="settingsNote">Kritik alarmlar (STOP / KILL / RISK) quiet hours’ta da gider.</div>
   </div>
   <div class="card">
     <h2>Top opportunities (risk-adjusted)</h2>
@@ -59,6 +86,93 @@
   </div>
   <script>
     const money = n => Number(n).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' TL';
+    let lastAlertId = null;
+    let settingsCache = {};
+
+    function playSound(profile, vol){
+      try{
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if(!Ctx) return;
+        const ctx = new Ctx();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        const v = Math.max(0, Math.min(1, vol ?? 0.7));
+        const now = ctx.currentTime;
+        const map = {
+          BUY: [880, 0.12],
+          SELL: [440, 0.1],
+          PROFIT: [660, 0.15],
+          STOP: [220, 0.35],
+          CRITICAL: [180, 0.5],
+          INFO: [520, 0.08]
+        };
+        const [freq, dur] = map[profile] || map.INFO;
+        o.frequency.value = freq;
+        g.gain.setValueAtTime(0.0001, now);
+        g.gain.exponentialRampToValueAtTime(v * 0.25, now + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+        o.start(now);
+        if(profile === 'SELL' || profile === 'CRITICAL'){
+          const o2 = ctx.createOscillator();
+          const g2 = ctx.createGain();
+          o2.connect(g2); g2.connect(ctx.destination);
+          o2.frequency.value = profile === 'CRITICAL' ? 140 : 330;
+          g2.gain.setValueAtTime(0.0001, now + 0.12);
+          g2.gain.exponentialRampToValueAtTime(v * 0.22, now + 0.14);
+          g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.12 + dur);
+          o2.start(now + 0.12);
+          o2.stop(now + 0.12 + dur + 0.02);
+        }
+        o.stop(now + dur + 0.02);
+        setTimeout(()=>ctx.close(), 800);
+      }catch(e){}
+    }
+
+    function speakTr(text){
+      try{
+        if(!window.speechSynthesis || !text) return;
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'tr-TR';
+        u.rate = 1.0;
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(u);
+      }catch(e){}
+    }
+
+    async function loadSettings(){
+      const s = await (await fetch('/api/notifications/settings')).json();
+      settingsCache = s;
+      document.getElementById('pushOn').checked = !!s.push_on;
+      document.getElementById('smsOn').checked = !!s.sms_on;
+      document.getElementById('soundOn').checked = !!s.sound_on;
+      document.getElementById('ttsOn').checked = !!s.tts_on;
+      document.getElementById('quietOn').checked = !!s.quiet_hours_enabled;
+      document.getElementById('vol').value = s.sound_volume ?? 0.7;
+      document.getElementById('audioFlags').textContent = `${s.sound_on?'ON':'OFF'} / ${s.tts_on?'ON':'OFF'}`;
+    }
+
+    async function loadAlerts(){
+      const n = await (await fetch('/api/notifications?limit=15')).json();
+      const inbox = n.inbox || [];
+      document.getElementById('unread').textContent = String(inbox.filter(x=>!x.read).length);
+      document.getElementById('alerts').innerHTML = inbox.length
+        ? inbox.map(a => `<div class="alert-item">
+            <div class="t"><span class="badge ${a.priority||'HIGH'}">${a.priority||''}</span> ${a.title||a.event_type}
+              <span style="color:var(--mute);font-weight:500"> · ${a.symbol||''}</span></div>
+            <div class="m">${a.message||''}</div>
+            <div class="m">${a.event_type} · ${a.timestamp||''}</div>
+          </div>`).join('')
+        : '<div style="color:var(--mute)">Bildirim yok</div>';
+      // Play newest unread once
+      const newest = inbox.find(x => !x.read);
+      if(newest && newest.event_id !== lastAlertId){
+        lastAlertId = newest.event_id;
+        if(settingsCache.sound_on !== false) playSound(newest.sound_profile || 'INFO', settingsCache.sound_volume);
+        if(settingsCache.tts_on && newest.tts_text) speakTr(newest.tts_text);
+      }
+    }
+
     async function load(){
       const res = await fetch('/api/dashboard');
       const data = await res.json();
@@ -123,17 +237,37 @@
           btn.disabled = true;
           const r = await fetch('/api/execute',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:btn.dataset.sym, approved:true})});
           const j = await r.json();
-          alert(j.ok ? 'Emir OK' : (j.message||j.result?.message||'Red'));
+          alert(j.ok ? 'Emir OK (ORDER event; SIGNAL ayrı)' : (j.message||j.result?.message||'Red'));
           load();
         };
       });
       document.getElementById('pos').innerHTML = (p.open_positions||[]).length
         ? p.open_positions.map(x=>`<div class="row"><b>${x.symbol}</b><div style="color:var(--mute)">${x.quantity} lot · maliyet ${x.avg_cost} · stop ${x.stop_price??'—'}</div></div>`).join('')
         : '<div style="color:var(--mute)">Pozisyon yok — BEKLE normaldir</div>';
+      await loadAlerts();
     }
     document.getElementById('refresh').onclick = load;
     document.getElementById('reset').onclick = async ()=>{ await fetch('/api/reset',{method:'POST'}); load(); };
-    load();
+    document.getElementById('markRead').onclick = async ()=>{ await fetch('/api/notifications/read',{method:'POST'}); loadAlerts(); };
+    document.getElementById('dailySum').onclick = async ()=>{ await fetch('/api/notifications/daily-summary',{method:'POST'}); loadAlerts(); };
+    document.getElementById('testBuy').onclick = async ()=>{
+      await fetch('/api/notifications/test?kind=BUY_SIGNAL&symbol=THYAO',{method:'POST'});
+      await loadAlerts();
+    };
+    document.getElementById('saveSettings').onclick = async ()=>{
+      const body = {
+        push_on: document.getElementById('pushOn').checked,
+        sms_on: document.getElementById('smsOn').checked,
+        sound_on: document.getElementById('soundOn').checked,
+        tts_on: document.getElementById('ttsOn').checked,
+        quiet_hours_enabled: document.getElementById('quietOn').checked,
+        sound_volume: Number(document.getElementById('vol').value)
+      };
+      settingsCache = await (await fetch('/api/notifications/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
+      document.getElementById('settingsNote').textContent = 'Kaydedildi. SMS gerçek provider yoksa gönderilmez; trading etkilenmez.';
+      document.getElementById('audioFlags').textContent = `${settingsCache.sound_on?'ON':'OFF'} / ${settingsCache.tts_on?'ON':'OFF'}`;
+    };
+    loadSettings().then(load);
     setInterval(load, 10000);
   </script>
 </body>

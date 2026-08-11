@@ -17,13 +17,26 @@ from monte_carlo.simulator import run_monte_carlo
 STATIC = Path(__file__).resolve().parent / "static"
 STATIC.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="Borsa Bot", version="0.2.0")
+app = FastAPI(title="Borsa Bot", version="0.3.0")
 service = TradingService()
 
 
 class ExecBody(BaseModel):
     symbol: str
     approved: bool = False
+
+
+class NotificationSettingsBody(BaseModel):
+    sms_on: bool | None = None
+    push_on: bool | None = None
+    sound_on: bool | None = None
+    tts_on: bool | None = None
+    sound_volume: float | None = None
+    quiet_hours_enabled: bool | None = None
+    quiet_hours_start: str | None = None
+    quiet_hours_end: str | None = None
+    cooldown_seconds: int | None = None
+    prefs: dict | None = None
 
 
 @app.get("/api/health")
@@ -33,6 +46,11 @@ def health() -> dict:
 
 @app.get("/api/dashboard")
 def dashboard() -> dict:
+    # Monitor exits first so STOP/TP alerts reflect real fills
+    try:
+        service.monitor_exits()
+    except Exception:  # noqa: BLE001
+        pass
     return service.dashboard()
 
 
@@ -120,6 +138,65 @@ def ai_daily_report() -> dict:
         ],
         "disclaimer": "Illustrative paper report. Not investment advice. No profit guarantee. LIVE OFF.",
     }
+
+
+# --- Notification APIs (informational only; never mutate trading decisions) ---
+
+
+@app.get("/api/notifications")
+def notifications(limit: int = 50, unread_only: bool = False) -> dict:
+    return {
+        "inbox": service.alerts.log.inbox(limit=limit, unread_only=unread_only),
+        "log": service.alerts.log.recent_log(limit=limit),
+        "settings": service.alerts.settings_store.get().to_dict(),
+        "note": "SIGNAL ≠ EXECUTION. Alerts do not place orders.",
+    }
+
+
+@app.post("/api/notifications/read")
+def notifications_read(event_id: str | None = None) -> dict:
+    n = service.alerts.log.mark_read(event_id)
+    return {"ok": True, "marked": n}
+
+
+@app.get("/api/notifications/settings")
+def get_notification_settings() -> dict:
+    return service.alerts.settings_store.get().to_dict()
+
+
+@app.put("/api/notifications/settings")
+def put_notification_settings(body: NotificationSettingsBody) -> dict:
+    patch = {k: v for k, v in body.model_dump().items() if v is not None}
+    return service.alerts.settings_store.update(patch).to_dict()
+
+
+@app.post("/api/notifications/daily-summary")
+def post_daily_summary() -> dict:
+    return service.daily_summary_alert()
+
+
+@app.post("/api/notifications/test")
+def test_notification(kind: str = "BUY_SIGNAL", symbol: str = "THYAO") -> dict:
+    """Dev helper — emits a synthetic alert without placing orders."""
+    from alerts.events import AlertEventType, TradingAlertEvent
+
+    try:
+        et = AlertEventType(kind.upper())
+    except ValueError as exc:
+        raise HTTPException(400, f"unknown kind: {kind}") from exc
+    ev = TradingAlertEvent(
+        event_type=et,
+        symbol=symbol.upper(),
+        price=100.0,
+        confidence=87,
+        risk_reward=2.8,
+        stop=95.0,
+        target=110.0,
+        strategy="Test Swing",
+    )
+    ev.dedupe_key = f"TEST:{et.value}:{symbol}:{ev.event_id}"
+    service.alerts.publish(ev)
+    return {"ok": True, "event_id": ev.event_id, "type": et.value}
 
 
 @app.get("/")

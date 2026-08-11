@@ -78,6 +78,14 @@ class Settings:
     api_port: int = _i("API_PORT", 8090)
     db_path: Path = ROOT / "database" / "paper.db"
     log_dir: Path = ROOT / "logs"
+    # Alert / notification layer (never drives trading decisions)
+    sms_on: bool = _b("SMS_ON", False)
+    push_on: bool = _b("PUSH_ON", True)
+    sound_on: bool = _b("SOUND_ON", True)
+    tts_on: bool = _b("TTS_ON", True)
+    alert_cooldown_seconds: int = _i("ALERT_COOLDOWN_SECONDS", 300)
+    push_enabled: bool = _b("PUSH_ENABLED", False)
+    sms_provider: str = os.getenv("SMS_PROVIDER", "null")
 
     @property
     def is_live(self) -> bool:

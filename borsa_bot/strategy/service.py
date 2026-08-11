@@ -1,8 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import date
 
 from ai.quality import assess_signal_quality, classify_volatility_regime
+from alerts import AlertManager
+from alerts.bridge import (
+    emit_daily_summary,
+    emit_execution_exit,
+    emit_kill_switch,
+    emit_order_lifecycle,
+    emit_risk_alert,
+    emit_signal_alerts,
+)
 from alpha.engine import aggregate_alpha, run_alpha_ensemble
 from config.models import (
     CapitalMode,
@@ -62,11 +72,15 @@ class TradingService:
         self.risk = RiskEngine(self.ledger)
         self.broker = PaperBroker(self.ledger)
         self.safety = SafetyGate()
+        self.alerts = AlertManager()
         self.system_status = "OK"
         self.last_error = ""
         self.pending_approvals: dict[str, dict] = {}
         self.capital_mode = CapitalMode.NORMAL
         self.multi = MultiHorizonOrchestrator(self.provider, equity=settings.starting_cash)
+        self._last_risk_alert_reason = ""
+        self._kill_switch_alerted = False
+        self._emit_signal_alerts = True  # dashboard/scan may publish SIGNAL alerts (not fills)
 
     def multi_horizon(self) -> dict:
         self.multi.equity = self.ledger.equity()
@@ -98,6 +112,27 @@ class TradingService:
         live_ok, live_failed = self.risk.preflight_live(
             data_fresh=fresh, api_ok=True, market_open=True
         )
+        # Alert layer observes state — never changes decisions
+        if settings.kill_switch or self.capital_mode == CapitalMode.KILL_SWITCH:
+            if not self._kill_switch_alerted:
+                emit_kill_switch(self.alerts)
+                self._kill_switch_alerted = True
+        else:
+            self._kill_switch_alerted = False
+        if not fresh:
+            emit_risk_alert(self.alerts, "data feed failure / stale data")
+        if not ok and reason in {"STALE_DATA", "ABNORMAL_SPREAD", "BROKER_API_FAILURE", "DATA_FEED_FAILURE"}:
+            emit_risk_alert(self.alerts, reason)
+        if self.risk.paused and self.risk.pause_reason != self._last_risk_alert_reason:
+            detail = {
+                "max_drawdown": "Portföy drawdown limiti aşıldı. Yeni işlemler durduruldu.",
+                "weekly_loss_limit": "Haftalık zarar limiti aşıldı. Yeni işlemler durduruldu.",
+                "daily_loss_limit": "Günlük zarar limiti aşıldı. Yeni işlemler durduruldu.",
+            }.get(self.risk.pause_reason, self.risk.pause_reason)
+            if "consecutive" in (self.risk.pause_reason or ""):
+                detail = f"Ardışık kayıp limiti: {self.risk.pause_reason}"
+            emit_risk_alert(self.alerts, detail)
+            self._last_risk_alert_reason = self.risk.pause_reason
         return {
             "status": status,
             "mode": settings.mode,
@@ -114,9 +149,15 @@ class TradingService:
             "philosophy": (
                 "Sermaye koruma → risk kontrolü → yüksek olasılıklı fırsat → "
                 "risk-ayarlı getiri. NO_TRADE birinci sınıf. AI emir vermez. "
-                "Kâr garantisi yok; paper trading LIVE öncesi zorunlu."
+                "Kâr garantisi yok; paper trading LIVE öncesi zorunlu. "
+                "Bildirimler trading kararını değiştirmez (SIGNAL ≠ EXECUTION)."
             ),
             "strategy_ranking_example": example_ranking_report(),
+            "alerts": {
+                "unread": len(self.alerts.log.inbox(limit=20, unread_only=True)),
+                "sms_on": self.alerts.settings_store.get().sms_on,
+                "push_on": self.alerts.settings_store.get().push_on,
+            },
         }
 
     def tick(self) -> None:
@@ -478,6 +519,11 @@ class TradingService:
             SignalAction.ALMA: 3,
         }
         decisions.sort(key=lambda x: (order.get(x.signal, 9), -x.buy_score))
+        if self._emit_signal_alerts:
+            try:
+                emit_signal_alerts(self.alerts, decisions)
+            except Exception:  # noqa: BLE001 — alerts never break scan
+                pass
         return decisions
 
     def dashboard(self) -> dict:
@@ -632,7 +678,15 @@ class TradingService:
             )
             result = self.broker.submit(order, quote.sector)
             self.pending_approvals.pop(symbol, None)
-            return {"ok": result.ok, "result": asdict(result)}
+            emit_order_lifecycle(
+                self.alerts,
+                symbol=symbol,
+                side="BUY",
+                result=result,
+                strategy=d.decision.value,
+                price=quote.price,
+            )
+            return {"ok": result.ok, "result": asdict(result), "alert_note": "ORDER event emitted (not BUY_SIGNAL)"}
         if d.signal == SignalAction.SAT:
             rd = self.risk.evaluate_exit(symbol, SignalAction.SELL)
             if not rd.allowed:
@@ -646,5 +700,81 @@ class TradingService:
             )
             result = self.broker.submit(order, quote.sector)
             self.pending_approvals.pop(symbol, None)
-            return {"ok": result.ok, "result": asdict(result)}
+            emit_order_lifecycle(
+                self.alerts,
+                symbol=symbol,
+                side="SELL",
+                result=result,
+                strategy=d.decision.value,
+                price=quote.price,
+            )
+            return {"ok": result.ok, "result": asdict(result), "alert_note": "ORDER event emitted (not SELL_SIGNAL)"}
         return {"ok": False, "message": f"no actionable signal ({d.decision.value})"}
+
+    def monitor_exits(self) -> list[dict]:
+        """Check stop/target vs marks; on hit execute paper sell then emit EXECUTION alerts."""
+        out: list[dict] = []
+        self.tick()
+        for pos in list(self.ledger.positions()):
+            quote = self.provider.get_quote(pos.symbol)
+            self.ledger.mark_prices[pos.symbol] = quote.price
+            kind = None
+            tp_level = None
+            if pos.stop_price is not None and quote.price <= pos.stop_price:
+                kind = "STOP_LOSS"
+            elif pos.target_price is not None and quote.price >= pos.target_price:
+                kind = "TAKE_PROFIT"
+                tp_level = 1
+            if not kind:
+                continue
+            order = OrderRequest(
+                symbol=pos.symbol,
+                side="SELL",
+                quantity=pos.quantity,
+                price=quote.price,
+                reason=f"auto_exit:{kind}",
+                client_order_id=f"EXIT:{kind}:{pos.symbol}:{quote.price}",
+            )
+            result = self.broker.submit(order, pos.sector)
+            emit_order_lifecycle(
+                self.alerts, symbol=pos.symbol, side="SELL", result=result, price=quote.price, strategy=kind
+            )
+            if result.ok:
+                emit_execution_exit(
+                    self.alerts, symbol=pos.symbol, kind=kind, price=quote.price, tp_level=tp_level
+                )
+            out.append({"symbol": pos.symbol, "kind": kind, "ok": result.ok, "status": result.status})
+        return out
+
+    def daily_summary_alert(self) -> dict:
+        sells = []
+        with self.ledger._connect() as conn:
+            rows = conn.execute(
+                "SELECT symbol, pnl FROM trades WHERE side='SELL' ORDER BY id DESC LIMIT 50"
+            ).fetchall()
+            sells = [(r["symbol"], float(r["pnl"])) for r in rows]
+        winners = [p for _, p in sells if p > 0]
+        losers = [p for _, p in sells if p <= 0]
+        best = max(sells, key=lambda x: x[1]) if sells else ("—", 0)
+        worst = min(sells, key=lambda x: x[1]) if sells else ("—", 0)
+        total = len(sells)
+        wr = (len(winners) / total * 100) if total else 0.0
+        unrealized = self.ledger.holdings_value() - sum(
+            p.quantity * p.avg_cost for p in self.ledger.positions()
+        )
+        payload = {
+            "date": date.today().isoformat(),
+            "total_trades": total,
+            "winners": len(winners),
+            "losers": len(losers),
+            "win_rate": f"%{wr:.1f}",
+            "realized_pnl": round(sum(p for _, p in sells), 2),
+            "unrealized_pnl": round(unrealized, 2),
+            "drawdown_pct": round(self.ledger.drawdown_pct(), 2),
+            "best_trade": f"{best[0]} ({best[1]:.2f})",
+            "worst_trade": f"{worst[0]} ({worst[1]:.2f})",
+            "open_positions": self.ledger.open_position_count(),
+            "risk_level": self.capital_mode.value,
+        }
+        emit_daily_summary(self.alerts, payload)
+        return payload

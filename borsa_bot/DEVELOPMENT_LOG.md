@@ -64,3 +64,31 @@ Existing paper/risk/EV/dashboard already matched capital-protection philosophy. 
 
 ### Test gate
 `pytest borsa_bot/tests -q` → **22 passed**
+
+---
+
+## 2026-08-11 — Multi-channel Alert & Notification Engine (§61–80)
+
+### Architecture
+```
+TRADING EVENT → EVENT BUS → ALERT MANAGER → PRIORITY → CHANNEL ROUTER
+  → IN_APP / PUSH / SOUND / TTS / SMS → DELIVERY LOG
+```
+
+### Rules locked
+- Notifications **never** change trading decisions
+- **SIGNAL ≠ EXECUTION** (BUY_SIGNAL vs ORDER_FILLED separate)
+- Channel failures never halt paper/risk/execution
+- SMS/Push use provider stubs; no fabricated delivery without credentials
+- Secrets scrubbed from notification logs
+- Quiet hours bypass for STOP / KILL / RISK / ORDER_REJECTED
+- Cooldown + event_id dedupe across channels
+
+### Modules
+- `alerts/` — events, bus, manager, bridge, messages, log, settings, channels
+- Dashboard: `/api/notifications*`, inbox UI, sound/TTS client, settings toggles
+- `monitor_exits()` emits STOP_LOSS / TAKE_PROFIT only after paper fill
+
+### Test gate
+`pytest borsa_bot/tests -q` → **36 passed**
+

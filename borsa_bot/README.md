@@ -21,6 +21,7 @@ Kâr garantisi yoktur. Geçmiş performans geleceği garanti etmez. LIVE öncesi
 - **No DCA default:** kaybeden pozisyona ekleme yok
 - **Capital modes:** NORMAL → DEFENSIVE → HIGH_RISK → CAPITAL_PROTECTION → KILL_SWITCH
 - **Risk-adjusted strategy ranking:** yüksek getiri + yüksek DD cezalı
+- **Alerts:** uygulama içi + push/SMS stub + ses + TTS (TR); SIGNAL ≠ EXECUTION; trading’i etkilemez
 
 ## Çalıştır / Test
 
@@ -60,6 +61,7 @@ PYTHONPATH=/workspace/borsa_bot pytest borsa_bot/tests -q
 | `ai/` | Confidence / anomali / vol rejimi (emir vermez) |
 | `risk/` | Risk-based sizing, R:R≥1.5, T1–T3, pause, kill switch |
 | `execution/` | Paper broker + safety gate + duplicate koruma |
+| `alerts/` | Event bus → manager → IN_APP/PUSH/SOUND/TTS/SMS (karar etkilemez) |
 | `backtest/` | Komisyon/slippage + metrikler + look-ahead guard |
 | `paper_trading/` | Paper facade |
 | `dashboard/` | Mobil UI: skorlar, NEDEN/RİSKLER, manuel onaylı paper emir |
