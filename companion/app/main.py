@@ -7,16 +7,24 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .brain import Intent, process_deterministic
+from .brain import Intent, process
 from .config import TRAINING_PATH
 from .memory import MemoryStore, extract_memories, memory_context
-from .ollama import OllamaClient, append_training_example
+from .ollama import AiClient, append_training_example
 
 STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
 
-app = FastAPI(title="Borsa", version="0.1.0")
+app = FastAPI(title="Borsa", version="0.2.0", description="AI tabanlı borsa asistanı")
 store = MemoryStore()
-ollama = OllamaClient()
+ai = AiClient()
+
+_LABELS = {
+    "user_name": "adın",
+    "preferred_name": "hitap",
+    "risk_profile": "risk profili",
+    "watchlist": "takip listesi",
+    "city": "şehir",
+}
 
 
 class ChatRequest(BaseModel):
@@ -27,19 +35,26 @@ class ChatResponse(BaseModel):
     reply: str
     intent: str
     source: str
-    ollama: bool
+    ai: bool
+    provider: str
 
 
 class HealthResponse(BaseModel):
     status: str
-    ollama: bool
+    ai: bool
+    provider: str
     model: str
 
 
 @app.get("/api/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
-    ready = await ollama.available()
-    return HealthResponse(status="ok", ollama=ready, model=ollama.model)
+    status = await ai.status()
+    return HealthResponse(
+        status="ok",
+        ai=status.available,
+        provider=status.provider,
+        model=status.model,
+    )
 
 
 @app.get("/api/memories")
@@ -68,56 +83,58 @@ async def chat(body: ChatRequest) -> ChatResponse:
         store.upsert(key, value, importance)
 
     memories = {m.key: m.value for m in store.list_all()}
-    brain = process_deterministic(message, memories=memories)
+    brain = process(message, memories=memories, prefer_llm=True)
+    ai_status = await ai.status()
 
-    if brain.intent == Intent.MEMORY_TEACH and brain.reply:
-        reply = brain.reply
-        # If we extracted something concrete, acknowledge it.
+    reply: str
+    source: str
+    used_ai = False
+    provider = "none"
+
+    # Memory teach stays local so facts are confirmed instantly.
+    if brain.intent == Intent.MEMORY_TEACH:
         learned = extract_memories(message)
         if learned:
             key, value, _ = learned[0]
-            labels = {
-                "user_name": "adın",
-                "preferred_name": "hitap",
-                "cat_name": "kedinin adı",
-                "city": "şehir",
-            }
-            label = labels.get(key, key)
-            reply = f"Tamam — {label} olarak '{value}' kaydettim."
+            reply = f"Tamam — {_LABELS.get(key, key)} olarak '{value}' kaydettim."
+        else:
+            reply = brain.reply or "Tamam, aklımda tuttum."
         source = brain.source
-        used_ollama = False
     elif brain.reply is not None and not brain.use_llm:
         reply = brain.reply
         source = brain.source
-        used_ollama = False
+    elif ai_status.available and brain.use_llm:
+        history = [
+            {"role": m.role, "content": m.content}
+            for m in store.recent_messages(12)
+            if m.role in {"user", "assistant"}
+        ]
+        try:
+            reply, provider = await ai.chat(
+                message,
+                history=history,
+                memory_block=memory_context(store.list_all()),
+                intent=brain.intent.value,
+            )
+            source = f"ai:{provider}"
+            used_ai = True
+        except Exception:
+            reply = brain.reply or (
+                "AI model yanıt veremedi. Sorunu bir cümleyle tekrar eder misin?"
+            )
+            source = "fallback"
+            provider = "none"
     else:
-        used_ollama = await ollama.available()
-        if used_ollama:
-            history = [
-                {"role": m.role, "content": m.content}
-                for m in store.recent_messages(12)
-                if m.role in {"user", "assistant"}
-            ]
-            try:
-                reply = await ollama.chat(
-                    message,
-                    history=history,
-                    memory_block=memory_context(store.list_all()),
-                )
-                source = "ollama"
-            except Exception:
-                reply = (
-                    "Model şu an yanıt veremedi. Kısa tutayım: sorununu bir cümleyle tekrar eder misin?"
-                )
-                source = "fallback"
-                used_ollama = False
+        if brain.reply:
+            reply = brain.reply
+            source = brain.source
         else:
             reply = (
-                "Ollama bağlı değil; şimdilik yerel beynimle yanıtlıyorum. "
-                "Kısa soru sor veya bana bir şey öğret (ör. 'Benim adım Mehmet')."
+                "AI şu an bağlı değil. Ollama çalıştır veya OPENAI_API_KEY ekle. "
+                "Şimdilik risk profilini / takip listeni kaydedebilirim "
+                "(ör. 'Risk tercihim orta', 'Takip ettiğim hisseler: THYAO, ASELS')."
             )
             source = "offline"
-            used_ollama = False
 
     store.add_message("user", message)
     store.add_message("assistant", reply)
@@ -127,7 +144,8 @@ async def chat(body: ChatRequest) -> ChatResponse:
         reply=reply,
         intent=brain.intent.value,
         source=source,
-        ollama=used_ollama,
+        ai=used_ai,
+        provider=provider,
     )
 
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Borsa</title>
+  <title>Borsa — AI Asistan</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
@@ -14,15 +14,15 @@
   <main class="shell">
     <header class="brand">
       <p class="brand__mark">Borsa</p>
-      <p class="brand__line">Yerel sohbet arkadaşı</p>
-      <p class="status" id="status">Bağlantı kontrol ediliyor…</p>
+      <p class="brand__line">AI tabanlı borsa asistanı</p>
+      <p class="status" id="status">AI bağlantısı kontrol ediliyor…</p>
     </header>
 
     <section class="stage" aria-label="Sohbet">
       <div class="transcript" id="transcript" role="log" aria-live="polite"></div>
       <form class="composer" id="composer">
         <label class="sr-only" for="message">Mesaj</label>
-        <textarea id="message" name="message" rows="1" placeholder="Bir şey söyle…" required></textarea>
+        <textarea id="message" name="message" rows="1" placeholder="Hisse, risk veya portföy sor…" required></textarea>
         <button type="submit" id="send">Gönder</button>
       </form>
     </section>

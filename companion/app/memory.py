@@ -151,9 +151,20 @@ NAME_PATTERNS: list[tuple[re.Pattern[str], str, int]] = [
         90,
     ),
     (
-        re.compile(r"kedimin\s+adı\s+([A-Za-zÇĞİÖŞÜçğıöşü]{2,30})\b", re.I),
-        "cat_name",
-        85,
+        re.compile(
+            r"risk\s*(?:tercihim|profilim)?\s*:?\s*(düşük|orta|yüksek|agresif|muhafazak[aâ]r)",
+            re.I,
+        ),
+        "risk_profile",
+        88,
+    ),
+    (
+        re.compile(
+            r"(?:takip ettiğim hisseler?|watchlist|izlediğim)\s*:?\s*([A-Za-z0-9ÇĞİÖŞÜçğıöşü ,./-]{2,80})",
+            re.I,
+        ),
+        "watchlist",
+        86,
     ),
     (
         re.compile(
@@ -192,8 +203,7 @@ def extract_memories(text: str) -> list[tuple[str, str, int]]:
             value = match.group(1).strip()
         if not value or value.casefold() in _QUESTION_TOKENS:
             continue
-        if "?" in raw and key in {"user_name", "cat_name", "preferred_name"}:
-            # Avoid treating recall questions as teaching statements.
+        if "?" in raw and key in {"user_name", "preferred_name", "risk_profile", "watchlist"}:
             continue
         found.append((key, value, importance))
     return found

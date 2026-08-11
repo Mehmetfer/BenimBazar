@@ -22,9 +22,11 @@ async function refreshStatus() {
   try {
     const res = await fetch("/api/health");
     const data = await res.json();
-    statusEl.textContent = data.ollama
-      ? `Ollama hazır · ${data.model}`
-      : "Yerel mod · Ollama bağlı değil";
+    if (data.ai) {
+      statusEl.textContent = `AI hazır · ${data.provider} · ${data.model}`;
+    } else {
+      statusEl.textContent = "AI çevrimdışı · Ollama veya OPENAI_API_KEY gerekli";
+    }
   } catch {
     statusEl.textContent = "Sunucuya ulaşılamadı";
   }
@@ -49,12 +51,16 @@ composer.addEventListener("submit", async (event) => {
       throw new Error("İstek başarısız");
     }
     const data = await res.json();
-    addBubble("assistant", data.reply, `${data.intent} · ${data.source}`);
+    const meta = data.ai
+      ? `${data.intent} · ${data.provider}`
+      : `${data.intent} · ${data.source}`;
+    addBubble("assistant", data.reply, meta);
   } catch (error) {
     addBubble("assistant", "Bir sorun oldu. Biraz sonra tekrar dene.");
   } finally {
     sendButton.disabled = false;
     messageInput.focus();
+    refreshStatus();
   }
 });
 
@@ -67,6 +73,6 @@ messageInput.addEventListener("keydown", (event) => {
 
 addBubble(
   "assistant",
-  "Merhaba. Ben Borsa. Yerelde çalışırım — bana adını söyle, aklımda tutayım."
+  "Merhaba. Ben Borsa — AI tabanlı borsa asistanın. Yatırım tavsiyesi vermem; hisse, risk ve portföyü birlikte çerçeveleyebiliriz."
 );
 refreshStatus();

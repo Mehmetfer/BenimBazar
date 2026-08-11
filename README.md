@@ -1,6 +1,6 @@
 # Borsa
 
-Yerel AI sohbet arkadaşı. Windows WinForms kodu (`Services/`, `Application/`) arşiv olarak duruyor; yeni çalışan uygulama `companion/` altında.
+AI tabanlı Türkçe borsa asistanı. Yanıtlar Ollama veya OpenAI uyumlu API üzerinden üretilir.
 
 ## Hızlı başlangıç
 
@@ -11,21 +11,29 @@ bash scripts/dev.sh
 
 Tarayıcı: http://127.0.0.1:8000
 
-## Özellikler
+## AI bağlantısı
 
-- Türkçe sohbet arayüzü
-- Yerel bellek (SQLite) — ad, kedi adı vb. hatırlar
-- Selamlaşma, empati ve basit matematik için deterministik yanıtlar
-- Ollama bağlıysa LLM cevapları (`OLLAMA_MODEL`, varsayılan `qwen2.5:3b`)
-- Her sohbet çifti eğitim verisine yazılır: `companion/data/training/borsa_dataset.jsonl`
-
-## Ollama (isteğe bağlı)
-
+### Seçenek A — Yerel Ollama
 ```bash
 ollama pull qwen2.5:3b
 ```
 
-Ollama yoksa uygulama **yerel modda** çalışmaya devam eder.
+### Seçenek B — OpenAI uyumlu API
+```bash
+export OPENAI_API_KEY=sk-...
+# isteğe bağlı:
+# export OPENAI_BASE_URL=https://api.openai.com/v1
+# export OPENAI_MODEL=gpt-4o-mini
+```
+
+`OPENAI_API_KEY` varsa OpenAI tercih edilir; yoksa Ollama kullanılır.
+
+## Özellikler
+
+- AI-first sohbet (piyasa / hisse / risk / portföy)
+- Yerel bellek (ad, risk profili, takip listesi)
+- Yatırım tavsiyesi vermez; çerçeve ve eğitim odaklıdır
+- Eğitim verisi: `companion/data/training/borsa_dataset.jsonl`
 
 ## Test
 
@@ -38,6 +46,9 @@ pytest companion/tests -q
 
 | Değişken | Varsayılan | Açıklama |
 |----------|------------|----------|
-| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama API |
-| `OLLAMA_MODEL` | `qwen2.5:3b` | Model adı |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Yerel Ollama |
+| `OLLAMA_MODEL` | `qwen2.5:3b` | Ollama modeli |
+| `OPENAI_API_KEY` | — | Varsa AI sağlayıcı olarak kullanılır |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Uyumlu API kökü |
+| `OPENAI_MODEL` | `gpt-4o-mini` | Bulut model |
 | `BORSA_DATA` | `companion/data` | Veri klasörü |
