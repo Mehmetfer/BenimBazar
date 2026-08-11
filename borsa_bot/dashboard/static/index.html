@@ -243,6 +243,19 @@
       const dec = u.final_decision || u.decision || u.signal;
       const star = u.is_favorite ? '★' : '☆';
       const badge = u.favorite_portfolio_badge ? '★ FAVORİ + PORTFÖYDE' : (u.is_favorite ? '★ FAVORİ' : '');
+      const fc = u.ai_forecast || [];
+      const rel = u.ai_reliability || {};
+      const fcHtml = fc.length ? `<div class="why" style="margin-top:6px">
+        <b>AI FORECAST</b> <span style="color:var(--mute)">(${u.forecast_bias||'MODEL_FORECAST'})</span><br>
+        ${fc.map(r => `${r.horizon}: ${r.arrow||''} ${r.pct_base!=null?(r.pct_base>=0?'+':'')+Number(r.pct_base).toFixed(1)+'%':'—'}
+          · <span title="Tahmin olasılığı (mevcut setup)">Tahmin olasılığı %${r.tahmin_olasiligi??'—'}</span>`).join('<br>')}
+        <div style="margin-top:4px"><b>AI RELIABILITY</b> ${rel.overall_grade||'—'}
+          · <span title="Geçmiş doğruluk (gerçek sonuçlar)">Geçmiş doğruluk %${rel.gecmis_dogruluk??'—'}</span>
+          · n=${rel.sample_size??0} (${rel.sample_tier||'—'})
+          ${rel.degradation_alert?' · <span style="color:#c44">DEGRADATION</span>':''}
+        </div>
+        <div style="color:var(--mute);font-size:.72rem;margin-top:2px">TAHMİN OLASILIĞI ≠ GEÇMİŞ DOĞRULUK</div>
+      </div>` : '';
       return `<div class="row">
         <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
           <div style="display:flex;gap:8px;align-items:center">
@@ -259,6 +272,7 @@
           <div>R/R <b>${ap.risk_reward??tp.risk_reward??'—'}</b></div><div>SEKTÖR <b>${u.sector||'—'}</b></div>
         </div>
         ${u.user_note?`<div class="why">Not: ${u.user_note}</div>`:''}
+        ${fcHtml}
         <div class="why"><b>NEDEN:</b> ${(u.reasons||[]).slice(0,4).join(' · ') || '—'}</div>
         ${(u.signal==='AL'||u.signal==='SAT') ? `<button class="btn" data-sym="${u.symbol}">Paper ${u.signal} (Onaylı)</button>`:''}
       </div>`;

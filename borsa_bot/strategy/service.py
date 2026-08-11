@@ -65,6 +65,7 @@ from favorites import (
     run_deeper_analysis,
     sort_rank_key,
 )
+from prediction import PredictionTrackingService
 
 
 def _to_exec_signal(decision: SignalAction) -> SignalAction:
@@ -86,6 +87,8 @@ class TradingService:
         self.safety = SafetyGate()
         self.alerts = AlertManager()
         self.favorites = FavoritesStore()
+        # Prediction tracking MEASURES only — never alters Risk/Execution decisions
+        self.predictions = PredictionTrackingService(settings=settings, alert_manager=self.alerts)
         self.system_status = "OK"
         self.last_error = ""
         self.pending_approvals: dict[str, dict] = {}
@@ -96,6 +99,7 @@ class TradingService:
         self._emit_signal_alerts = True  # dashboard/scan may publish SIGNAL alerts (not fills)
         self._last_favorite_scan_ts = 0.0
         self._favorite_deeper_cache: dict[str, dict] = {}
+        self._prediction_cards: dict[str, dict] = {}
 
     def multi_horizon(self) -> dict:
         self.multi.equity = self.ledger.equity()
@@ -165,7 +169,8 @@ class TradingService:
                 "Sermaye koruma → risk kontrolü → yüksek olasılıklı fırsat → "
                 "risk-ayarlı getiri. NO_TRADE birinci sınıf. AI emir vermez. "
                 "Kâr garantisi yok; paper trading LIVE öncesi zorunlu. "
-                "Bildirimler trading kararını değiştirmez (SIGNAL ≠ EXECUTION)."
+                "Bildirimler trading kararını değiştirmez (SIGNAL ≠ EXECUTION). "
+                "Prediction tracking ÖLÇER; TAHMİN OLASILIĞI ≠ GEÇMİŞ DOĞRULUK."
             ),
             "strategy_ranking_example": example_ranking_report(),
             "alerts": {
@@ -180,6 +185,17 @@ class TradingService:
 
     def scan(self) -> list[SymbolDecision]:
         self.tick()
+        # Evaluate matured forecasts against current marks (measurement only)
+        try:
+            def _px(sym: str) -> float | None:
+                try:
+                    return float(self.provider.get_quote(sym).price)
+                except Exception:  # noqa: BLE001
+                    return None
+
+            self.predictions.evaluate_due(_px)
+        except Exception:  # noqa: BLE001
+            pass
         regime = detect_regime(self.provider)
         index_bars = self.provider.get_bars("XU100", 220)
         index_ind = compute_indicators(index_bars)
@@ -599,6 +615,40 @@ class TradingService:
                     self._favorite_deeper_cache[symbol] = deeper.to_dict()
                 except Exception:  # noqa: BLE001
                     pass
+
+            # Prediction tracking — record immutable forecast (MEASURES; does not change decision)
+            try:
+                pred = self.predictions.record_prediction(
+                    symbol=symbol,
+                    price=quote.price,
+                    signal=decision.value,
+                    confidence=float(bundle.ai_confidence),
+                    probability=float(opp.p_win if opp else max(0.4, bundle.ai_confidence / 100.0)),
+                    ind=ind,
+                    regime=regime,
+                    sector=quote.sector or "",
+                    strategy=strategy_label,
+                    opp=opp,
+                    plan=ai_plan,
+                    is_favorite=symbol in fav_set,
+                    features_snapshot={
+                        "expected_return_pct": round(opp.expected_return_pct, 4) if opp else None,
+                        "expected_value": round(opp.expected_value, 4) if opp else None,
+                        "false_breakout": bool(pa.false_breakout),
+                        "volume_weak": not bool(pa.volume_confirmed),
+                        "news_block": bool(news_block),
+                        "atr": round(ind.atr14, 4),
+                        "rsi": round(ind.rsi14, 2),
+                        "structure": getattr(ind, "structure", None),
+                        "final_decision": final_decision_str,
+                    },
+                )
+                card = self.predictions.symbol_card(symbol, latest=pred)
+                self._prediction_cards[symbol] = card
+                setattr(d, "_prediction_card", card)
+            except Exception:  # noqa: BLE001 — tracking never breaks scan
+                pass
+
             decisions.append(d)
             self.ledger.log_decision(
                 {
@@ -656,6 +706,8 @@ class TradingService:
                     self.favorites,
                     decisions,
                     favorite_voice=settings.favorite_voice_alert,
+                    forecast_cards=self._prediction_cards,
+                    prediction_formatter=self.predictions.format_favorite_forecast_message,
                 )
                 plans = {d.symbol: d.ai_trade_plan for d in decisions if d.ai_trade_plan}
                 check_favorite_price_alerts(self.alerts, self.favorites, marks, plans)
@@ -689,6 +741,10 @@ class TradingService:
                     "confidence": f.get("ai_confidence"),
                     "priority_score": f.get("priority_score"),
                     "badge": "FAVORİ + PORTFÖYDE" if f.get("favorite_portfolio_badge") else "FAVORİ",
+                    "ai_reliability_grade": (f.get("ai_reliability") or {}).get("overall_grade"),
+                    "gecmis_dogruluk": f.get("gecmis_dogruluk"),
+                    "tahmin_olasiligi": f.get("tahmin_olasiligi"),
+                    "forecast_bias": f.get("forecast_bias"),
                 }
                 for f in favorites_sorted[:12]
             ],
@@ -820,6 +876,22 @@ class TradingService:
             base["ai_trade_plan"] = ai_plan_to_dict(d.ai_trade_plan)
         if fav and d.symbol in self._favorite_deeper_cache:
             base["deeper"] = self._favorite_deeper_cache[d.symbol]
+        # AI FORECAST + AI RELIABILITY (METRIC 1 vs METRIC 2 kept distinct)
+        card = getattr(d, "_prediction_card", None) or self._prediction_cards.get(d.symbol)
+        if card is None:
+            try:
+                card = self.predictions.symbol_card(d.symbol)
+            except Exception:  # noqa: BLE001
+                card = None
+        if card:
+            base["ai_forecast"] = card.get("ai_forecast")
+            base["ai_reliability"] = card.get("ai_reliability")
+            base["forecast_bias"] = card.get("forecast_bias")
+            base["forecast_decomposition"] = card.get("decomposition")
+            base["prediction_metric_note"] = card.get("principle")
+            # Explicit UI labels
+            base["tahmin_olasiligi"] = card.get("current_forecast_probability")
+            base["gecmis_dogruluk"] = (card.get("ai_reliability") or {}).get("gecmis_dogruluk")
         return base
 
     def favorites_view(self, sort: str = "PRIORITY", group: str | None = None) -> dict:
@@ -862,9 +934,13 @@ class TradingService:
             "ok": True,
             "detail": ser,
             "timeline": self.favorites.timeline(symbol),
+            "prediction_history": self.predictions.history(symbol, limit=30),
+            "prediction_timeline": self.predictions.timeline(symbol, limit=40),
+            "ai_forecast": ser.get("ai_forecast"),
+            "ai_reliability": ser.get("ai_reliability"),
             "price_alerts": [a.__dict__ for a in self.favorites.list_price_alerts(symbol)],
             "is_favorite": self.favorites.is_favorite(symbol),
-            "principle": "FAVORITE ≠ BUY",
+            "principle": "FAVORITE ≠ BUY · TAHMİN OLASILIĞI ≠ GEÇMİŞ DOĞRULUK",
         }
 
     def execute_signal(self, symbol: str, approved: bool = False) -> dict:

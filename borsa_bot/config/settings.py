@@ -88,6 +88,12 @@ class Settings:
     sms_provider: str = os.getenv("SMS_PROVIDER", "null")
     favorite_voice_alert: bool = _b("FAVORITE_VOICE_ALERT", True)
     favorite_scan_boost: bool = _b("FAVORITE_SCAN_BOOST", True)
+    # Prediction tracking / calibration (§104) — measurement only
+    prediction_model_version: str = os.getenv("PREDICTION_MODEL_VERSION", "1.0.0")
+    pred_sample_insufficient: int = _i("PRED_SAMPLE_INSUFFICIENT", 50)
+    pred_sample_provisional: int = _i("PRED_SAMPLE_PROVISIONAL", 100)
+    pred_sample_validated: int = _i("PRED_SAMPLE_VALIDATED", 500)
+    prediction_degradation_drop_pp: float = _f("PRED_DEGRADATION_DROP_PP", 10.0)
 
     @property
     def is_live(self) -> bool:

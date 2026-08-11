@@ -12,11 +12,14 @@ def emit_favorite_signal_alerts(
     decisions: list[SymbolDecision],
     *,
     favorite_voice: bool = True,
+    forecast_cards: dict | None = None,
+    prediction_formatter=None,
 ) -> None:
     """Favorite-specific alerts. Does not change trading decisions."""
     fav_syms = store.symbols()
     if not fav_syms:
         return
+    forecast_cards = forecast_cards or {}
     for d in decisions:
         if d.symbol not in fav_syms:
             continue
@@ -74,6 +77,25 @@ def emit_favorite_signal_alerts(
             t1, t2, t3 = ai.target1.price, ai.target2.price, ai.target3.price
             rr = ai.risk_reward
 
+        card = forecast_cards.get(d.symbol) or getattr(d, "_prediction_card", None)
+        forecast_block = ""
+        if card and prediction_formatter:
+            forecast_block = "\n\n" + prediction_formatter(d.symbol, decision, card)
+        elif card:
+            lines = ["", "AI FORECAST"]
+            for row in card.get("ai_forecast") or []:
+                pct = float(row.get("pct_base") or 0)
+                sign = "+" if pct >= 0 else ""
+                lines.append(
+                    f"{row.get('horizon')}: {sign}{pct:.1f}% "
+                    f"(Tahmin olasılığı %{row.get('tahmin_olasiligi', 0)})"
+                )
+            rel = card.get("ai_reliability") or {}
+            lines.append(f"AI güvenilirlik: {rel.get('overall_grade', '—')}")
+            if rel.get("gecmis_dogruluk") is not None:
+                lines.append(f"Geçmiş doğruluk: %{rel.get('gecmis_dogruluk')}")
+            forecast_block = "\n".join(lines)
+
         title = f"★ FAVORİ SİNYALİ — {d.symbol}"
         msg = (
             f"★ FAVORİ SİNYALİ\n"
@@ -85,6 +107,7 @@ def emit_favorite_signal_alerts(
             f"Confidence: {int(d.ai_confidence)}\n"
             f"R/R: 1:{rr if rr is not None else '—'}\n"
             f"FAVORİ HİSSENDE SİNYAL OLUŞTU. Favori ≠ otomatik AL."
+            f"{forecast_block}"
         )
         tts = (
             f"Favori hisseniz {d.symbol} için {decision.replace('_', ' ').lower()} sinyali oluştu."
@@ -121,6 +144,8 @@ def emit_favorite_signal_alerts(
                     "favorite": True,
                     "push_body": msg,
                     "sms_ascii": f"FAV {decision} {d.symbol} | SL {stop} | TP {t1} | Conf {int(d.ai_confidence)}"[:160],
+                    "ai_forecast": (card or {}).get("ai_forecast"),
+                    "ai_reliability_grade": ((card or {}).get("ai_reliability") or {}).get("overall_grade"),
                 },
                 dedupe_key=f"FAV_SIGNAL:{d.symbol}:{decision}",
             )

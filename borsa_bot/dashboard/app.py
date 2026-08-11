@@ -305,6 +305,78 @@ def favorites_detail(symbol: str) -> dict:
     return service.favorite_detail(symbol.upper())
 
 
+# --- Prediction Tracking (§104) — MEASURES only; TAHMİN OLASILIĞI ≠ GEÇMİŞ DOĞRULUK ---
+
+
+@app.get("/api/predictions/report")
+def predictions_report(
+    symbol: str | None = None,
+    strategy: str | None = None,
+    horizon: str | None = None,
+    model_version: str | None = None,
+    regime: str | None = None,
+    sector: str | None = None,
+) -> dict:
+    from prediction.rating import calibration_buckets
+
+    rows = service.predictions.store.list_evaluations(
+        symbol=symbol.upper() if symbol else None,
+        strategy=strategy,
+        horizon=horizon,
+        model_version=model_version,
+        regime=regime,
+        sector=sector,
+    )
+    rep = service.predictions.reliability_report(
+        symbol=symbol.upper() if symbol else None,
+        strategy=strategy,
+        horizon=horizon,
+        model_version=model_version,
+        regime=regime,
+        sector=sector,
+    )
+    return {
+        **rep.to_dict(),
+        "calibration_buckets": calibration_buckets(rows),
+        "principle": "TAHMİN OLASILIĞI ≠ GEÇMİŞ DOĞRULUK. Prediction tracking does not decide trades.",
+    }
+
+
+@app.get("/api/predictions/leaderboard")
+def predictions_leaderboard(group: str = "strategy") -> dict:
+    board = service.predictions.leaderboard(group_key=group)
+    champ = service.predictions.champion(group_key="model_version")
+    return {
+        "leaderboard": board,
+        "champion": champ,
+        "note": "Champion requires VALIDATED+ out-of-sample style sample; no degradation.",
+    }
+
+
+@app.get("/api/predictions/{symbol}")
+def predictions_symbol(symbol: str) -> dict:
+    card = service.predictions.symbol_card(symbol.upper())
+    return {
+        **card,
+        "history": service.predictions.history(symbol.upper(), limit=40),
+        "timeline": service.predictions.timeline(symbol.upper(), limit=40),
+    }
+
+
+@app.post("/api/predictions/evaluate")
+def predictions_evaluate() -> dict:
+    """Force evaluation of due horizons using current provider prices."""
+
+    def _px(sym: str) -> float | None:
+        try:
+            return float(service.provider.get_quote(sym).price)
+        except Exception:  # noqa: BLE001
+            return None
+
+    n = service.predictions.evaluate_due(_px)
+    return {"ok": True, "evaluated": n}
+
+
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
