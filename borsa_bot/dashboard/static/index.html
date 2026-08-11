@@ -218,6 +218,13 @@
       <div id="level7Diag" class="meta" style="margin-top:6px">—</div>
       <button class="more" id="level7CycleBtn" type="button" style="margin-top:8px">L7 Research Cycle</button>
     </div>
+    <div class="card" style="cursor:default" id="level8Card">
+      <div class="why"><b>LEVEL 8 — CONTINUOUS LEARNING</b></div>
+      <div id="level8Body" class="meta" style="margin-top:8px">—</div>
+      <div id="level8Stats" class="meta" style="margin-top:6px">—</div>
+      <button class="more" id="level8CycleBtn" type="button" style="margin-top:8px">L8 Hourly</button>
+      <button class="more" id="level8AcceptBtn" type="button" style="margin-top:8px;margin-left:6px">Acceptance Chain</button>
+    </div>
     <div class="card" style="cursor:default">
       <div class="why"><b>AI PERFORMANCE</b> — ana sayfada gösterilmez.</div>
       <div id="aiPerf" class="why" style="margin-top:8px">Yükleniyor…</div>
@@ -947,6 +954,16 @@
       const dg = await (await fetch('/api/level7/diagnostics')).json();
       const bad = ((dg.diagnostics||{}).what_am_i_doing_badly||[]).slice(0,3).join(' · ')||'—';
       document.getElementById('level7Diag').textContent = 'Self-diag: '+bad;
+      const l8 = await (await fetch('/api/level8/status')).json();
+      const sc8 = (l8.scorecard||(l8.last_cycle||{}).scorecard)||{};
+      const st8 = sc8.stats||{};
+      document.getElementById('level8Body').innerHTML =
+        `CL Score <b>${sc8.continuous_learning_score??'—'}</b> · ${sc8.maturity_label||''}<br>`+
+        `Research ${sc8.research_score??'—'} · SelfDiag ${sc8.self_diagnostic_score??'—'} · ModelAdapt ${sc8.model_adaptation_score??'—'}<br>`+
+        `StrategyAdapt ${sc8.strategy_adaptation_score??'—'} · Data ${sc8.data_integrity??'—'} · RiskSafety ${sc8.risk_safety??'—'}<br>`+
+        `<span class="meta">full_level8_claimed=false · auto_promote=NO · risk_limits=DENIED</span>`;
+      document.getElementById('level8Stats').textContent =
+        `Exp ${st8.total_experiments??0} · ValidHyp ${st8.validated_hypotheses??0} · Rejected ${st8.rejected_hypotheses??0} · Challengers ${st8.active_challengers??0} · PromoCand ${st8.promotion_candidates??0} · Drifts ${st8.detected_drifts??0} · Patterns ${st8.learned_patterns??0} · RootCauses ${st8.root_causes??0}`;
     }catch(e){
       document.getElementById('aiDecisionBody').textContent = 'AI API yok';
     }
@@ -985,6 +1002,20 @@
   if(l7btn) l7btn.onclick=async()=>{
     document.getElementById('level7Body').textContent='L7 cycle…';
     await fetch('/api/level7/cycle',{method:'POST'});
+    await loadAutonomy();
+  };
+  const l8btn=document.getElementById('level8CycleBtn');
+  if(l8btn) l8btn.onclick=async()=>{
+    document.getElementById('level8Body').textContent='L8 cycle…';
+    await fetch('/api/level8/cycle?period=HOURLY',{method:'POST'});
+    await loadAutonomy();
+  };
+  const l8acc=document.getElementById('level8AcceptBtn');
+  if(l8acc) l8acc.onclick=async()=>{
+    document.getElementById('level8Stats').textContent='Acceptance chain…';
+    const r=await (await fetch('/api/level8/acceptance',{method:'POST'})).json();
+    document.getElementById('level8Stats').textContent=
+      `Acceptance ${r.acceptance?.status||'?'} · auto_promoted=${r.auto_promoted} · live=${r.live_unlocked}`;
     await loadAutonomy();
   };
   document.getElementById('moreBtn').onclick=()=>{showAll=true; renderHome();};

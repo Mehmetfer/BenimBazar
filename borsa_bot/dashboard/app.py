@@ -945,6 +945,91 @@ def level7_diagnostics() -> dict:
     }
 
 
+@app.get("/api/level8/status")
+def level8_status() -> dict:
+    l8 = getattr(engine.ai, "level8", None)
+    if l8 is None:
+        return {"ok": False, "reason": "level8_unavailable"}
+    return {"ok": True, **l8.status()}
+
+
+@app.post("/api/level8/cycle")
+def level8_cycle(period: str = "HOURLY") -> dict:
+    l8 = getattr(engine.ai, "level8", None)
+    if l8 is None:
+        raise HTTPException(503, "level8_unavailable")
+    st = engine.ai.status()
+    last = st.get("last_cycle") or {}
+    out = l8.run_period(
+        period,
+        context={**(last.get("context") or {}), "data_valid": True, "prediction_tier": (last.get("learning") or {}).get("sample_tier")},
+        metrics={
+            "data_quality": 90,
+            "market_regime": (last.get("regime") or {}).get("primary"),
+            "what_worked": "Structured debate + fail-closed data gates",
+            "what_failed": "Insufficient calibrated prediction sample",
+            "test_next": "Volume confirmation ablation by regime",
+        },
+    )
+    return {"ok": True, "cycle": out, "risk_bypass": False, "auto_promoted": False}
+
+
+@app.post("/api/level8/acceptance")
+def level8_acceptance() -> dict:
+    """Run full continuous-learning acceptance chain (sandbox; no broker)."""
+    l8 = getattr(engine.ai, "level8", None)
+    if l8 is None:
+        raise HTTPException(503, "level8_unavailable")
+    out = l8.run_acceptance_chain()
+    return {"ok": True, "acceptance": out, "auto_promoted": False, "live_unlocked": False}
+
+
+@app.get("/api/level8/replay/{decision_id}")
+def level8_replay(decision_id: str) -> dict:
+    l8 = getattr(engine.ai, "level8", None)
+    if l8 is None:
+        raise HTTPException(503, "level8_unavailable")
+    return l8.snapshots.replay(decision_id)
+
+
+@app.get("/api/level8/knowledge")
+def level8_knowledge() -> dict:
+    l8 = getattr(engine.ai, "level8", None)
+    if l8 is None:
+        raise HTTPException(503, "level8_unavailable")
+    return {"ok": True, "knowledge": l8.knowledge.list_all(50), "note": "stale marked not deleted"}
+
+
+@app.get("/api/level8/drift")
+def level8_drift() -> dict:
+    l8 = getattr(engine.ai, "level8", None)
+    if l8 is None:
+        raise HTTPException(503, "level8_unavailable")
+    return {"ok": True, "open": l8.drift.list_open(50), "derate": l8.drift.derate()}
+
+
+@app.get("/api/level8/reports")
+def level8_reports(period: str | None = None) -> dict:
+    l8 = getattr(engine.ai, "level8", None)
+    if l8 is None:
+        raise HTTPException(503, "level8_unavailable")
+    return {"ok": True, "reports": l8.reports.list_reports(period=period, limit=30)}
+
+
+class Level8FeedbackBody(BaseModel):
+    decision_id: str
+    label: str
+    note: str = ""
+
+
+@app.post("/api/level8/feedback")
+def level8_feedback(body: Level8FeedbackBody) -> dict:
+    l8 = getattr(engine.ai, "level8", None)
+    if l8 is None:
+        raise HTTPException(503, "level8_unavailable")
+    return l8.add_human_feedback(body.decision_id, body.label, note=body.note)
+
+
 @app.get("/api/models")
 def list_models() -> dict:
     from ai.model_registry import model_registry

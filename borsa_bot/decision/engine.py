@@ -36,6 +36,11 @@ try:
 except Exception:  # noqa: BLE001
     Level7Engine = None  # type: ignore[misc, assignment]
 
+try:
+    from level8.engine import ContinuousLearningEngine
+except Exception:  # noqa: BLE001
+    ContinuousLearningEngine = None  # type: ignore[misc, assignment]
+
 
 @dataclass
 class AIDecisionCycleReport:
@@ -55,6 +60,7 @@ class AIDecisionCycleReport:
     learning: dict[str, Any] = field(default_factory=dict)
     command_center: dict[str, Any] = field(default_factory=dict)
     level7: dict[str, Any] = field(default_factory=dict)
+    level8: dict[str, Any] = field(default_factory=dict)
     top_card: dict[str, Any] | None = None
     ai_status: str = "ACTIVE"
     autonomy_score_hint: int = 55
@@ -89,6 +95,7 @@ class AIDecisionEngine:
         self.learning_agent = LearningAgent()
         self.outcome_agent = OutcomeAgent()
         self.level7 = Level7Engine(trading) if Level7Engine is not None else None
+        self.level8 = ContinuousLearningEngine(trading) if ContinuousLearningEngine is not None else None
         self._last: AIDecisionCycleReport | None = None
 
     def status(self) -> dict[str, Any]:
@@ -101,6 +108,7 @@ class AIDecisionEngine:
             "command_center": (last or {}).get("command_center"),
             "autonomy": (last or {}).get("autonomy"),
             "level7": (last or {}).get("level7") or (self.level7.status() if self.level7 else {}),
+            "level8": (last or {}).get("level8") or (self.level8.status() if self.level8 else {}),
             "risk_bypass": False,
             "broker_direct": False,
             "fallback": (last or {}).get("fallback") or "QUANT/TECHNICAL",
@@ -372,6 +380,48 @@ class AIDecisionEngine:
                 report.command_center["hypotheses"] = len(report.level7.get("hypotheses") or [])
             except Exception as exc:  # noqa: BLE001
                 report.level7 = {"status": "ERROR", "error": str(exc), "risk_bypass": False}
+
+        # Level 8 continuous learning — snapshot top decisions + hourly observe (propose-only)
+        if self.level8 is not None:
+            try:
+                dq8 = float(((packets[0] or {}).get("quality") or {}).get("total") or 55) if packets else 55.0
+                for p in packets[:3]:
+                    self.level8.snapshots.capture(
+                        decision_id=str(p.get("decision_id") or ""),
+                        symbol=str(p.get("symbol") or ""),
+                        market_type=str(p.get("market_type") or market_type),
+                        signal=str(p.get("action") or "WAIT"),
+                        confidence=float(p["confidence"]) if p.get("confidence") is not None else None,
+                        uncertainty="HIGH" if (p.get("quality") or {}).get("notes") else "MEDIUM",
+                        expected_value=p.get("expected_value"),
+                        entry=p.get("entry"),
+                        stop=p.get("stop"),
+                        target=p.get("target"),
+                        regime=str(p.get("regime") or reg.get("primary") or ""),
+                        timeframe="15m",
+                        features={"reason_codes": p.get("reason_codes"), "quality": (p.get("quality") or {}).get("total")},
+                        data_kind=str(ctx_d.get("data_kind") or "UNKNOWN"),
+                        provider=str(ctx_d.get("provider_class") or ""),
+                        market_snapshot={"equity": ctx_d.get("equity"), "session": ctx_d.get("market_session")},
+                    )
+                report.level8 = self.level8.run_period(
+                    "HOURLY",
+                    context=ctx_d,
+                    metrics={
+                        "data_quality": 95 if ctx_d.get("data_fresh") else 40,
+                        "signal_quality": dq8,
+                        "market_regime": reg.get("primary"),
+                        "open_positions": ctx_d.get("open_positions"),
+                        "risk": {"paused": ctx_d.get("risk_paused"), "kill_switch": ctx_d.get("kill_switch")},
+                        "prediction_accuracy": learning.get("historical_accuracy_pct"),
+                    },
+                )
+                sc8 = report.level8.get("scorecard") or {}
+                report.command_center["level8_score"] = sc8.get("continuous_learning_score")
+                report.command_center["learning_maturity"] = sc8.get("maturity_label")
+                report.command_center["open_drifts"] = len((report.level8.get("drift") or {}).get("open") or [])
+            except Exception as exc:  # noqa: BLE001
+                report.level8 = {"status": "ERROR", "error": str(exc), "risk_bypass": False}
 
         self._last = report
         return report.to_dict()
