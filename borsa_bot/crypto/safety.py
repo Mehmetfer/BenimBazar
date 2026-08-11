@@ -157,13 +157,20 @@ def gate_crypto_provider(
                 env=env,
             )
 
-    # Live MD OK for observation; crypto strategy/trade still disabled (Phase 2)
+    # Live MD OK for observation; signals only when CRYPTO_SIGNALS_ENABLED
+    from config.settings import settings as _settings
+
+    signals_ok = bool(getattr(_settings, "crypto_signals_enabled", False))
     return _gate(
         ok=True,
         code=MarketDataGateCode.OK,
-        note="crypto LIVE market data available — signals/trading not enabled (Phase 2)",
+        note=(
+            "crypto LIVE market data — signals enabled (paper only)"
+            if signals_ok
+            else "crypto LIVE market data available — signals disabled (CRYPTO_SIGNALS_ENABLED=false)"
+        ),
         env=env,
-        signals_allowed=False,
+        signals_allowed=signals_ok,
     )
 
 

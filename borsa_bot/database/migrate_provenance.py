@@ -38,6 +38,7 @@ def migrate_predictions_db(conn: sqlite3.Connection) -> dict:
             ("market_data_source", "TEXT DEFAULT 'UNKNOWN'"),
             ("prediction_source", "TEXT DEFAULT 'UNKNOWN'"),
             ("data_source_kind", "TEXT DEFAULT 'UNKNOWN'"),
+            ("market_type", "TEXT DEFAULT 'BIST'"),
         ],
     )
     added += ensure_columns(

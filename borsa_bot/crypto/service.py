@@ -1,6 +1,7 @@
 """Crypto foundation service — isolated from TradingService (BIST).
 
-Phase 2: live Paribu quotes/discovery when enabled; signals/trading still off.
+Phase 3: optional crypto signal scan when CRYPTO_SIGNALS_ENABLED.
+Live broker still disabled — paper analysis only.
 """
 
 from __future__ import annotations
@@ -9,10 +10,12 @@ from typing import Any
 
 from config.settings import settings
 from crypto.backfill import backfill_symbol
+from crypto.engine import CryptoSignalEngine
 from crypto.market import MarketType
 from crypto.providers.factory import create_crypto_provider
 from crypto.providers.paribu import ParibuMarketDataProvider
 from crypto.safety import gate_crypto_provider
+from crypto.symbols import normalize_crypto_app_symbol
 from data.validation import normalize_app_env
 
 
@@ -23,16 +26,29 @@ class CryptoFoundationService:
         self.provider = create_crypto_provider()
         self.market_type = MarketType.CRYPTO
         self._gate = None
+        self._engine: CryptoSignalEngine | None = None
 
     def refresh_provider(self) -> None:
         old = self.provider
         self.provider = create_crypto_provider()
+        self._engine = None
         close = getattr(old, "close", None)
         if callable(close):
             try:
                 close()
             except Exception:  # noqa: BLE001
                 pass
+
+    def _signal_engine(self) -> CryptoSignalEngine | None:
+        if not isinstance(self.provider, ParibuMarketDataProvider):
+            return None
+        if self._engine is None:
+            self._engine = CryptoSignalEngine(
+                provider=self.provider,
+                max_symbols=settings.crypto_scan_max_symbols,
+                record_predictions=settings.crypto_predictions_enabled,
+            )
+        return self._engine
 
     def status(self) -> dict[str, Any]:
         gate = gate_crypto_provider(
@@ -71,15 +87,17 @@ class CryptoFoundationService:
             "market_type": MarketType.CRYPTO.value,
             "crypto_enabled": settings.crypto_enabled,
             "paribu_enabled": settings.paribu_enabled,
+            "crypto_signals_enabled": settings.crypto_signals_enabled,
             "crypto_provider": settings.crypto_provider,
             "provider_id": getattr(self.provider, "provider_id", ""),
             "provider_class": type(self.provider).__name__,
             "is_stub": bool(getattr(self.provider, "is_stub", False)),
             "is_real_provider": bool(getattr(self.provider, "is_real_provider", False)),
             "has_market_data": bool(self.provider.has_market_data()),
-            "signals_allowed": False,  # Phase 2: MD only — no crypto strategy yet
+            "signals_allowed": bool(gate.signals_allowed),
             "tradeable": False,
             "live_trading": False,
+            "paper_only": True,
             "data_source": meta.to_dict(),
             "provenance": provenance,
             "gate": gate.to_dict(),
@@ -91,7 +109,7 @@ class CryptoFoundationService:
                 "title": "Kripto (Paribu)",
                 "ready": bool(self.provider.has_market_data()),
                 "message": (
-                    f"Paribu LIVE · {len(symbols)} markets · signals/trading KAPALI · BIST etkilenmez"
+                    f"Paribu LIVE · {len(symbols)} markets · signals={'ON' if gate.signals_allowed else 'OFF'} · PAPER ONLY · BIST etkilenmez"
                     if self.provider.has_market_data()
                     else (
                         "CRYPTO_ENABLED=false — kripto piyasası kapalı"
@@ -104,10 +122,24 @@ class CryptoFoundationService:
             "docs": "crypto/docs/PARIBU_API.md",
         }
 
-    def scan(self) -> list[dict[str, Any]]:
-        """Phase 2: always empty — crypto analysis/strategy is Phase 3."""
-        _ = self.status()
-        return []
+    def scan(self, symbols: list[str] | None = None) -> list[dict[str, Any]]:
+        """Crypto signal scan — empty unless CRYPTO_SIGNALS_ENABLED + live MD."""
+        eng = self._signal_engine()
+        if eng is None:
+            return []
+        return eng.scan(symbols)
+
+    def signal(self, symbol: str) -> dict[str, Any]:
+        eng = self._signal_engine()
+        if eng is None:
+            return {
+                "symbol": normalize_crypto_app_symbol(symbol),
+                "signal": "NO_TRADE",
+                "note": "provider_not_live",
+                "market_type": "CRYPTO",
+                "paper_only": True,
+            }
+        return eng.analyze_symbol(symbol).to_dict()
 
     def backfill(self, symbol: str, timeframe: str = "15m") -> dict[str, Any]:
         if not isinstance(self.provider, ParibuMarketDataProvider):
@@ -131,6 +163,7 @@ class CryptoFoundationService:
                     "default": False,
                     "path": "/api/crypto/status",
                     "ready": bool(settings.crypto_enabled and settings.paribu_enabled),
+                    "signals": bool(settings.crypto_signals_enabled),
                 },
             ],
             "active_default": MarketType.BIST.value,

@@ -104,7 +104,7 @@ class Settings:
     # Market-data contract foundation (Phase 3 readiness — no real provider yet)
     base_timeframe: str = os.getenv("BASE_TIMEFRAME", "15m")
     required_history_bars: int = _i("REQUIRED_HISTORY_BARS", 240)
-    # CRYPTO / Paribu foundation (Phase 1) — default OFF; BIST path unchanged
+    # CRYPTO / Paribu foundation — default OFF; BIST path unchanged
     crypto_enabled: bool = _b("CRYPTO_ENABLED", False)
     crypto_provider: str = os.getenv("CRYPTO_PROVIDER", "paribu")
     paribu_enabled: bool = _b("PARIBU_ENABLED", False)
@@ -113,6 +113,12 @@ class Settings:
     paribu_api_secret: str = os.getenv("PARIBU_API_SECRET", "")
     paribu_ws_enabled: bool = _b("PARIBU_WS_ENABLED", True)
     paribu_poll_interval_sec: float = _f("PARIBU_POLL_INTERVAL_SEC", 3.0)
+    # Phase 3 crypto analytics / signals (still paper-only; no live broker)
+    crypto_signals_enabled: bool = _b("CRYPTO_SIGNALS_ENABLED", False)
+    crypto_predictions_enabled: bool = _b("CRYPTO_PREDICTIONS_ENABLED", True)
+    crypto_max_exposure_pct: float = _f("CRYPTO_MAX_EXPOSURE_PCT", 15.0)
+    crypto_atr_cap_pct: float = _f("CRYPTO_ATR_CAP_PCT", 8.0)
+    crypto_scan_max_symbols: int = _i("CRYPTO_SCAN_MAX_SYMBOLS", 40)
 
     @property
     def is_live(self) -> bool:

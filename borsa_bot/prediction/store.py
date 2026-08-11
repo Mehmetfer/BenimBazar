@@ -132,6 +132,9 @@ class PredictionStore:
             mds = parse_data_source_kind(rec.market_data_source).value
             ps = parse_data_source_kind(rec.prediction_source or rec.market_data_source).value
             dsk = parse_data_source_kind(rec.data_source_kind or rec.market_data_source).value
+            mtype = (getattr(rec, "market_type", None) or "BIST").upper()
+            if mtype not in {"BIST", "CRYPTO"}:
+                mtype = "BIST"
             c.execute(
                 """
                 INSERT INTO predictions(
@@ -139,8 +142,8 @@ class PredictionStore:
                     probability, entry_price, stop_loss, target_1, target_2, target_3, strategy,
                     market_regime, sector, time_horizon_primary, model_version, strategy_version,
                     features_snapshot, forecasts_json, is_favorite,
-                    market_data_source, prediction_source, data_source_kind
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    market_data_source, prediction_source, data_source_kind, market_type
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     rec.prediction_id,
@@ -167,6 +170,7 @@ class PredictionStore:
                     mds,
                     ps,
                     dsk,
+                    mtype,
                 ),
             )
         return rec.prediction_id

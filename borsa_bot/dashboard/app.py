@@ -59,14 +59,24 @@ def crypto_status() -> dict:
 
 
 @app.get("/api/crypto/scan")
-def crypto_scan() -> dict:
-    """Phase 2: always empty signals (crypto strategy is Phase 3)."""
+def crypto_scan(limit: int = 20) -> dict:
+    """Crypto signal scan (paper analysis). Empty unless CRYPTO_SIGNALS_ENABLED."""
+    lim = max(1, min(100, int(limit)))
+    signals = crypto_service.scan()
     return {
         "market_type": "CRYPTO",
-        "signals": crypto_service.scan(),
-        "count": 0,
-        "note": "CRYPTO strategy not enabled — Phase 3",
+        "signals": signals[:lim],
+        "count": len(signals),
+        "signals_enabled": bool(settings.crypto_signals_enabled),
+        "live_trading": False,
+        "paper_only": True,
+        "note": "CRYPTO signals are paper-only — no live broker orders",
     }
+
+
+@app.get("/api/crypto/signal/{symbol}")
+def crypto_signal(symbol: str) -> dict:
+    return crypto_service.signal(symbol)
 
 
 @app.get("/api/crypto/symbols")

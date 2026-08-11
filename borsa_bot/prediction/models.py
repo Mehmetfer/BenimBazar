@@ -116,6 +116,7 @@ class PredictionRecord:
     market_data_source: str = "UNKNOWN"
     prediction_source: str = "UNKNOWN"
     data_source_kind: str = "UNKNOWN"
+    market_type: str = "BIST"  # BIST | CRYPTO — additive Phase 3
 
     def to_dict(self) -> dict:
         d = asdict(self)

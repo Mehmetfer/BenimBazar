@@ -77,10 +77,11 @@ def test_production_rejects_mock_crypto_name():
 
 
 def test_gate_live_signals_still_blocked():
-    """Phase 2: live MD may be OK but crypto signals/trading remain off."""
+    """Default CRYPTO_SIGNALS_ENABLED=false → live MD OK but signals_allowed false."""
     from tests.test_paribu_live import ORDERBOOK_SAMPLE, TICKER_SAMPLE, _client_with
 
     object.__setattr__(settings, "paribu_enabled", True)
+    object.__setattr__(settings, "crypto_signals_enabled", False)
     try:
         http = _client_with({"/market/ticker": TICKER_SAMPLE, "/orderbook": ORDERBOOK_SAMPLE})
         p = ParibuMarketDataProvider(http=http, enable_websocket=False)
@@ -90,6 +91,7 @@ def test_gate_live_signals_still_blocked():
         assert gate.code == MarketDataGateCode.OK
     finally:
         object.__setattr__(settings, "paribu_enabled", False)
+        object.__setattr__(settings, "crypto_signals_enabled", False)
 
 
 def test_crypto_service_scan_empty():
