@@ -1,4 +1,4 @@
-# Koca Kafa
+# Borsa
 
 Yerel AI sohbet arkadaşı. Windows WinForms kodu (`Services/`, `Application/`) arşiv olarak duruyor; yeni çalışan uygulama `companion/` altında.
 
@@ -17,7 +17,7 @@ Tarayıcı: http://127.0.0.1:8000
 - Yerel bellek (SQLite) — ad, kedi adı vb. hatırlar
 - Selamlaşma, empati ve basit matematik için deterministik yanıtlar
 - Ollama bağlıysa LLM cevapları (`OLLAMA_MODEL`, varsayılan `qwen2.5:3b`)
-- Her sohbet çifti eğitim verisine yazılır: `companion/data/training/koca_kafa_dataset.jsonl`
+- Her sohbet çifti eğitim verisine yazılır: `companion/data/training/borsa_dataset.jsonl`
 
 ## Ollama (isteğe bağlı)
 
@@ -40,4 +40,4 @@ pytest companion/tests -q
 |----------|------------|----------|
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama API |
 | `OLLAMA_MODEL` | `qwen2.5:3b` | Model adı |
-| `KOCA_KAFA_DATA` | `companion/data` | Veri klasörü |
+| `BORSA_DATA` | `companion/data` | Veri klasörü |

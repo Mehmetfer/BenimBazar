@@ -1,1 +1,1 @@
-"""Koca Kafa companion package."""
+"""Borsa companion package."""

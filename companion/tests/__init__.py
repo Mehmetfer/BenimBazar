@@ -1,1 +1,1 @@
-"""Koca Kafa web companion — yerel AI sohbet arkadaşı."""
+"""Borsa web companion — yerel AI sohbet arkadaşı."""

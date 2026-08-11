@@ -19,7 +19,7 @@ is_healthy() {
 }
 
 if is_healthy; then
-  echo "Koca Kafa already running on :8000"
+  echo "Borsa already running on :8000"
   exit 0
 fi
 
@@ -34,12 +34,12 @@ fi
 
 for _ in $(seq 1 30); do
   if is_healthy; then
-    echo "Koca Kafa ready on http://127.0.0.1:8000"
+    echo "Borsa ready on http://127.0.0.1:8000"
     exit 0
   fi
   sleep 0.5
 done
 
-echo "Koca Kafa failed to become healthy" >&2
+echo "Borsa failed to become healthy" >&2
 tail -n 50 "$ROOT/companion/data/uvicorn.log" >&2 || true
 exit 1

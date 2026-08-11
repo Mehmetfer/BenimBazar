@@ -67,6 +67,6 @@ messageInput.addEventListener("keydown", (event) => {
 
 addBubble(
   "assistant",
-  "Merhaba. Ben Koca Kafa. Yerelde çalışırım — bana adını söyle, aklımda tutayım."
+  "Merhaba. Ben Borsa. Yerelde çalışırım — bana adını söyle, aklımda tutayım."
 );
 refreshStatus();

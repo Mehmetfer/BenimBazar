@@ -90,7 +90,7 @@ def try_math(message: str) -> str | None:
 def greeting_reply(user_name: str | None) -> str:
     if user_name:
         return f"Merhaba {user_name}. Buradayım — ne konuşmak istersin?"
-    return "Merhaba. Ben Koca Kafa. Bugün nasılsın?"
+    return "Merhaba. Ben Borsa. Bugün nasılsın?"
 
 
 def empathy_reply(message: str) -> str:

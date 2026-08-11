@@ -14,7 +14,7 @@ from .ollama import OllamaClient, append_training_example
 
 STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
 
-app = FastAPI(title="Koca Kafa", version="0.1.0")
+app = FastAPI(title="Borsa", version="0.1.0")
 store = MemoryStore()
 ollama = OllamaClient()
 
