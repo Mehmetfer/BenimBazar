@@ -108,9 +108,11 @@ class Settings:
     crypto_enabled: bool = _b("CRYPTO_ENABLED", False)
     crypto_provider: str = os.getenv("CRYPTO_PROVIDER", "paribu")
     paribu_enabled: bool = _b("PARIBU_ENABLED", False)
-    paribu_api_base: str = os.getenv("PARIBU_API_BASE", "")
+    paribu_api_base: str = os.getenv("PARIBU_API_BASE", "https://api.paribu.com")
     paribu_api_key: str = os.getenv("PARIBU_API_KEY", "")
     paribu_api_secret: str = os.getenv("PARIBU_API_SECRET", "")
+    paribu_ws_enabled: bool = _b("PARIBU_WS_ENABLED", True)
+    paribu_poll_interval_sec: float = _f("PARIBU_POLL_INTERVAL_SEC", 3.0)
 
     @property
     def is_live(self) -> bool:

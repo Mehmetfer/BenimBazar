@@ -52,22 +52,16 @@ def test_create_crypto_provider_disabled_is_required():
     assert p.list_symbols() == []
 
 
-def test_paribu_stub_when_enabled(monkeypatch):
-    monkeypatch.setenv("PARIBU_API_BASE", "https://example.invalid")
-    p = create_crypto_provider("paribu", crypto_enabled=True, app_env="DEVELOPMENT")
-    # PARIBU_ENABLED default false → Required unless we pass via settings; factory reads settings.paribu_enabled
-    # Force stub path: provider name paribu with crypto_enabled True and patch settings field
+def test_paribu_live_provider_when_enabled(monkeypatch):
     object.__setattr__(settings, "paribu_enabled", True)
     try:
-        p = create_crypto_provider("paribu", crypto_enabled=True, app_env="DEVELOPMENT")
+        p = create_crypto_provider(
+            "paribu", crypto_enabled=True, app_env="DEVELOPMENT", enable_websocket=False
+        )
         assert isinstance(p, ParibuMarketDataProvider)
-        assert p.is_stub is True
-        assert p.is_real_provider is False
-        assert p.has_market_data() is False
-        assert p.list_symbols() == []
-        with pytest.raises(RuntimeError, match="NO_MARKET_DATA"):
-            p.get_quote("BTC/USDT")
-        assert p.get_bars("BTC/USDT") == []
+        assert p.is_stub is False
+        assert p.is_real_provider is True
+        assert p.api_base.startswith("https://")
         prov = p.provenance()
         assert prov["market_type"] == "CRYPTO"
         assert prov["provider"] == "paribu"
@@ -82,13 +76,18 @@ def test_production_rejects_mock_crypto_name():
     assert "PRODUCTION" in p.reason or "mock" in p.reason.lower()
 
 
-def test_gate_stub_no_signals():
+def test_gate_live_signals_still_blocked():
+    """Phase 2: live MD may be OK but crypto signals/trading remain off."""
+    from tests.test_paribu_live import ORDERBOOK_SAMPLE, TICKER_SAMPLE, _client_with
+
     object.__setattr__(settings, "paribu_enabled", True)
     try:
-        p = create_crypto_provider("paribu", crypto_enabled=True, app_env="DEVELOPMENT")
+        http = _client_with({"/market/ticker": TICKER_SAMPLE, "/orderbook": ORDERBOOK_SAMPLE})
+        p = ParibuMarketDataProvider(http=http, enable_websocket=False)
         gate = gate_crypto_provider(p, app_env=AppEnvironment.DEVELOPMENT, crypto_enabled=True)
+        assert gate.ok is True
         assert gate.signals_allowed is False
-        assert gate.code == MarketDataGateCode.STUB_NOT_IMPLEMENTED
+        assert gate.code == MarketDataGateCode.OK
     finally:
         object.__setattr__(settings, "paribu_enabled", False)
 

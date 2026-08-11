@@ -23,8 +23,8 @@ class CryptoSymbolRef:
 def normalize_crypto_app_symbol(raw: str | None) -> str:
     """Provider / UI variants → application symbol (BASE_QUOTE).
 
-    Accepts: BTC/USDT, BTC-USDT, BTC_USDT, btcusdt (best-effort split).
-    Does not invent Paribu-specific ids.
+    Accepts: BTC/USDT, BTC-USDT, BTC_USDT, btc_tl (Paribu wire).
+    Paribu quote `tl` stays TL; TRY aliases to TL.
     """
     if not raw:
         return ""
@@ -35,14 +35,24 @@ def normalize_crypto_app_symbol(raw: str | None) -> str:
     s = s.replace(" ", "")
     if "/" in s:
         base, _, quote = s.partition("/")
-        return f"{base}_{quote}" if base and quote else s.replace("/", "_")
+        return _join_base_quote(base, quote)
     if "-" in s:
         base, _, quote = s.partition("-")
-        return f"{base}_{quote}" if base and quote else s.replace("-", "_")
+        return _join_base_quote(base, quote)
     if "_" in s:
-        return s
-    # Ambiguous concatenated forms — leave as-is until provider map exists
+        base, _, quote = s.partition("_")
+        return _join_base_quote(base, quote)
     return s
+
+
+def _join_base_quote(base: str, quote: str) -> str:
+    base = (base or "").strip().upper()
+    quote = (quote or "").strip().upper()
+    if quote in {"TRY", "TL"}:
+        quote = "TL"
+    if not base or not quote:
+        return base or quote
+    return f"{base}_{quote}"
 
 
 def to_display_symbol(app_symbol: str) -> str:
@@ -51,6 +61,11 @@ def to_display_symbol(app_symbol: str) -> str:
         base, _, quote = sym.partition("_")
         return f"{base}/{quote}" if quote else sym
     return sym
+
+
+def to_paribu_market(app_symbol: str) -> str:
+    """Application symbol → official Paribu wire market id (lowercase base_quote)."""
+    return normalize_crypto_app_symbol(app_symbol).lower()
 
 
 def parse_crypto_symbol(raw: str | None) -> CryptoSymbolRef | None:

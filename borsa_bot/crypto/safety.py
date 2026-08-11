@@ -97,7 +97,20 @@ def gate_crypto_provider(
         return _gate(
             ok=False,
             code=MarketDataGateCode.STUB_NOT_IMPLEMENTED,
-            note="ParibuMarketDataProvider stub — NO MARKET DATA — NO CRYPTO TRADE",
+            note="Paribu stub — NO MARKET DATA — NO CRYPTO TRADE",
+            env=env,
+        )
+
+    # Trigger refresh if provider supports tick
+    try:
+        tick = getattr(provider, "tick", None)
+        if callable(tick):
+            tick()
+    except Exception as exc:  # noqa: BLE001
+        return _gate(
+            ok=False,
+            code=MarketDataGateCode.NO_MARKET_DATA,
+            note=f"PROVIDER_FAILURE: {exc}",
             env=env,
         )
 
@@ -118,23 +131,37 @@ def gate_crypto_provider(
         except ValueError:
             kind_v = DataSourceKind.UNKNOWN
 
-    if env == AppEnvironment.PRODUCTION and kind_v in {
-        DataSourceKind.SIMULATED,
-        DataSourceKind.TEST,
-        DataSourceKind.UNKNOWN,
-    }:
+    if kind_v in {DataSourceKind.SIMULATED, DataSourceKind.TEST} or (
+        env == AppEnvironment.PRODUCTION and kind_v == DataSourceKind.UNKNOWN
+    ):
         return _gate(
             ok=False,
             code=MarketDataGateCode.PRODUCTION_MARKET_DATA_VIOLATION,
-            note=f"PRODUCTION rejects mock/unknown crypto source kind={kind_v.value}",
+            note=f"rejects mock/unknown crypto source kind={kind_v.value}",
             env=env,
         )
 
-    # Foundation: even with data, crypto signals/trades not enabled in Phase 1
+    meta = None
+    try:
+        meta = provider.source_meta()
+    except Exception:  # noqa: BLE001
+        meta = None
+    if meta is not None:
+        from data.integrity import FreshnessStatus
+
+        if getattr(meta, "freshness", None) == FreshnessStatus.STALE:
+            return _gate(
+                ok=False,
+                code=MarketDataGateCode.STALE_DATA,
+                note=getattr(meta, "note", "stale crypto data"),
+                env=env,
+            )
+
+    # Live MD OK for observation; crypto strategy/trade still disabled (Phase 2)
     return _gate(
-        ok=False,
-        code=MarketDataGateCode.DATA_NOT_VERIFIED,
-        note="crypto foundation — signals not enabled until Phase 2+",
+        ok=True,
+        code=MarketDataGateCode.OK,
+        note="crypto LIVE market data available — signals/trading not enabled (Phase 2)",
         env=env,
         signals_allowed=False,
     )

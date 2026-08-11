@@ -194,12 +194,16 @@
       const banner = document.getElementById('cryptoBanner');
       banner.className = st.crypto_enabled ? 'banner warn' : 'banner sim';
       banner.textContent = (st.ui && st.ui.message) || 'CRYPTO';
-      document.getElementById('cryptoEnabled').textContent = st.crypto_enabled ? 'AÇIK (foundation)' : 'KAPALI';
+      document.getElementById('cryptoEnabled').textContent = st.crypto_enabled ? 'AÇIK' : 'KAPALI';
       document.getElementById('cryptoProv').textContent = st.provider_class || st.crypto_provider || '—';
-      document.getElementById('cryptoData').textContent = st.has_market_data ? 'VAR' : 'YOK';
+      document.getElementById('cryptoData').textContent = st.has_market_data ? (`VAR · ${st.symbol_count||0} market`) : 'YOK';
       document.getElementById('cryptoSig').textContent = st.signals_allowed ? 'AÇIK' : 'KAPALI';
       document.getElementById('cryptoMsg').textContent =
-        `market_type=${st.market_type} · provider=${(st.provenance&&st.provenance.provider)||st.provider_id} · kind=${(st.provenance&&st.provenance.data_source_kind)||'—'}`;
+        `market_type=${st.market_type} · provider=${(st.provenance&&st.provenance.provider)||st.provider_id} · kind=${(st.provenance&&st.provenance.data_source_kind)||'—'} · WS=${(st.websocket&&st.websocket.connected)?'on':'off'}`;
+      const samples = (st.sample_quotes||[]).map(q=>`${q.symbol} ${q.price}`).join(' · ');
+      document.getElementById('cryptoEmpty').textContent = samples
+        ? (`Örnek: ${samples} — Sinyal yok (Phase 3)`)
+        : 'Kripto sinyali yok (beklenen).';
     }catch(e){
       document.getElementById('cryptoBanner').className = 'banner bad';
       document.getElementById('cryptoBanner').textContent = 'CRYPTO status alınamadı';

@@ -60,13 +60,56 @@ def crypto_status() -> dict:
 
 @app.get("/api/crypto/scan")
 def crypto_scan() -> dict:
-    """Phase 1: always empty signals (no crypto strategy yet)."""
+    """Phase 2: always empty signals (crypto strategy is Phase 3)."""
     return {
         "market_type": "CRYPTO",
         "signals": crypto_service.scan(),
         "count": 0,
-        "note": "CRYPTO strategy not enabled in Phase 1",
+        "note": "CRYPTO strategy not enabled — Phase 3",
     }
+
+
+@app.get("/api/crypto/symbols")
+def crypto_symbols() -> dict:
+    st = crypto_service.status()
+    return {
+        "market_type": "CRYPTO",
+        "count": st.get("symbol_count", 0),
+        "symbols": st.get("symbols") or [],
+        "provider": st.get("provider_id"),
+        "has_market_data": st.get("has_market_data"),
+    }
+
+
+@app.get("/api/crypto/quote/{symbol}")
+def crypto_quote(symbol: str) -> dict:
+    from crypto.providers.paribu import ParibuMarketDataProvider
+    from crypto.symbols import normalize_crypto_app_symbol
+
+    if not isinstance(crypto_service.provider, ParibuMarketDataProvider):
+        raise HTTPException(503, "Paribu live provider not active")
+    try:
+        q = crypto_service.provider.get_quote(normalize_crypto_app_symbol(symbol))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(404, str(exc)) from exc
+    return {
+        "symbol": q.symbol,
+        "price": q.price,
+        "bid": q.bid,
+        "ask": q.ask,
+        "spread_pct": q.spread_pct,
+        "volume": q.volume,
+        "timestamp_utc": q.ts.isoformat() if q.ts else None,
+        "market_type": "CRYPTO",
+        "data_source_kind": q.data_source_kind,
+        "provider": q.provider,
+        "market_status": q.market_status,
+    }
+
+
+@app.get("/api/crypto/backfill/{symbol}")
+def crypto_backfill(symbol: str, timeframe: str = "15m") -> dict:
+    return crypto_service.backfill(symbol, timeframe=timeframe)
 
 
 @app.get("/api/dashboard")
