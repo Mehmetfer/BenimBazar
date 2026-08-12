@@ -1353,8 +1353,15 @@ class TradingService:
             return {"ok": result.ok, "result": asdict(result), "alert_note": "ORDER event emitted (not SELL_SIGNAL)"}
         return {"ok": False, "message": f"no actionable signal ({d.decision.value})"}
 
-    def execute_manual_paper(self, symbol: str, side: str) -> dict:
-        """Manual BIST paper BUY/SELL — signal-independent (BIST100 UI)."""
+    def execute_manual_paper(
+        self,
+        symbol: str,
+        side: str,
+        *,
+        quantity: float | None = None,
+        price: float | None = None,
+    ) -> dict:
+        """Manual BIST paper BUY/SELL — signal-independent; optional qty/price."""
         symbol = symbol.upper()
         side_u = side.upper()
         if side_u not in {"BUY", "SELL"}:
@@ -1397,38 +1404,60 @@ class TradingService:
 
         decisions = {d.symbol: d for d in self.scan()}
         d = decisions.get(symbol)
+        fill_price = float(price) if price is not None and float(price) > 0 else float(quote.price)
 
         if side_u == "BUY":
-            if self.ledger.get_position(symbol) is not None:
-                return {"ok": False, "message": "Zaten portföyde — önce SAT"}
+            custom_qty = int(quantity) if quantity is not None else None
+            if custom_qty is not None and custom_qty <= 0:
+                return {"ok": False, "message": "Adet 0'dan büyük olmalı"}
+            existing = self.ledger.get_position(symbol)
+            if existing is None and self.ledger.open_position_count() >= int(settings.max_open_positions):
+                return {"ok": False, "message": "max_open_positions"}
             bars = self.provider.get_bars(symbol, 220)
             ind = compute_indicators(bars)
             plan = d.trade_plan if d else None
-            size_mult = float(d.opportunity.position_size_mult) if d and d.opportunity else 0.75
-            rd = self.risk.evaluate_entry(
-                symbol=symbol,
-                sector=quote.sector,
-                price=quote.price,
-                ind=ind,
-                action=SignalAction.BUY,
-                plan=plan,
-                spread_pct=quote.spread_pct,
-                correlated_sector_risk=self.ledger.sector_risk_pct(quote.sector),
-                opportunity=None,
-                capital_mode=self.capital_mode,
-                size_mult=size_mult,
-            )
-            if not rd.allowed:
-                return {"ok": False, "message": rd.reason, "risk": rd.risk.value}
+            stop_price = None
+            target_price = None
+            qty = custom_qty
+            if qty is None:
+                size_mult = float(d.opportunity.position_size_mult) if d and d.opportunity else 0.75
+                rd = self.risk.evaluate_entry(
+                    symbol=symbol,
+                    sector=quote.sector,
+                    price=fill_price,
+                    ind=ind,
+                    action=SignalAction.BUY,
+                    plan=plan,
+                    spread_pct=quote.spread_pct,
+                    correlated_sector_risk=self.ledger.sector_risk_pct(quote.sector),
+                    opportunity=None,
+                    capital_mode=self.capital_mode,
+                    size_mult=size_mult,
+                )
+                if not rd.allowed:
+                    return {"ok": False, "message": rd.reason, "risk": rd.risk.value}
+                qty = int(rd.quantity)
+                stop_price = rd.stop_price
+                target_price = rd.target_price
+            else:
+                cost = qty * fill_price
+                if cost > self.ledger.cash + 1e-6:
+                    return {"ok": False, "message": f"Yetersiz bakiye — gerekli {cost:,.2f} TL"}
+                stop = fill_price - ind.atr14 * settings.atr_stop_mult
+                risk_ps = fill_price - stop
+                if risk_ps <= 0:
+                    return {"ok": False, "message": "stop_undefined"}
+                stop_price = round(stop, 2)
+                target_price = round(fill_price + risk_ps * settings.min_risk_reward, 2)
             order = OrderRequest(
                 symbol=symbol,
                 side="BUY",
-                quantity=rd.quantity,
-                price=quote.price,
-                reason="manual_bist100_buy",
-                stop_price=rd.stop_price,
-                target_price=rd.target_price,
-                client_order_id=f"MANUAL-B100-BUY:{symbol}:{utc_now().strftime('%Y%m%d%H%M%S')}",
+                quantity=float(qty),
+                price=fill_price,
+                reason="manual_ui_buy",
+                stop_price=stop_price,
+                target_price=target_price,
+                client_order_id=f"MANUAL-UI-BUY:{symbol}:{utc_now().strftime('%Y%m%d%H%M%S')}",
             )
             result = self.broker.submit(order, quote.sector)
             emit_order_lifecycle(
@@ -1436,15 +1465,15 @@ class TradingService:
                 symbol=symbol,
                 side="BUY",
                 result=result,
-                strategy="MANUAL_BIST100",
-                price=quote.price,
+                strategy="MANUAL_UI",
+                price=fill_price,
             )
             return {
                 "ok": result.ok,
                 "side": "BUY",
                 "symbol": symbol,
-                "quantity": rd.quantity,
-                "price": quote.price,
+                "quantity": qty,
+                "price": fill_price,
                 "result": asdict(result),
                 "wallet": self.paper_wallet(),
             }
@@ -1452,16 +1481,21 @@ class TradingService:
         pos = self.ledger.get_position(symbol)
         if not pos:
             return {"ok": False, "message": "Portföyde pozisyon yok"}
+        sell_qty = int(quantity) if quantity is not None else int(pos.quantity)
+        if sell_qty <= 0:
+            return {"ok": False, "message": "Adet 0'dan büyük olmalı"}
+        if sell_qty > int(pos.quantity):
+            return {"ok": False, "message": f"En fazla {int(pos.quantity)} lot satılabilir"}
         rd = self.risk.evaluate_exit(symbol, SignalAction.SELL)
         if not rd.allowed:
             return {"ok": False, "message": rd.reason}
         order = OrderRequest(
             symbol=symbol,
             side="SELL",
-            quantity=rd.quantity,
-            price=quote.price,
-            reason="manual_bist100_sell",
-            client_order_id=f"MANUAL-B100-SELL:{symbol}:{utc_now().strftime('%Y%m%d%H%M%S')}",
+            quantity=float(sell_qty),
+            price=fill_price,
+            reason="manual_ui_sell",
+            client_order_id=f"MANUAL-UI-SELL:{symbol}:{utc_now().strftime('%Y%m%d%H%M%S')}",
         )
         result = self.broker.submit(order, quote.sector)
         emit_order_lifecycle(
@@ -1469,15 +1503,15 @@ class TradingService:
             symbol=symbol,
             side="SELL",
             result=result,
-            strategy="MANUAL_BIST100",
-            price=quote.price,
+            strategy="MANUAL_UI",
+            price=fill_price,
         )
         return {
             "ok": result.ok,
             "side": "SELL",
             "symbol": symbol,
-            "quantity": rd.quantity,
-            "price": quote.price,
+            "quantity": sell_qty,
+            "price": fill_price,
             "result": asdict(result),
             "wallet": self.paper_wallet(),
         }

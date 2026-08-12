@@ -91,3 +91,50 @@ def test_manual_paper_buy_and_sell(monkeypatch):
         sell = svc.execute_manual_paper("THYAO", "SELL")
         assert sell.get("ok") is True
         assert svc.ledger.get_position("THYAO") is None
+
+
+def test_manual_paper_custom_quantity(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmp:
+        svc = TradingService()
+        db = Path(tmp) / "paper.db"
+        svc.ledger = PortfolioLedger(db_path=db)
+        svc.broker.ledger = svc.ledger
+        svc.risk.ledger = svc.ledger
+
+        class FakeQuote:
+            price = 100.0
+            sector = "Bankacılık"
+            spread_pct = 0.1
+
+        class FakeBar:
+            def __init__(self, close=100.0):
+                self.ts = None
+                self.open = self.high = self.low = self.close = close
+                self.volume = 1_000_000
+
+        def fake_bars(_s, n):
+            return [FakeBar(98 + (i % 5)) for i in range(max(220, n))]
+
+        monkeypatch.setattr(svc.provider, "get_quote", lambda _s: FakeQuote())
+        monkeypatch.setattr(svc.provider, "get_bars", fake_bars)
+        monkeypatch.setattr(svc.provider, "has_market_data", lambda: True)
+        monkeypatch.setattr(svc.provider, "is_fresh", lambda _age=60: True)
+        monkeypatch.setattr(
+            svc.provider,
+            "source_meta",
+            lambda _sec: type("M", (), {"freshness": type("F", (), {"value": "FRESH"})()})(),
+        )
+        monkeypatch.setattr(TradingService, "scan", lambda self, symbols=None: [])
+        monkeypatch.setattr("strategy.service.gate_market_data_for_scan", lambda *a, **k: _gate_ok())
+
+        buy = svc.execute_manual_paper("GARAN", "BUY", quantity=10, price=100.0)
+        assert buy.get("ok") is True
+        assert svc.ledger.get_position("GARAN").quantity == 10
+
+
+def test_ledger_topup():
+    with tempfile.TemporaryDirectory() as tmp:
+        ledger = PortfolioLedger(db_path=Path(tmp) / "paper.db")
+        start = ledger.cash
+        ledger.topup(100_000)
+        assert ledger.cash == start + 100_000

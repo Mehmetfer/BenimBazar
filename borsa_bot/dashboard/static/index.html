@@ -125,6 +125,60 @@
     .trade-row:last-child,.pos-row:last-child{border-bottom:none}
     .trade-side.buy{color:var(--buy2);font-weight:700}
     .trade-side.sell{color:#ff6b6b;font-weight:700}
+    /* INFO-style watchlist grid */
+    .fav-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .fav-head h2{margin:0}
+    .fav-wallet-pill{font-size:.75rem;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(0,0,0,.2)}
+    .watch-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+    @media(max-width:420px){.watch-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    .watch-tile{border-radius:10px;padding:8px 8px 10px;cursor:pointer;border:1px solid rgba(255,255,255,.06);min-height:118px;display:flex;flex-direction:column;justify-content:space-between}
+    .watch-tile.up{background:linear-gradient(160deg,#0f4d32,#0b3524)}
+    .watch-tile.down{background:linear-gradient(160deg,#5a1f24,#3a1418)}
+    .watch-tile.flat{background:linear-gradient(160deg,#2a3138,#1c2228)}
+    .watch-top{display:flex;justify-content:space-between;align-items:flex-start;gap:4px}
+    .watch-top b{font-size:.95rem;letter-spacing:.02em}
+    .watch-ts{font-size:.58rem;opacity:.75}
+    .watch-row{display:flex;justify-content:space-between;font-size:.68rem;opacity:.95;margin-top:2px}
+    .watch-row span{opacity:.8}
+    .watch-pct{text-align:center;font-weight:800;font-size:.82rem;margin-top:6px}
+  /* Stock detail overlay */
+    .stock-overlay,.order-overlay{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
+    .stock-overlay{align-items:stretch}
+    .stock-overlay.hidden,.order-overlay.hidden{display:none}
+    .stock-panel{width:100%;max-width:520px;margin:0 auto;background:#0f1613;border-radius:18px 18px 0 0;max-height:92dvh;overflow:auto;padding:12px 12px 24px;border-top:1px solid var(--line)}
+    .stock-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+    .stock-price{font-size:2rem;font-weight:800;line-height:1}
+    .stock-chg{font-size:.9rem;font-weight:700;margin-top:4px}
+    .stock-actions{display:flex;gap:8px}
+    .pill-trade{min-width:52px;min-height:52px;border-radius:999px;border:0;font-weight:900;font-size:.85rem;color:#fff}
+    .pill-trade.buy{background:#1f9d6a}
+    .pill-trade.sell{background:#c44b4b}
+    .stock-stats{margin-top:12px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+    .stock-stat{display:flex;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--line);font-size:.82rem}
+    .stock-stat:last-child{border-bottom:none}
+    .stock-stat span{color:var(--mute)}
+    .stock-close{margin-top:10px;width:100%}
+  /* Order sheet */
+    .order-sheet{width:100%;max-width:520px;background:#101816;border-radius:18px 18px 0 0;padding:14px 14px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
+    .order-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+    .order-side{font-weight:900;font-size:1.1rem}
+    .order-side.buy{color:var(--buy2)}
+    .order-side.sell{color:#ff6b6b}
+    .order-sym{font-weight:800;font-size:1.05rem;flex:1}
+    .order-close{border:0;background:transparent;color:var(--mute);font-size:1.4rem;min-width:40px;min-height:40px}
+    .order-limits{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+    .order-limit-box{background:rgba(91,141,239,.12);border:1px solid rgba(91,141,239,.25);border-radius:12px;padding:10px}
+    .order-limit-box span{display:block;font-size:.68rem;color:#c9dbff;opacity:.85}
+    .order-limit-box b{display:block;margin-top:4px;font-size:.95rem}
+    .order-qty-row{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+    .order-qty-btn{flex:1;min-width:52px;min-height:38px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.25);color:var(--ink);font-weight:800;font-size:.78rem}
+    .order-field{margin-bottom:10px}
+    .order-field label{display:block;font-size:.72rem;color:var(--mute);margin-bottom:4px}
+    .order-field input{width:100%;min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:0 12px;font:inherit;font-weight:700}
+    .order-submit-row{display:flex;gap:10px;align-items:center;margin-top:12px}
+    .order-submit{flex:1;min-height:52px;border-radius:999px;border:0;background:linear-gradient(90deg,#1f9d6a,#2ecf8a);color:#fff;font-weight:900;font-size:1rem}
+    .order-submit.sell{background:linear-gradient(90deg,#c44b4b,#ff6b6b)}
+    .order-topup{min-height:44px;padding:0 14px;border-radius:12px;border:1px solid rgba(91,141,239,.35);background:rgba(91,141,239,.12);color:#c9dbff;font-weight:800;font-size:.78rem;white-space:nowrap}
     .b100-sig.NO_TRADE,.b100-sig.NO_DATA{background:rgba(143,163,150,.12);color:var(--mute)}
     .b100-summary{font-size:.78rem;color:var(--mute);margin:6px 0 10px;line-height:1.4}
     .tv-wrap{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;min-height:480px}
@@ -184,9 +238,12 @@
   </div>
 
   <div class="panel" id="panel-fav">
-    <h2>★ Favorilerim</h2>
-    <p class="why">Favori ≠ otomatik AL. Öncelikli izleme.</p>
-    <div id="favHome"></div>
+    <div class="fav-head">
+      <h2>★ Takip Listem</h2>
+      <div class="fav-wallet-pill" id="favWalletPill">Cüzdan: —</div>
+    </div>
+    <p class="why">Kutuya dokun → detay · AL/SAT paper cüzdan · gerçek para değil</p>
+    <div class="watch-grid" id="favHome"></div>
   </div>
 
   <div class="panel" id="panel-mkt">
@@ -328,6 +385,47 @@
     </div>
   </div>
 
+  <div id="stockDetailOverlay" class="stock-overlay hidden" aria-hidden="true">
+    <div class="stock-panel">
+      <div class="stock-top">
+        <div>
+          <div class="stock-price" id="sdPrice">—</div>
+          <div class="stock-chg" id="sdChg">—</div>
+          <div class="meta" id="sdMeta">—</div>
+        </div>
+        <div class="stock-actions">
+          <button type="button" class="pill-trade buy" id="sdBuyBtn">AL</button>
+          <button type="button" class="pill-trade sell" id="sdSellBtn">SAT</button>
+        </div>
+      </div>
+      <div class="stock-stats" id="sdStats"></div>
+      <button type="button" class="more stock-close" id="sdCloseBtn">Kapat</button>
+    </div>
+  </div>
+
+  <div id="orderSheetOverlay" class="order-overlay hidden" aria-hidden="true">
+    <div class="order-sheet">
+      <div class="order-head">
+        <span class="order-side buy" id="orderSideLabel">AL</span>
+        <span class="order-sym" id="orderSymLabel">—</span>
+        <button type="button" class="order-close" id="orderCloseBtn" aria-label="Kapat">×</button>
+      </div>
+      <div class="order-limits">
+        <div class="order-limit-box"><span>İşlem limiti</span><b id="orderCashLimit">—</b></div>
+        <div class="order-limit-box"><span id="orderQtyCapLabel">Alınabilir adet</span><b id="orderMaxQty">—</b></div>
+      </div>
+      <div class="order-field"><label>Emir tipi</label><input value="Limitli" readonly /></div>
+      <div class="order-qty-row" id="orderQtyBtns"></div>
+      <div class="order-field"><label>Adet</label><input id="orderQtyInput" type="number" min="1" step="1" placeholder="Adet giriniz" /></div>
+      <div class="order-field"><label>Fiyat</label><input id="orderPriceInput" type="number" min="0.01" step="0.01" /></div>
+      <div class="order-field"><label>Tutar</label><input id="orderTotalInput" readonly /></div>
+      <div class="order-submit-row">
+        <button type="button" class="order-topup" id="orderTopupBtn">+100.000 TL</button>
+        <button type="button" class="order-submit" id="orderSubmitBtn">Emri gönder →</button>
+      </div>
+    </div>
+  </div>
+
   <nav class="nav">
     <button class="on" data-nav="home" type="button"><span class="ico">🏠</span>Ana</button>
     <button data-nav="fav" type="button"><span class="ico">★</span>Favori</button>
@@ -376,6 +474,207 @@
       if(sb !== sa) return sb - sa;
       return String(a.ticker || a.symbol || '').localeCompare(String(b.ticker || b.symbol || ''), 'tr');
     });
+  }
+
+  let orderCtx = {symbol:'', side:'BUY', price:0, name:'', positionQty:0};
+  let stockDetailCtx = null;
+  const QTY_PRESETS = [1, 100, 1000, 5000, 10000];
+
+  async function ensureWallet(){
+    if(!paperWallet){
+      try{ paperWallet = await (await fetch('/api/paper/wallet')).json(); }catch(e){ paperWallet = null; }
+    }
+    return paperWallet;
+  }
+
+  function bidAsk(price){
+    const p = Number(price)||0;
+    return {bid: p*0.999, ask: p*1.001, mid: p};
+  }
+
+  function updateFavWalletPill(){
+    const el = document.getElementById('favWalletPill');
+    if(!el) return;
+    const cash = paperWallet ? paperWallet.cash : null;
+    el.textContent = cash!=null ? `Nakit ${money(cash)} TL` : 'Cüzdan: —';
+  }
+
+  async function walletTopup(){
+    const r = await (await fetch('/api/paper/wallet/topup',{method:'POST'})).json();
+    paperWallet = r.wallet || paperWallet;
+    updateFavWalletPill();
+    refreshOrderLimits();
+    if(document.getElementById('panel-port').classList.contains('on')) loadPortfolio();
+    return r;
+  }
+
+  function calcOrderTotal(){
+    const q = Number(document.getElementById('orderQtyInput').value||0);
+    const p = Number(document.getElementById('orderPriceInput').value||0);
+    document.getElementById('orderTotalInput').value = (q>0 && p>0) ? money(q*p) : '';
+    return q*p;
+  }
+
+  function refreshOrderLimits(){
+    const cash = Number(paperWallet?.cash||0);
+    const price = Number(document.getElementById('orderPriceInput').value||orderCtx.price||0);
+    document.getElementById('orderCashLimit').textContent = money(cash)+' ₺';
+    const capLbl = document.getElementById('orderQtyCapLabel');
+    const maxEl = document.getElementById('orderMaxQty');
+    if(orderCtx.side==='SELL'){
+      capLbl.textContent = 'Satılabilir adet';
+      maxEl.textContent = String(Math.max(0, Math.floor(orderCtx.positionQty||0)));
+    } else {
+      capLbl.textContent = 'Alınabilir adet';
+      const maxBuy = price>0 ? Math.floor(cash/price) : 0;
+      maxEl.textContent = String(Math.max(0, maxBuy));
+    }
+    calcOrderTotal();
+  }
+
+  function closeOrderSheet(){
+    document.getElementById('orderSheetOverlay').classList.add('hidden');
+    document.getElementById('orderSheetOverlay').setAttribute('aria-hidden','true');
+  }
+
+  function closeStockDetail(){
+    document.getElementById('stockDetailOverlay').classList.add('hidden');
+    document.getElementById('stockDetailOverlay').setAttribute('aria-hidden','true');
+    stockDetailCtx = null;
+  }
+
+  async function openOrderSheet(sym, side, meta){
+    await ensureWallet();
+    orderCtx = {
+      symbol: sym,
+      side: side==='SELL' ? 'SELL' : 'BUY',
+      price: Number(meta?.price||0),
+      name: meta?.name||sym,
+      positionQty: Number(meta?.positionQty||0),
+    };
+    const isSell = orderCtx.side==='SELL';
+    const sideEl = document.getElementById('orderSideLabel');
+    sideEl.textContent = isSell ? 'SAT' : 'AL';
+    sideEl.className = 'order-side ' + (isSell ? 'sell' : 'buy');
+    document.getElementById('orderSymLabel').textContent = sym;
+    document.getElementById('orderPriceInput').value = orderCtx.price ? Number(orderCtx.price).toFixed(2) : '';
+    document.getElementById('orderQtyInput').value = isSell && orderCtx.positionQty ? String(Math.floor(orderCtx.positionQty)) : '';
+    const submit = document.getElementById('orderSubmitBtn');
+    submit.textContent = isSell ? 'SAT emri gönder →' : 'AL emri gönder →';
+    submit.classList.toggle('sell', isSell);
+    const qtyRow = document.getElementById('orderQtyBtns');
+    qtyRow.innerHTML = QTY_PRESETS.map(n=>`<button type="button" class="order-qty-btn" data-qty="${n}">${n}</button>`).join('');
+    qtyRow.querySelectorAll('[data-qty]').forEach(b=>{
+      b.onclick = ()=>{ document.getElementById('orderQtyInput').value = b.dataset.qty; calcOrderTotal(); };
+    });
+    refreshOrderLimits();
+    document.getElementById('orderSheetOverlay').classList.remove('hidden');
+    document.getElementById('orderSheetOverlay').setAttribute('aria-hidden','false');
+  }
+
+  async function submitOrderSheet(){
+    const sym = orderCtx.symbol;
+    const side = orderCtx.side;
+    const qty = Number(document.getElementById('orderQtyInput').value||0);
+    const price = Number(document.getElementById('orderPriceInput').value||0);
+    if(!sym || qty<=0 || price<=0){ alert('Adet ve fiyat girin'); return; }
+    const btn = document.getElementById('orderSubmitBtn');
+    btn.disabled = true;
+    try{
+      const r = await (await fetch('/api/paper/trade',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({symbol:sym, side, quantity:qty, price})
+      })).json();
+      if(r.ok){
+        paperWallet = r.wallet || paperWallet;
+        updateFavWalletPill();
+        closeOrderSheet();
+        closeStockDetail();
+        if(document.getElementById('panel-fav').classList.contains('on')) loadFavorites();
+        if(document.getElementById('panel-mkt').classList.contains('on')) loadBist100();
+        if(document.getElementById('panel-port').classList.contains('on')) loadPortfolio();
+        alert(`${side==='BUY'?'AL':'SAT'} başarılı · ${qty} lot @ ${money(price)}`);
+      } else {
+        alert(r.message||'Emir başarısız');
+      }
+    }catch(e){
+      alert('Emir hatası');
+    }finally{
+      btn.disabled = false;
+    }
+  }
+
+  function openStockDetail(item){
+    stockDetailCtx = item;
+    const sym = item.symbol || item.ticker;
+    const px = Number(item.price||0);
+    const ba = bidAsk(px);
+    const chg = Number(item.change_pct||0);
+    document.getElementById('sdPrice').textContent = px ? money(px) : '—';
+    const chgEl = document.getElementById('sdChg');
+    chgEl.textContent = px ? `${chg>=0?'+':''}${chg.toFixed(2)}%` : '—';
+    chgEl.className = 'stock-chg ' + (chg>=0?'up':'down');
+    document.getElementById('sdMeta').textContent = `${item.name||''} · ${item.decision_label||item.decision||'—'}`;
+    const pos = (paperWallet?.positions||[]).find(p=>p.symbol===sym);
+    const posQty = pos ? pos.quantity : (item.position_qty||0);
+    document.getElementById('sdStats').innerHTML = `
+      <div class="stock-stat"><span>Alış</span><b>${px?money(ba.bid):'—'}</b></div>
+      <div class="stock-stat"><span>Satış</span><b>${px?money(ba.ask):'—'}</b></div>
+      <div class="stock-stat"><span>Ö. Kapanış</span><b>${item.prev_close!=null?money(item.prev_close):'—'}</b></div>
+      <div class="stock-stat"><span>Portföy</span><b>${posQty?posQty+' lot':'—'}</b></div>
+      <div class="stock-stat"><span>Skor</span><b>${item.final_score!=null?Number(item.final_score).toFixed(0):(item.buy_score??'—')}</b></div>`;
+    document.getElementById('sdBuyBtn').onclick = ()=> openOrderSheet(sym,'BUY',{price:px,name:item.name,positionQty:posQty});
+    document.getElementById('sdSellBtn').onclick = ()=> openOrderSheet(sym,'SELL',{price:px,name:item.name,positionQty:posQty});
+    document.getElementById('stockDetailOverlay').classList.remove('hidden');
+    document.getElementById('stockDetailOverlay').setAttribute('aria-hidden','false');
+  }
+
+  function watchTileHtml(item){
+    const sym = item.symbol || item.ticker;
+    const px = Number(item.price||0);
+    const ba = bidAsk(px);
+    const chg = Number(item.change_pct||0);
+    const cls = chg>0.05?'up':(chg<-0.05?'down':'flat');
+    const ts = new Date().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    return `<div class="watch-tile ${cls}" data-watch="${sym}">
+      <div class="watch-top"><b>${sym}</b><span class="watch-ts">${ts}</span></div>
+      <div class="watch-row"><span>Son</span><b>${px?money(px):'—'}</b></div>
+      <div class="watch-row"><span>Alış</span><b>${px?money(ba.bid):'—'}</b></div>
+      <div class="watch-row"><span>Satış</span><b>${px?money(ba.ask):'—'}</b></div>
+      <div class="watch-pct">${px?('%'+(chg>=0?'+':'')+chg.toFixed(2)):'—'}</div>
+    </div>`;
+  }
+
+  async function loadFavorites(){
+    const el = document.getElementById('favHome');
+    el.innerHTML = '<div class="empty">Yükleniyor…</div>';
+    await ensureWallet();
+    updateFavWalletPill();
+    try{
+      const body = await (await fetch('/api/favorites')).json();
+      const favs = body.favorites||[];
+      if(!favs.length){
+        el.innerHTML = '<div class="empty">Favori yok — ana sayfadan ★ ekleyin</div>';
+        return;
+      }
+      const held = new Set((paperWallet?.positions||[]).map(p=>p.symbol));
+      favs.forEach(f=>{
+        f.in_portfolio = held.has(f.symbol);
+        const pos = (paperWallet?.positions||[]).find(p=>p.symbol===f.symbol);
+        f.position_qty = pos ? pos.quantity : 0;
+      });
+      el.innerHTML = favs.map(watchTileHtml).join('');
+      el.querySelectorAll('[data-watch]').forEach(tile=>{
+        tile.onclick = ()=>{
+          const sym = tile.dataset.watch;
+          const item = favs.find(f=>(f.symbol||f.ticker)===sym);
+          if(item) openStockDetail(item);
+        };
+      });
+    }catch(e){
+      el.innerHTML = '<div class="empty">Favoriler yüklenemedi</div>';
+    }
   }
 
   function setMarket(m){
@@ -645,6 +944,7 @@
     document.getElementById(id).classList.add('on');
     if(name!=='detail') lastPanel = name;
     if(name==='port') loadPortfolio();
+    if(name==='fav') loadFavorites();
   }
 
   function pnlClass(n){
@@ -693,6 +993,7 @@
       </div>
       <div class="wallet-actions">
         <button class="more" id="walletInitBtn" type="button">Cüzdanı Başlat (100.000 TL)</button>
+        <button class="more" id="walletTopupBtn" type="button">+100.000 TL Ekle</button>
         <button class="more" id="walletFollowBtn" type="button">Önerilerden Al</button>
         <button class="more" id="walletRefreshBtn" type="button">Yenile</button>
       </div>
@@ -708,8 +1009,18 @@
       paperWallet = await (await fetch('/api/paper/wallet')).json();
       el.innerHTML = renderPortfolio(paperWallet);
       const initBtn = document.getElementById('walletInitBtn');
+      const topupBtn = document.getElementById('walletTopupBtn');
       const followBtn = document.getElementById('walletFollowBtn');
       const refreshBtn = document.getElementById('walletRefreshBtn');
+      if(topupBtn) topupBtn.onclick = async ()=>{
+        topupBtn.disabled = true;
+        try{
+          const r = await walletTopup();
+          el.innerHTML = renderPortfolio(paperWallet);
+          alert(r.message||'+100.000 TL eklendi');
+          loadPortfolio();
+        }finally{ topupBtn.disabled = false; }
+      };
       if(initBtn) initBtn.onclick = async ()=>{
         if(!confirm('Cüzdan sıfırlanacak: 100.000 TL nakit, tüm pozisyonlar kapanır. Devam?')) return;
         initBtn.disabled = true;
@@ -1019,34 +1330,15 @@
     }
   }
 
-  async function b100Trade(sym, side, btn){
-    if(!sym) return;
-    const label = side==='BUY' ? 'AL' : 'SAT';
-    if(!confirm(`${sym} — paper ${label} emri gönderilsin mi?`)) return;
-    if(btn){ btn.classList.add('busy'); btn.disabled = true; }
-    try{
-      const r = await (await fetch('/api/paper/trade',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({symbol:sym, side})
-      })).json();
-      if(r.ok){
-        paperWallet = r.wallet || paperWallet;
-        const co = (bist100.companies||[]).find(x=>(x.ticker||x.symbol)===sym);
-        if(co){
-          co.in_portfolio = side==='BUY';
-          co.position_qty = side==='BUY' ? (r.quantity||co.position_qty||0) : 0;
-        }
-        renderBist100List();
-        if(document.getElementById('panel-port').classList.contains('on')) loadPortfolio();
-      } else {
-        alert(r.message || 'Emir başarısız');
-      }
-    }catch(e){
-      alert('Emir hatası — yenileyin');
-    }finally{
-      if(btn){ btn.classList.remove('busy'); btn.disabled = false; renderBist100List(); }
-    }
+  async function b100Trade(sym, side){
+    const co = (bist100.companies||[]).find(x=>(x.ticker||x.symbol)===sym) || {symbol:sym, ticker:sym};
+    await ensureWallet();
+    const pos = (paperWallet?.positions||[]).find(p=>p.symbol===sym);
+    openOrderSheet(sym, side, {
+      price: co.price,
+      name: co.name,
+      positionQty: pos ? pos.quantity : (co.position_qty||0),
+    });
   }
 
   function renderBist100List(){
@@ -1117,13 +1409,13 @@
     list.querySelectorAll('[data-b100-buy]').forEach(btn=>{
       btn.onclick = (e)=>{
         e.stopPropagation();
-        b100Trade(btn.dataset.b100Buy, 'BUY', btn);
+        b100Trade(btn.dataset.b100Buy, 'BUY');
       };
     });
     list.querySelectorAll('[data-b100-sell]').forEach(btn=>{
       btn.onclick = (e)=>{
         e.stopPropagation();
-        b100Trade(btn.dataset.b100Sell, 'SELL', btn);
+        b100Trade(btn.dataset.b100Sell, 'SELL');
       };
     });
   }
@@ -1198,7 +1490,6 @@
       renderIntegrity(data.data_source||daily.integrity||{}, health, extra);
     });
     renderHome();
-    document.getElementById('favHome').innerHTML = ((daily.sections||{}).favorites||[]).map(cardHtml).join('') || '<div class="empty">Favori yok — aramadan ★ ekleyin</div>';
     bindCards();
     loadPortfolio();
     try {
@@ -1352,6 +1643,17 @@
   document.getElementById('b100SearchBtn').onclick=()=>renderBist100List();
   document.getElementById('b100q').oninput=()=>renderBist100List();
   document.getElementById('b100Sector').onchange=()=>renderBist100List();
+  document.getElementById('orderCloseBtn').onclick=closeOrderSheet;
+  document.getElementById('orderSheetOverlay').onclick=(e)=>{ if(e.target.id==='orderSheetOverlay') closeOrderSheet(); };
+  document.getElementById('orderQtyInput').oninput=calcOrderTotal;
+  document.getElementById('orderPriceInput').oninput=refreshOrderLimits;
+  document.getElementById('orderSubmitBtn').onclick=submitOrderSheet;
+  document.getElementById('orderTopupBtn').onclick=async()=>{
+    const r = await walletTopup();
+    alert(r.message||'+100.000 TL eklendi');
+  };
+  document.getElementById('sdCloseBtn').onclick=closeStockDetail;
+  document.getElementById('stockDetailOverlay').onclick=(e)=>{ if(e.target.id==='stockDetailOverlay') closeStockDetail(); };
   setMarket('BIST');
   load();
   loadBist100();

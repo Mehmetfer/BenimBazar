@@ -87,6 +87,8 @@ class ExecBody(BaseModel):
 class PaperTradeBody(BaseModel):
     symbol: str
     side: str  # BUY | SELL
+    quantity: float | None = None
+    price: float | None = None
 
 
 class NotificationSettingsBody(BaseModel):
@@ -363,7 +365,28 @@ def paper_trade(body: PaperTradeBody, authorization: str | None = Header(default
     side = body.side.upper().strip()
     if side not in {"BUY", "SELL"}:
         raise HTTPException(400, "side must be BUY or SELL")
-    return service.execute_manual_paper(body.symbol.upper(), side)
+    return service.execute_manual_paper(
+        body.symbol.upper(),
+        side,
+        quantity=body.quantity,
+        price=body.price,
+    )
+
+
+@app.post("/api/paper/wallet/topup")
+def paper_wallet_topup(amount: float = 100_000) -> dict:
+    """Add paper cash (default +100.000 TL) without resetting positions."""
+    try:
+        cash = service.ledger.topup(amount)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {
+        "ok": True,
+        "added": round(float(amount), 2),
+        "cash": round(cash, 2),
+        "message": f"+{amount:,.0f} TL eklendi",
+        "wallet": service.paper_wallet(),
+    }
 
 
 @app.post("/api/execute")
