@@ -442,11 +442,14 @@ class YahooBistMarketDataProvider:
                     day_high, day_low = highs[-1], lows[-1]
             out["day_high"] = round(float(day_high), 2) if day_high else None
             out["day_low"] = round(float(day_low), 2) if day_low else None
-            ref = prev or last_px
-            if ref and float(ref) > 0:
-                # BIST free band ≈ ±10% of reference (prev close)
-                out["floor"] = round(float(ref) * 0.90, 2)
-                out["ceiling"] = round(float(ref) * 1.10, 2)
+            ref = float(last_px or prev or 0)
+            if ref > 0:
+                # Info/BIST band: ±10% of last, rounded to 0.02 tick
+                def _tick(px: float, tick: float = 0.02) -> float:
+                    return round(round(px / tick) * tick, 2)
+
+                out["floor"] = _tick(ref * 0.90)
+                out["ceiling"] = _tick(ref * 1.10)
 
             def _range_pack(n: int) -> dict:
                 if len(closes) < max(2, n):
@@ -472,25 +475,6 @@ class YahooBistMarketDataProvider:
             out["yearly_pct"] = yearly.get("pct")
 
             mcap = meta.get("marketCap")
-            if mcap is None:
-                # Secondary quote endpoint (best-effort)
-                try:
-                    qurl = (
-                        "https://query1.finance.yahoo.com/v7/finance/quote"
-                        f"?symbols={urllib.parse.quote(ysym)}"
-                    )
-                    qdata = self._get_json(qurl)
-                    results = (((qdata or {}).get("quoteResponse") or {}).get("result")) or []
-                    if results:
-                        mcap = results[0].get("marketCap")
-                        if out["prev_close"] is None and results[0].get("regularMarketPreviousClose"):
-                            out["prev_close"] = round(float(results[0]["regularMarketPreviousClose"]), 2)
-                        if out["day_high"] is None and results[0].get("regularMarketDayHigh"):
-                            out["day_high"] = round(float(results[0]["regularMarketDayHigh"]), 2)
-                        if out["day_low"] is None and results[0].get("regularMarketDayLow"):
-                            out["day_low"] = round(float(results[0]["regularMarketDayLow"]), 2)
-                except Exception:  # noqa: BLE001
-                    mcap = None
             if mcap is not None:
                 try:
                     out["market_cap"] = int(float(mcap))

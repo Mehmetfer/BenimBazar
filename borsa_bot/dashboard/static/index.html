@@ -161,10 +161,11 @@
     .pill-trade{min-width:52px;min-height:52px;border-radius:999px;border:0;font-weight:900;font-size:.85rem;color:#fff}
     .pill-trade.buy{background:#1f9d6a}
     .pill-trade.sell{background:#c44b4b}
-    .stock-stats{margin-top:12px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+    .stock-stats{margin-top:12px;border:1px solid var(--line);border-radius:12px;overflow:hidden;display:grid;grid-template-columns:1fr 1fr}
     .stock-stat{display:flex;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--line);font-size:.82rem}
-    .stock-stat:last-child{border-bottom:none}
+    .stock-stat:nth-last-child(-n+2){border-bottom:none}
     .stock-stat span{color:var(--mute)}
+    .stock-stat b{font-weight:800}
     .stock-signal-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
     .stock-sig{font-size:.78rem;font-weight:900;padding:6px 10px;border-radius:999px;background:rgba(143,163,150,.14);color:var(--mute)}
     .stock-sig.STRONG_BUY,.stock-sig.BUY,.stock-sig.AL{background:rgba(46,207,138,.18);color:var(--buy2)}
@@ -173,14 +174,14 @@
     .stock-score,.stock-favval{font-size:.78rem;font-weight:800;color:var(--ink)}
     .stock-section{margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
     .stock-sec-title{font-size:.72rem;font-weight:800;color:var(--mute);margin-bottom:8px;letter-spacing:.03em;text-transform:uppercase}
-    .stock-returns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-    .stock-ret{text-align:center;background:rgba(0,0,0,.18);border-radius:10px;padding:8px 4px}
-    .stock-ret span{display:block;font-size:.68rem;color:var(--mute)}
-    .stock-ret b{display:block;margin-top:4px;font-size:.95rem}
+    .stock-returns{display:flex;gap:10px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;scroll-snap-type:x mandatory}
+    .stock-ret{flex:0 0 72%;max-width:260px;text-align:left;background:rgba(0,0,0,.22);border-radius:12px;padding:12px;scroll-snap-align:start}
+    .stock-ret span.ret-label{display:block;font-size:.72rem;color:var(--mute);font-weight:700}
+    .stock-ret b.ret-pct{display:block;margin-top:6px;font-size:1.35rem;font-weight:900}
     .stock-ret b.up{color:var(--buy2)}
     .stock-ret b.down{color:#ff6b6b}
-    .stock-ret-range{display:flex;justify-content:space-between;gap:4px;margin-top:6px;font-size:.62rem;color:var(--mute)}
-    .stock-ret-bar{height:4px;border-radius:999px;background:rgba(255,255,255,.08);margin-top:6px;position:relative;overflow:hidden}
+    .stock-ret-range{display:flex;justify-content:space-between;gap:4px;margin-top:10px;font-size:.68rem;color:var(--mute)}
+    .stock-ret-bar{height:4px;border-radius:999px;background:rgba(255,255,255,.08);margin-top:8px;position:relative;overflow:visible}
     .stock-ret-dot{position:absolute;top:50%;width:8px;height:8px;border-radius:50%;transform:translate(-50%,-50%);background:var(--buy2)}
     .stock-ret-dot.down{background:#ff6b6b}
     .stock-kap{font-size:.78rem;color:var(--mute);line-height:1.4}
@@ -678,19 +679,23 @@
       </div>
       <div class="stock-stats" id="sdStats"></div>
       <div class="stock-section">
-        <div class="stock-sec-title">Kazanç</div>
+        <div class="stock-sec-title">Getiri</div>
         <div class="stock-returns" id="sdReturns">
           <div class="stock-ret">
-            <span>Günlük</span><b id="sdRetD">—</b>
-            <div class="stock-ret-range"><span id="sdRetDDip"></span><span id="sdRetDPeak"></span></div>
+            <span class="ret-label">Haftalık Getiri</span>
+            <b class="ret-pct" id="sdRetW">—</b>
+            <div class="stock-ret-range"><span>Dip <i id="sdRetWDip">—</i></span><span>Zirve <i id="sdRetWPeak">—</i></span></div>
+            <div class="stock-ret-bar"><i class="stock-ret-dot" id="sdRetWDot"></i></div>
           </div>
           <div class="stock-ret">
-            <span>Aylık</span><b id="sdRetM">—</b>
+            <span class="ret-label">1 Aylık Getiri</span>
+            <b class="ret-pct" id="sdRetM">—</b>
             <div class="stock-ret-range"><span>Dip <i id="sdRetMDip">—</i></span><span>Zirve <i id="sdRetMPeak">—</i></span></div>
             <div class="stock-ret-bar"><i class="stock-ret-dot" id="sdRetMDot"></i></div>
           </div>
           <div class="stock-ret">
-            <span>Yıllık</span><b id="sdRetY">—</b>
+            <span class="ret-label">Yıllık Getiri</span>
+            <b class="ret-pct" id="sdRetY">—</b>
             <div class="stock-ret-range"><span>Dip <i id="sdRetYDip">—</i></span><span>Zirve <i id="sdRetYPeak">—</i></span></div>
             <div class="stock-ret-bar"><i class="stock-ret-dot" id="sdRetYDot"></i></div>
           </div>
@@ -997,7 +1002,21 @@
   function fmtRet(v){
     if(v==null || v==='' || Number.isNaN(Number(v))) return {txt:'—', cls:''};
     const n = Number(v);
-    return {txt:(n>=0?'+':'')+n.toFixed(2)+'%', cls:n>=0?'up':'down'};
+    return {txt:'%'+(n>=0?'':'-')+Math.abs(n).toFixed(2), cls:n>=0?'up':'down'};
+  }
+
+  function applyRetCard(pctId, pack, price){
+    const pct = pack && pack.pct != null ? pack.pct : null;
+    const fr = fmtRet(pct);
+    const el = document.getElementById(pctId);
+    if(el){
+      el.textContent = fr.txt;
+      el.className = 'ret-pct ' + fr.cls;
+    }
+    const prefix = pctId.replace('sdRet','sdRet');
+    // ids: sdRetW / sdRetM / sdRetY → Dip/Peak/Dot
+    const stem = pctId; // sdRetW
+    setRetRange(stem+'Dip', stem+'Peak', stem+'Dot', pack||{}, price);
   }
 
   function setRetRange(dipId, peakId, dotId, pack, price){
@@ -1057,12 +1076,10 @@
     const score0 = item.final_score!=null?Number(item.final_score):(item.priority_score!=null?Number(item.priority_score):(item.buy_score??null));
     document.getElementById('sdScore').textContent = score0!=null ? ('Skor '+Number(score0).toFixed(0)) : 'Skor —';
     document.getElementById('sdFavVal').textContent = isFav ? 'Fav ★' : 'Fav ☆';
-    document.getElementById('sdRetD').textContent = chg ? ((chg>=0?'+':'')+chg.toFixed(2)+'%') : '—';
-    document.getElementById('sdRetD').className = chg>0?'up':(chg<0?'down':'');
-    document.getElementById('sdRetM').textContent = '—';
-    document.getElementById('sdRetM').className = '';
-    document.getElementById('sdRetY').textContent = '—';
-    document.getElementById('sdRetY').className = '';
+    ['sdRetW','sdRetM','sdRetY'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el){ el.textContent='—'; el.className='ret-pct'; }
+    });
     document.getElementById('sdKap').textContent = 'KAP yükleniyor…';
     const favBtn = document.getElementById('sdFavBtn');
     if(sym === 'XU100'){
@@ -1168,17 +1185,15 @@
       const favBtn = document.getElementById('sdFavBtn');
       favBtn.classList.toggle('on', isFav);
       favBtn.textContent = isFav ? '★' : '☆';
-      const rd = fmtRet(ret.daily_pct);
-      const rm = fmtRet(ret.monthly_pct!=null?ret.monthly_pct:(ret.monthly&&ret.monthly.pct));
-      const ry = fmtRet(ret.yearly_pct!=null?ret.yearly_pct:(ret.yearly&&ret.yearly.pct));
-      document.getElementById('sdRetD').textContent = rd.txt;
-      document.getElementById('sdRetD').className = rd.cls;
-      document.getElementById('sdRetM').textContent = rm.txt;
-      document.getElementById('sdRetM').className = rm.cls;
-      document.getElementById('sdRetY').textContent = ry.txt;
-      document.getElementById('sdRetY').className = ry.cls;
-      setRetRange('sdRetMDip','sdRetMPeak','sdRetMDot', ret.monthly||{}, px);
-      setRetRange('sdRetYDip','sdRetYPeak','sdRetYDot', ret.yearly||{}, px);
+      const weeklyPack = ret.weekly || {pct: ret.weekly_pct};
+      const monthlyPack = ret.monthly || {pct: ret.monthly_pct};
+      const yearlyPack = ret.yearly || {pct: ret.yearly_pct};
+      if(weeklyPack.pct == null && ret.weekly_pct != null) weeklyPack.pct = ret.weekly_pct;
+      if(monthlyPack.pct == null && ret.monthly_pct != null) monthlyPack.pct = ret.monthly_pct;
+      if(yearlyPack.pct == null && ret.yearly_pct != null) yearlyPack.pct = ret.yearly_pct;
+      applyRetCard('sdRetW', weeklyPack, px);
+      applyRetCard('sdRetM', monthlyPack, px);
+      applyRetCard('sdRetY', yearlyPack, px);
       const posQty = (r.position&&r.position.quantity) || 0;
       const prev = d.prev_close!=null?d.prev_close:mkt.prev_close;
       const low = mkt.day_low!=null?mkt.day_low:d.day_low;
@@ -1191,7 +1206,8 @@
       document.getElementById('sdStats').innerHTML = `
         <div class="stock-stat"><span>Alış</span><b>${px?money(ba.bid):'—'}</b></div>
         <div class="stock-stat"><span>Satış</span><b>${px?money(ba.ask):'—'}</b></div>
-        <div class="stock-stat"><span>Fark</span><b>${fark!=null?((fark>=0?'+':'')+Number(fark).toFixed(2)):'—'}</b></div>
+        <div class="stock-stat"><span>Fark</span><b>${fark!=null?Number(fark).toFixed(2):'—'}</b></div>
+        <div class="stock-stat"><span>A. Ort.</span><b>—</b></div>
         <div class="stock-stat"><span>Düşük</span><b>${low!=null?money(low):'—'}</b></div>
         <div class="stock-stat"><span>Yüksek</span><b>${high!=null?money(high):'—'}</b></div>
         <div class="stock-stat"><span>Taban</span><b>${floor!=null?money(floor):'—'}</b></div>
@@ -1199,10 +1215,9 @@
         <div class="stock-stat"><span>Ö. Kapanış</span><b>${prev!=null?money(prev):'—'}</b></div>
         <div class="stock-stat"><span>Pazar Grubu</span><b>${grp}</b></div>
         <div class="stock-stat"><span>Piyasa Değeri</span><b>${fmtMcap(mcap)}</b></div>
-        <div class="stock-stat"><span>Sektör</span><b>${mkt.sector||d.sector||'—'}</b></div>
-        <div class="stock-stat"><span>Portföy</span><b>${posQty?posQty+' lot':'—'}</b></div>
-        <div class="stock-stat"><span>AL skoru</span><b>${sig.buy_score!=null?Number(sig.buy_score).toFixed(0):'—'}</b></div>
-        <div class="stock-stat"><span>SAT skoru</span><b>${sig.sell_score!=null?Number(sig.sell_score).toFixed(0):'—'}</b></div>`;
+        <div class="stock-stat"><span>Sinyal</span><b>${sig.label||d.decision_label||'—'}</b></div>
+        <div class="stock-stat"><span>Skor</span><b>${score!=null?Number(score).toFixed(0):'—'}</b></div>
+        <div class="stock-stat"><span>Portföy</span><b>${posQty?posQty+' lot':'—'}</b></div>`;
       const buyBtn = document.getElementById('sdBuyBtn');
       const sellBtn = document.getElementById('sdSellBtn');
       if(px){
