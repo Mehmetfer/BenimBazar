@@ -88,11 +88,13 @@ def score_software_engineering_autonomy(
         verdict = "SOFTWARE ENGINEERING AUTONOMY NOT VERIFIED"
         status_word = "NOT VERIFIED"
     elif benchmark_passed == benchmark_total and raw >= 9.0:
-        # Full bench pass → claim 9.4 Autonomous Testing / debugging band (not 10)
+        # Full bench pass including orchestrator → still cap 9.4 without long-soak
         level = 9.4
-        verdict = "9.4 SOFTWARE ENGINEERING AUTONOMY PARTIALLY VERIFIED (benchmark suite); LIVE-MONEY NOT VERIFIED"
+        verdict = (
+            "9.4 SOFTWARE ENGINEERING AUTONOMY PARTIALLY VERIFIED "
+            "(benchmark suite + orchestrator E2E); LIVE-MONEY NOT VERIFIED"
+        )
         status_word = "PARTIALLY VERIFIED"
-        # Cap honesty: without multi-hour soak / parallel agents, not 9.6+
     elif benchmark_passed >= int(0.8 * benchmark_total):
         level = 9.2
         verdict = "9.2 SOFTWARE ENGINEERING AUTONOMY PARTIALLY VERIFIED; LIVE-MONEY NOT VERIFIED"

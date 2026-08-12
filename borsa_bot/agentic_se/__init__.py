@@ -10,11 +10,15 @@ weaken assertions to make failures pass.
 from __future__ import annotations
 
 from agentic_se.engine import AutonomousSoftwareEngine, GoalRunReport
+from agentic_se.orchestrator import Orchestrator, OrchestratorLimits, OrchestratorReport
 from agentic_se.scorecard import SEAutonomyScorecard, score_software_engineering_autonomy
 
 __all__ = [
     "AutonomousSoftwareEngine",
     "GoalRunReport",
+    "Orchestrator",
+    "OrchestratorLimits",
+    "OrchestratorReport",
     "SEAutonomyScorecard",
     "score_software_engineering_autonomy",
 ]

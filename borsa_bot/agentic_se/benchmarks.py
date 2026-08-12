@@ -281,6 +281,26 @@ def bench_long_run_stages() -> BenchResult:
     return _time_call(run)
 
 
+def bench_orchestrator_e2e() -> BenchResult:
+    def run() -> BenchResult:
+        from agentic_se.orchestrator import Orchestrator, OrchestratorLimits
+
+        orch = Orchestrator(limits=OrchestratorLimits(max_iterations=2, max_retries=2))
+        rep = orch.run("Provider recovery sistemini geliştir")
+        ok = rep.status == "DELIVERED" and "IMPLEMENT" in rep.stages and not rep.waited_for_human
+        return BenchResult(
+            "orchestrator_e2e",
+            "coding",
+            ok,
+            0.0,
+            iterations=rep.iterations,
+            rollbacks=1 if rep.rollback else 0,
+            detail=f"{rep.status} tools={rep.tool_calls}",
+        )
+
+    return _time_call(run)
+
+
 def run_all_benchmarks() -> dict[str, Any]:
     benches = [
         bench_repo_understanding,
@@ -292,6 +312,7 @@ def run_all_benchmarks() -> dict[str, Any]:
         bench_refuse_weaken_assertion,
         bench_quality_gate,
         bench_long_run_stages,
+        bench_orchestrator_e2e,
     ]
     results = [b() for b in benches]
     payload = {

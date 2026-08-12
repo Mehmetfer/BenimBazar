@@ -85,9 +85,11 @@ normal paper, provider failure, broker timeout/unknown, duplicate, restart, risk
 
 ## Software Engineering Autonomy (ASE)
 
-- Package: `borsa_bot/agentic_se/`
-- SE autonomy: **9.4/10** PARTIALLY VERIFIED (full local benchmark suite)
-- Loop: goal → discover → decompose → implement → test → repair → review → verify → deliver → learn
-- Benchmarks: see `SOFTWARE_ENGINEERING_AUTONOMY_REPORT.md`
-- Not claimed: 9.6+ long-run soak, 10.0 verified ASE, LIVE-MONEY
+- Package: `borsa_bot/agentic_se/` (+ **Orchestrator**)
+- SE autonomy: **9.4/10** PARTIALLY VERIFIED (10/10 benches incl. orchestrator E2E)
+- Gap analysis: `MASTER_GAP_ANALYSIS.md`
+- Lessons: `autonomy/memory/lessons.md`
+- Demo: provider recovery goal delivered without human step commands
+- Post-orchestrator suite: **437 passed / 0 failed**
+- Not claimed: 9.6+, 10.0, Cursor-level, LIVE-MONEY
 

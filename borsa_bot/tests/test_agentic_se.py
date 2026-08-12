@@ -104,9 +104,10 @@ def test_scorecard_caps_below_10():
             "quality_gate": True,
             "autonomous_file_discovery": True,
             "long_run_stages": True,
+            "orchestrator_e2e": True,
         },
-        benchmark_passed=9,
-        benchmark_total=9,
+        benchmark_passed=10,
+        benchmark_total=10,
     )
     assert sc.software_engineering_autonomy <= 9.4
     assert sc.live_money_autonomy == "NOT VERIFIED"

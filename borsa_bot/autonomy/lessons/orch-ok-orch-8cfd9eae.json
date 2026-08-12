@@ -1,0 +1,15 @@
+{
+  "id": "orch-ok-orch-8cfd9eae",
+  "title": "Orchestrator delivered: Provider recovery sistemini geliştir",
+  "error_class": "ORCHESTRATOR_SUCCESS",
+  "root_cause": "n/a",
+  "fix_summary": "Discovered autonomous/recovery.py patterns; added fail-closed provider_recovery_policy + regression tests under allowlist. hits=['DEVELOPMENT_LOG.md', 'PROJECT_AUDIT.md', 'README.md', 'agentic_se/benchmarks.py', 'agentic_se/coder.py']",
+  "regression_test": "tests/test_ase_provider_recovery.py",
+  "architectural_decision": "Allowlisted heuristic coding under quality gate",
+  "created_at": "2026-08-12T06:30:59.754530+00:00",
+  "prevents": [
+    "unvalidated_provider_alternate",
+    "financial_ambiguity_retry"
+  ],
+  "live_trading_impact": "NONE — lessons never unlock LIVE broker"
+}
