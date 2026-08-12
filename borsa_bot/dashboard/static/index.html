@@ -90,8 +90,15 @@
       .bist100-list-wrap{max-height:calc(100dvh - 220px);overflow:auto;padding-right:4px}
       .tv-sticky{position:sticky;top:8px}
     }
-    .bist100-item{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:14px;padding:12px;margin-bottom:8px;cursor:pointer;font:inherit}
+    .bist100-item{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:14px;padding:12px;margin-bottom:8px;font:inherit}
     .bist100-item:hover,.bist100-item.on{border-color:rgba(46,207,138,.45);background:rgba(46,207,138,.08)}
+    .bist100-item .b100-main{flex:1;min-width:0;border:0;background:transparent;color:inherit;text-align:left;padding:0;cursor:pointer;font:inherit}
+    .b100-actions{display:flex;gap:6px;margin-top:6px;justify-content:flex-end}
+    .b100-trade{min-height:32px;min-width:44px;padding:4px 10px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.2);color:var(--ink);font-weight:800;font-size:.72rem;cursor:pointer}
+    .b100-trade.buy{border-color:rgba(46,207,138,.45);color:var(--buy2)}
+    .b100-trade.sell{border-color:rgba(255,90,90,.35);color:#ff8a8a}
+    .b100-trade:disabled{opacity:.35;cursor:not-allowed}
+    .b100-trade.busy{opacity:.6;pointer-events:none}
     .bist100-item .t{font-weight:800;font-size:1.05rem}
     .bist100-item .n{color:var(--mute);font-size:.78rem;margin-top:2px;line-height:1.3}
     .bist100-item .sec{flex:0 0 auto;font-size:.72rem;font-weight:700;color:var(--buy2);padding:6px 8px;border-radius:999px;border:1px solid rgba(46,207,138,.25)}
@@ -1012,6 +1019,36 @@
     }
   }
 
+  async function b100Trade(sym, side, btn){
+    if(!sym) return;
+    const label = side==='BUY' ? 'AL' : 'SAT';
+    if(!confirm(`${sym} — paper ${label} emri gönderilsin mi?`)) return;
+    if(btn){ btn.classList.add('busy'); btn.disabled = true; }
+    try{
+      const r = await (await fetch('/api/paper/trade',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({symbol:sym, side})
+      })).json();
+      if(r.ok){
+        paperWallet = r.wallet || paperWallet;
+        const co = (bist100.companies||[]).find(x=>(x.ticker||x.symbol)===sym);
+        if(co){
+          co.in_portfolio = side==='BUY';
+          co.position_qty = side==='BUY' ? (r.quantity||co.position_qty||0) : 0;
+        }
+        renderBist100List();
+        if(document.getElementById('panel-port').classList.contains('on')) loadPortfolio();
+      } else {
+        alert(r.message || 'Emir başarısız');
+      }
+    }catch(e){
+      alert('Emir hatası — yenileyin');
+    }finally{
+      if(btn){ btn.classList.remove('busy'); btn.disabled = false; renderBist100List(); }
+    }
+  }
+
   function renderBist100List(){
     const q = (document.getElementById('b100q').value||'').trim().toLocaleLowerCase('tr-TR');
     const sector = document.getElementById('b100Sector').value||'';
@@ -1047,20 +1084,26 @@
       const chg = c.change_pct!=null ? pct(c.change_pct) : '';
       const chgCls = (c.change_pct||0)>=0?'up':'down';
       const score = c.final_score!=null ? c.final_score : (c.scores&&c.scores.final)!=null ? c.scores.final : c.buy_score;
+      const inPort = !!(c.in_portfolio || (c.position_qty||0) > 0);
+      const canBuy = c.price!=null;
       return `
-      <button type="button" class="bist100-item ${(bist100.selected&&(bist100.selected.ticker||bist100.selected.symbol)===sym)?'on':''}" data-b100="${sym}">
-        <div style="min-width:0;flex:1">
-          <div class="t">${sym}${c.is_favorite?' ★':''}</div>
+      <div class="bist100-item ${(bist100.selected&&(bist100.selected.ticker||bist100.selected.symbol)===sym)?'on':''}">
+        <button type="button" class="b100-main" data-b100="${sym}">
+          <div class="t">${sym}${c.is_favorite?' ★':''}${inPort?' · portföy':''}</div>
           <div class="n">${c.name||c.company_name||''}</div>
           <span class="sec">${c.sector}</span>
-        </div>
+        </button>
         <div class="b100-right">
           <span class="b100-sig ${dec}">${c.decision_label||dec}</span>
           <div class="b100-price">${priceTxt}</div>
           ${chg?`<div class="b100-chg ${chgCls}">${chg}</div>`:''}
           <div class="b100-score">Skor ${score!=null?Number(score).toFixed(0):'—'}</div>
+          <div class="b100-actions">
+            <button type="button" class="b100-trade buy" data-b100-buy="${sym}" ${canBuy?'':'disabled'} title="Paper AL">AL</button>
+            <button type="button" class="b100-trade sell" data-b100-sell="${sym}" ${inPort?'':'disabled'} title="Paper SAT">SAT</button>
+          </div>
         </div>
-      </button>`;
+      </div>`;
     }).join('');
     list.querySelectorAll('[data-b100]').forEach(btn=>{
       btn.onclick = ()=>{
@@ -1069,6 +1112,18 @@
         bist100.selected = company;
         renderBist100List();
         renderTradingView(company);
+      };
+    });
+    list.querySelectorAll('[data-b100-buy]').forEach(btn=>{
+      btn.onclick = (e)=>{
+        e.stopPropagation();
+        b100Trade(btn.dataset.b100Buy, 'BUY', btn);
+      };
+    });
+    list.querySelectorAll('[data-b100-sell]').forEach(btn=>{
+      btn.onclick = (e)=>{
+        e.stopPropagation();
+        b100Trade(btn.dataset.b100Sell, 'SELL', btn);
       };
     });
   }
@@ -1084,6 +1139,16 @@
       bist100.sectors = body.sectors || bist100.sectors || [];
       bist100.summary = body.summary || {};
       bist100.note = body.note || '';
+      try{
+        const w = await (await fetch('/api/paper/wallet')).json();
+        paperWallet = w;
+        const held = new Set((w.positions||[]).map(p=>p.symbol));
+        bist100.companies = (bist100.companies||[]).map(c=>{
+          const sym = c.ticker||c.symbol;
+          const pos = (w.positions||[]).find(p=>p.symbol===sym);
+          return {...c, in_portfolio: held.has(sym), position_qty: pos?pos.quantity:0};
+        });
+      }catch(_e){}
       const sel = document.getElementById('b100Sector');
       if((body.sectors||[]).length && sel.options.length <= 1){
         const current = sel.value;

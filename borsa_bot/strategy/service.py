@@ -859,9 +859,13 @@ class TradingService:
                     str(row.get("final_decision") or row.get("decision") or "")
                 )
                 row["final_score"] = float((row.get("scores") or {}).get("final") or row.get("buy_score") or 0)
+                pos = self.ledger.get_position(c.ticker)
+                row["position_qty"] = float(pos.quantity) if pos else 0
             else:
+                in_port = self.ledger.get_position(c.ticker)
                 row = {
                     "symbol": c.ticker,
+                    "ticker": c.ticker,
                     "name": c.name,
                     "sector": c.sector,
                     "tradingview_symbol": c.tradingview_symbol,
@@ -873,6 +877,8 @@ class TradingService:
                     "ai_confidence": None,
                     "scanner_class": "NO_TRADE",
                     "note": "Tarama kapsamı dışında veya veri yok",
+                    "in_portfolio": in_port is not None,
+                    "position_qty": float(in_port.quantity) if in_port else 0,
                 }
             rows.append(row)
 
@@ -1346,6 +1352,135 @@ class TradingService:
             )
             return {"ok": result.ok, "result": asdict(result), "alert_note": "ORDER event emitted (not SELL_SIGNAL)"}
         return {"ok": False, "message": f"no actionable signal ({d.decision.value})"}
+
+    def execute_manual_paper(self, symbol: str, side: str) -> dict:
+        """Manual BIST paper BUY/SELL — signal-independent (BIST100 UI)."""
+        symbol = symbol.upper()
+        side_u = side.upper()
+        if side_u not in {"BUY", "SELL"}:
+            return {"ok": False, "message": "side BUY veya SELL olmalı"}
+
+        if settings.is_live:
+            return {"ok": False, "message": "LIVE mode blocked — paper trading zorunlu", "live_trading": False}
+
+        gate = gate_market_data_for_scan(
+            self.provider,
+            app_env=settings.app_env,
+            max_age_sec=settings.data_freshness_sec,
+        )
+        self._market_gate = gate
+        if not gate.signals_allowed:
+            return {"ok": False, "message": f"{gate.code.value} — trading blocked", "market_data_gate": gate.to_dict()}
+        if not self.provider.has_market_data():
+            return {"ok": False, "message": "DATA SOURCE REQUIRED — veri yok, emir yok"}
+
+        meta = self.provider.source_meta(settings.data_freshness_sec)
+        if meta.freshness.value in {"STALE", "DISCONNECTED", "NO_DATA"}:
+            return {"ok": False, "message": "STALE/DISCONNECTED data — emir engellendi"}
+
+        try:
+            quote = self.provider.get_quote(symbol)
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "message": f"quote unavailable: {exc}"}
+
+        ok, reason = self.safety.evaluate(
+            data_fresh=self.provider.is_fresh(60),
+            api_ok=True,
+            order_status_ok=True,
+            spread_pct=quote.spread_pct,
+            daily_loss_pct=self.ledger.daily_loss_pct(),
+            clock_ok=True,
+            max_spread_pct=settings.max_spread_pct,
+        )
+        if not ok:
+            return {"ok": False, "message": f"safety halt: {reason}"}
+
+        decisions = {d.symbol: d for d in self.scan()}
+        d = decisions.get(symbol)
+
+        if side_u == "BUY":
+            if self.ledger.get_position(symbol) is not None:
+                return {"ok": False, "message": "Zaten portföyde — önce SAT"}
+            bars = self.provider.get_bars(symbol, 220)
+            ind = compute_indicators(bars)
+            plan = d.trade_plan if d else None
+            size_mult = float(d.opportunity.position_size_mult) if d and d.opportunity else 0.75
+            rd = self.risk.evaluate_entry(
+                symbol=symbol,
+                sector=quote.sector,
+                price=quote.price,
+                ind=ind,
+                action=SignalAction.BUY,
+                plan=plan,
+                spread_pct=quote.spread_pct,
+                correlated_sector_risk=self.ledger.sector_risk_pct(quote.sector),
+                opportunity=None,
+                capital_mode=self.capital_mode,
+                size_mult=size_mult,
+            )
+            if not rd.allowed:
+                return {"ok": False, "message": rd.reason, "risk": rd.risk.value}
+            order = OrderRequest(
+                symbol=symbol,
+                side="BUY",
+                quantity=rd.quantity,
+                price=quote.price,
+                reason="manual_bist100_buy",
+                stop_price=rd.stop_price,
+                target_price=rd.target_price,
+                client_order_id=f"MANUAL-B100-BUY:{symbol}:{utc_now().strftime('%Y%m%d%H%M%S')}",
+            )
+            result = self.broker.submit(order, quote.sector)
+            emit_order_lifecycle(
+                self.alerts,
+                symbol=symbol,
+                side="BUY",
+                result=result,
+                strategy="MANUAL_BIST100",
+                price=quote.price,
+            )
+            return {
+                "ok": result.ok,
+                "side": "BUY",
+                "symbol": symbol,
+                "quantity": rd.quantity,
+                "price": quote.price,
+                "result": asdict(result),
+                "wallet": self.paper_wallet(),
+            }
+
+        pos = self.ledger.get_position(symbol)
+        if not pos:
+            return {"ok": False, "message": "Portföyde pozisyon yok"}
+        rd = self.risk.evaluate_exit(symbol, SignalAction.SELL)
+        if not rd.allowed:
+            return {"ok": False, "message": rd.reason}
+        order = OrderRequest(
+            symbol=symbol,
+            side="SELL",
+            quantity=rd.quantity,
+            price=quote.price,
+            reason="manual_bist100_sell",
+            client_order_id=f"MANUAL-B100-SELL:{symbol}:{utc_now().strftime('%Y%m%d%H%M%S')}",
+        )
+        result = self.broker.submit(order, quote.sector)
+        emit_order_lifecycle(
+            self.alerts,
+            symbol=symbol,
+            side="SELL",
+            result=result,
+            strategy="MANUAL_BIST100",
+            price=quote.price,
+        )
+        return {
+            "ok": result.ok,
+            "side": "SELL",
+            "symbol": symbol,
+            "quantity": rd.quantity,
+            "price": quote.price,
+            "result": asdict(result),
+            "wallet": self.paper_wallet(),
+        }
 
     def monitor_exits(self) -> list[dict]:
         """Check stop/target vs marks; on hit execute paper sell then emit EXECUTION alerts."""

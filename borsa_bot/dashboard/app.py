@@ -84,6 +84,11 @@ class ExecBody(BaseModel):
     approved: bool = False
 
 
+class PaperTradeBody(BaseModel):
+    symbol: str
+    side: str  # BUY | SELL
+
+
 class NotificationSettingsBody(BaseModel):
     sms_on: bool | None = None
     push_on: bool | None = None
@@ -348,6 +353,17 @@ def daily_home() -> dict:
         "scan_stats": (engine.status().get("last_cycle") or {}).get("filter_stats"),
         "display_note": "Top list = visible opportunities only — not the full universe.",
     }
+
+
+@app.post("/api/paper/trade")
+def paper_trade(body: PaperTradeBody, authorization: str | None = Header(default=None)) -> dict:
+    """Manual BIST paper BUY/SELL from BIST100 UI."""
+    if bool(getattr(settings, "auth_enabled", False)):
+        auth_store.require(authorization, min_role=Role.TRADER)
+    side = body.side.upper().strip()
+    if side not in {"BUY", "SELL"}:
+        raise HTTPException(400, "side must be BUY or SELL")
+    return service.execute_manual_paper(body.symbol.upper(), side)
 
 
 @app.post("/api/execute")
