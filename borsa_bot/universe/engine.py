@@ -41,8 +41,37 @@ def detect_pump_dump(closes: list[float], volumes: list[float]) -> bool:
 
 
 def evaluate_symbol(provider: MarketDataProvider, symbol: str) -> UniverseMember:
-    quote = provider.get_quote(symbol)
-    bars = provider.get_bars(symbol, 220)
+    try:
+        quote = provider.get_quote(symbol)
+    except Exception as exc:  # noqa: BLE001
+        return UniverseMember(
+            symbol=symbol,
+            name=symbol,
+            sector="",
+            eligible=False,
+            reason=f"no_quote:{type(exc).__name__}",
+            liquidity_score=0.0,
+            spread_pct=99.0,
+            avg_volume=0.0,
+            volatility_pct=99.0,
+            pump_dump_flag=False,
+        )
+    try:
+        bars = provider.get_bars(symbol, 220)
+    except Exception:  # noqa: BLE001
+        # Quote-only fallback — do not crash full-universe Yahoo scans on 429
+        return UniverseMember(
+            symbol=symbol,
+            name=quote.name,
+            sector=quote.sector,
+            eligible=False,
+            reason="no_bars_or_rate_limited",
+            liquidity_score=max(0.0, 40.0 - quote.spread_pct * 20),
+            spread_pct=round(quote.spread_pct, 4),
+            avg_volume=0.0,
+            volatility_pct=99.0,
+            pump_dump_flag=False,
+        )
     closes = [b.close for b in bars]
     volumes = [b.volume for b in bars]
     ind = compute_indicators(bars) if len(bars) >= 210 else None
@@ -89,4 +118,24 @@ def evaluate_symbol(provider: MarketDataProvider, symbol: str) -> UniverseMember
 
 
 def select_universe(provider: MarketDataProvider) -> list[UniverseMember]:
-    return [evaluate_symbol(provider, s) for s in provider.list_symbols()]
+    """Build universe membership. Never raise on single-symbol MD failures."""
+    out: list[UniverseMember] = []
+    for s in provider.list_symbols():
+        try:
+            out.append(evaluate_symbol(provider, s))
+        except Exception as exc:  # noqa: BLE001
+            out.append(
+                UniverseMember(
+                    symbol=s,
+                    name=s,
+                    sector="",
+                    eligible=False,
+                    reason=f"universe_error:{type(exc).__name__}",
+                    liquidity_score=0.0,
+                    spread_pct=99.0,
+                    avg_volume=0.0,
+                    volatility_pct=99.0,
+                    pump_dump_flag=False,
+                )
+            )
+    return out

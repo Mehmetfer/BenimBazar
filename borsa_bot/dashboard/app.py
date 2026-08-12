@@ -56,6 +56,20 @@ async def _lifespan(app: FastAPI):
 
     task = asyncio.create_task(_poll())
     wallet_task = asyncio.create_task(_wallet_poll())
+
+    def _startup_warm() -> None:
+        try:
+            app.state.daily_warm_started = True
+            service.tick()
+            service.scan()
+        except Exception:  # noqa: BLE001
+            pass
+        finally:
+            app.state.daily_warm_started = False
+
+    import threading
+
+    threading.Thread(target=_startup_warm, name="startup-scan-warm", daemon=True).start()
     try:
         service.tick()
         yield
@@ -163,6 +177,28 @@ def health() -> dict:
 def markets() -> dict:
     """Market plane catalog — BIST default; CRYPTO foundation only."""
     return crypto_service.markets_catalog()
+
+
+@app.get("/api/bist100/quotes")
+def bist100_quotes() -> dict:
+    """Fast BIST100 quote grid — Son/Alış/Satış/%G without full scan."""
+    try:
+        return service.bist100_quotes()
+    except FileNotFoundError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(500, str(exc)) from exc
+
+
+@app.get("/api/watchlist/quotes")
+def watchlist_quotes() -> dict:
+    """Fast Takip Listem grid — XU100 + favorites, Son/Alış/Satış/%G."""
+    try:
+        return service.watchlist_quotes()
+    except FileNotFoundError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(500, str(exc)) from exc
 
 
 @app.get("/api/bist100/analysis")
@@ -394,13 +430,77 @@ def dashboard() -> dict:
 
 @app.get("/api/daily")
 def daily_home() -> dict:
-    """Simple live trading home — integrity-first, daily opportunities."""
+    """Simple live trading home — integrity-first, daily opportunities.
+
+    Must stay responsive: Yahoo full-universe scans can 429. Prefer scan cache;
+    on cold start return shell + kick background warm scan (page still opens).
+    """
+    import threading
+    import time
+
+    t0 = time.time()
+    soft_deadline_sec = 12.0
+
+    def _shell(daily: dict | None = None, *, scan_pending: bool = False, note: str = "") -> dict:
+        try:
+            meta = service.provider.source_meta(settings.data_freshness_sec)
+            src = meta.to_dict()
+        except Exception:  # noqa: BLE001
+            src = {"kind": "UNKNOWN", "display_name": "UNKNOWN"}
+        try:
+            health = service.health()
+        except Exception:  # noqa: BLE001
+            health = {"status": "UNKNOWN"}
+        return {
+            "daily": daily or {
+                "opportunities": [],
+                "no_opportunity": True,
+                "no_opportunity_message": note or "Tarama devam ediyor — sayfayı yenileyin",
+            },
+            "health": health,
+            "data_source": src,
+            "data_source_kind": src.get("data_source_kind") or src.get("kind"),
+            "tradeable": bool(src.get("tradeable")),
+            "live_ready": False,
+            "live_data_provider": (health or {}).get("live_data_provider"),
+            "principle": "LESS DATA, MORE DECISION · DELAYED ≠ LIVE",
+            "universe": universe_stats(),
+            "scan_stats": (engine.status().get("last_cycle") or {}).get("filter_stats"),
+            "display_note": "Top list = visible opportunities only — not the full universe.",
+            "scan_pending": scan_pending,
+            "elapsed_ms": int((time.time() - t0) * 1000),
+        }
+
+    # Warm cache path — only ONE background warm at a time
+    cache_warm = getattr(service, "_scan_cache", None) is not None
+    if not cache_warm:
+        if not getattr(app.state, "daily_warm_started", False):
+            app.state.daily_warm_started = True
+
+            def _warm() -> None:
+                try:
+                    service.scan()
+                except Exception:  # noqa: BLE001
+                    pass
+                finally:
+                    app.state.daily_warm_started = False
+
+            threading.Thread(target=_warm, name="daily-scan-warm", daemon=True).start()
+        # Try a quick tick for source banner only
+        try:
+            service.tick()
+        except Exception:  # noqa: BLE001
+            pass
+        return _shell(scan_pending=True, note="İlk tarama arka planda — Yahoo DELAYED · birkaç saniye sonra yenileyin")
+
     try:
         service.monitor_exits()
     except Exception:  # noqa: BLE001
         pass
+    if time.time() - t0 > soft_deadline_sec:
+        return _shell(scan_pending=True, note="Zaman aşımı — önbellek yenileniyor")
+
     dash = service.dashboard()
-    # Strip any accidental client-shaped fields; source is backend-owned
     src = dash.get("data_source") or {}
     return {
         "daily": dash.get("daily"),
@@ -414,6 +514,8 @@ def daily_home() -> dict:
         "universe": universe_stats(),
         "scan_stats": (engine.status().get("last_cycle") or {}).get("filter_stats"),
         "display_note": "Top list = visible opportunities only — not the full universe.",
+        "scan_pending": False,
+        "elapsed_ms": int((time.time() - t0) * 1000),
     }
 
 

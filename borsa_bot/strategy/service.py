@@ -279,9 +279,17 @@ class TradingService:
             self.predictions.evaluate_due(_px, actual_result_source=meta_kind.value)
         except Exception:  # noqa: BLE001
             pass
-        regime = detect_regime(self.provider)
-        index_bars = self.provider.get_bars("XU100", 220)
-        index_ind = compute_indicators(index_bars)
+        try:
+            regime = detect_regime(self.provider)
+        except Exception:  # noqa: BLE001
+            from config.models import MarketRegime as _MR
+
+            regime = _MR.NEUTRAL
+        try:
+            index_bars = self.provider.get_bars("XU100", 220)
+            index_ind = compute_indicators(index_bars)
+        except Exception:  # noqa: BLE001
+            index_bars, index_ind = [], None
         index_bullish = bool(index_ind and index_ind.ema21 > index_ind.ema50)
         atr_index_pct = (index_ind.atr14 / index_ind.ema21 * 100) if index_ind and index_ind.ema21 else 2.0
         weights = regime_weights(regime)
@@ -295,16 +303,33 @@ class TradingService:
             liquidity_ok=True,
         )
         self.risk.capital_mode = self.capital_mode
-        universe_map = {m.symbol: m for m in select_universe(self.provider)}
-        # Correlation series for book awareness
+        meta_kind = str(
+            getattr(getattr(self.provider.source_meta(settings.data_freshness_sec), "kind", None), "value", "")
+            or ""
+        ).upper()
+        provider_id = str(getattr(self.provider, "provider_id", "") or "").lower()
+        delayed_feed = meta_kind in {"DELAYED", "REQUIRED"} or "yahoo" in provider_id or provider_id == "session_auto"
+        # Full-universe bar evaluation is unsafe on Yahoo DELAYED (100 chart pulls → 429).
+        if delayed_feed:
+            universe_map = {}
+        else:
+            universe_map = {m.symbol: m for m in select_universe(self.provider)}
+        # Correlation series for book awareness — NEVER fetch bars for full universe on
+        # Yahoo/DELAYED (100 chart calls → 429 / page hang). Positions + favorites only.
         ret_series: dict[str, list[float]] = {}
-        for symbol in self.provider.list_symbols():
-            bars_c = self.provider.get_bars(symbol, 40)
+        corr_syms = {p.symbol for p in self.ledger.positions()} | set(self.favorites.symbols())
+        if not delayed_feed:
+            corr_syms |= set(self.provider.list_symbols())
+        for symbol in corr_syms:
+            try:
+                bars_c = self.provider.get_bars(symbol, 40)
+            except Exception:  # noqa: BLE001
+                continue
             closes = [b.close for b in bars_c]
             ret_series[symbol] = [
                 closes[i] / closes[i - 1] - 1 for i in range(1, len(closes)) if closes[i - 1]
             ]
-        corr_matrix = build_correlation_matrix(ret_series)
+        corr_matrix = build_correlation_matrix(ret_series) if ret_series else {}
 
         # Priority queue: FAVORITES → rest of market (does not skip non-favorites)
         fav_set = self.favorites.symbols()
@@ -313,12 +338,47 @@ class TradingService:
             want = {s.upper() for s in symbols}
             all_syms = [s for s in all_syms if s in want]
         ordered = [s for s in all_syms if s in fav_set] + [s for s in all_syms if s not in fav_set]
+        # Cap deep Yahoo analysis so /api/daily cannot hang on 100 sequential chart pulls
+        if delayed_feed and symbols is None:
+            deep_cap = max(5, min(8, int(getattr(settings, "autonomy_deep_max", 8))))
+            owned = {p.symbol for p in self.ledger.positions()}
+            priority = [s for s in ordered if s in fav_set or s in owned]
+            rest = [s for s in ordered if s not in fav_set and s not in owned]
+            ordered = (priority + rest)[:deep_cap]
+            # Prefetch bars in small parallel batches (Yahoo chart is the bottleneck)
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
+            def _prefetch(sym: str) -> None:
+                try:
+                    self.provider.get_bars(sym, 240)
+                except Exception:  # noqa: BLE001
+                    return
+
+            try:
+                with ThreadPoolExecutor(max_workers=3) as pool:
+                    futs = [pool.submit(_prefetch, s) for s in ordered[:deep_cap]]
+                    futs.append(pool.submit(_prefetch, "XU100"))
+                    for fut in as_completed(futs, timeout=40):
+                        try:
+                            fut.result()
+                        except Exception:  # noqa: BLE001
+                            pass
+            except Exception:  # noqa: BLE001
+                pass
 
         for symbol in ordered:
-            quote = self.provider.get_quote(symbol)
+            try:
+                quote = self.provider.get_quote(symbol)
+            except Exception:  # noqa: BLE001
+                continue
             marks[symbol] = quote.price
             uni = universe_map.get(symbol)
-            bars = self.provider.get_bars(symbol, 240)
+            try:
+                bars = self.provider.get_bars(symbol, 240)
+            except Exception:  # noqa: BLE001
+                continue
+            if not bars:
+                continue
             # Mixed LIVE + SIMULATED (etc.) must not enter one calculation
             env = normalize_app_env(settings.app_env)
             try:
@@ -831,6 +891,118 @@ class TradingService:
             self._scan_cache_ts = time.time()
         return decisions
 
+    def bist100_quotes(self) -> dict:
+        """Fast BIST100 quote board — Son/Alış/Satış/%G (no deep scan)."""
+        from universe.bist100 import list_companies
+
+        try:
+            self.tick()
+        except Exception:  # noqa: BLE001
+            pass
+        source = self.provider.source_meta(settings.data_freshness_sec)
+
+        def _row(sym: str, name: str, sector: str = "", tv: str = "") -> dict:
+            try:
+                q = self.provider.get_quote(sym)
+                chg = float(getattr(q, "change_pct", 0) or 0)
+                ts = q.ts.isoformat() if hasattr(q.ts, "isoformat") else None
+                return {
+                    "symbol": sym,
+                    "ticker": sym,
+                    "name": name,
+                    "sector": sector,
+                    "price": round(float(q.price), 4),
+                    "bid": round(float(q.bid), 4) if q.bid else None,
+                    "ask": round(float(q.ask), 4) if q.ask else None,
+                    "change_pct": round(chg, 2),
+                    "quote_ts": ts,
+                    "tradingview_symbol": tv or f"BIST:{sym}",
+                    "decision": None,
+                    "decision_label": None,
+                }
+            except Exception:  # noqa: BLE001
+                return {
+                    "symbol": sym,
+                    "ticker": sym,
+                    "name": name,
+                    "sector": sector,
+                    "price": None,
+                    "bid": None,
+                    "ask": None,
+                    "change_pct": None,
+                    "tradingview_symbol": tv or f"BIST:{sym}",
+                    "decision": "NO_DATA",
+                    "decision_label": "VERİ YOK",
+                }
+
+        index = _row("XU100", "BIST 100", "Endeks", "BIST:XU100")
+        quotes = [_row(c.ticker, c.name, c.sector, c.tradingview_symbol) for c in list_companies()]
+        return {
+            "ok": True,
+            "index": index,
+            "quotes": quotes,
+            "count": len(quotes),
+            "data_source": source.to_dict(),
+            "note": "Hızlı kotasyon — sinyal analizi ayrı yüklenir",
+        }
+
+    def watchlist_quotes(self) -> dict:
+        """Fast Takip Listem board — XU100 + favorites, Son/Alış/Satış/%G."""
+        self.favorites.ensure_default_watchlist(market_type="BIST")
+        try:
+            self.tick()
+        except Exception:  # noqa: BLE001
+            pass
+        source = self.provider.source_meta(settings.data_freshness_sec)
+
+        def _row(sym: str, name: str = "", *, is_favorite: bool = False) -> dict:
+            try:
+                q = self.provider.get_quote(sym)
+                chg = float(getattr(q, "change_pct", 0) or 0)
+                ts = q.ts.isoformat() if hasattr(q.ts, "isoformat") else None
+                return {
+                    "symbol": sym,
+                    "ticker": sym,
+                    "name": name or sym,
+                    "price": round(float(q.price), 4),
+                    "bid": round(float(q.bid), 4) if q.bid else None,
+                    "ask": round(float(q.ask), 4) if q.ask else None,
+                    "change_pct": round(chg, 2),
+                    "quote_ts": ts,
+                    "is_favorite": is_favorite,
+                    "decision": None,
+                    "decision_label": None,
+                }
+            except Exception:  # noqa: BLE001
+                return {
+                    "symbol": sym,
+                    "ticker": sym,
+                    "name": name or sym,
+                    "price": None,
+                    "bid": None,
+                    "ask": None,
+                    "change_pct": None,
+                    "is_favorite": is_favorite,
+                    "decision": "NO_DATA",
+                    "decision_label": "VERİ YOK",
+                }
+
+        index = _row("XU100", "BIST 100")
+        quotes = []
+        for fav in self.favorites.list_favorites(market_type="BIST"):
+            sym = fav.symbol.upper()
+            if sym == "XU100":
+                continue
+            quotes.append(_row(sym, sym, is_favorite=True))
+        return {
+            "ok": True,
+            "index": index,
+            "quotes": quotes,
+            "count": len(quotes),
+            "data_source": source.to_dict(),
+            "note": "Takip listesi — hızlı kotasyon",
+        }
+
     def bist100_analysis(
         self,
         *,
@@ -1060,16 +1232,32 @@ class TradingService:
         change_pct = 0.0
         prev_close = None
         quote_ts = None
+        bid = ask = None
         try:
+            quote = self.provider.get_quote(d.symbol)
+            bid = round(float(quote.bid), 4) if quote.bid else None
+            ask = round(float(quote.ask), 4) if quote.ask else None
+            if getattr(quote, "change_pct", None) is not None:
+                change_pct = float(quote.change_pct)
+            if hasattr(quote, "ts") and quote.ts:
+                quote_ts = quote.ts.isoformat() if hasattr(quote.ts, "isoformat") else str(quote.ts)
             bars = self.provider.get_bars(d.symbol, 3)
-            if bars:
+            if bars and not quote_ts:
                 quote_ts = bars[-1].ts.isoformat() if hasattr(bars[-1].ts, "isoformat") else str(bars[-1].ts)
-            if len(bars) >= 2 and bars[-2].close:
+            if len(bars) >= 2 and bars[-2].close and change_pct == 0.0:
                 prev_close = round(bars[-2].close, 2)
                 change_pct = (bars[-1].close / bars[-2].close - 1) * 100
         except Exception:  # noqa: BLE001
-            change_pct = 0.0
-            prev_close = None
+            try:
+                bars = self.provider.get_bars(d.symbol, 3)
+                if bars:
+                    quote_ts = bars[-1].ts.isoformat() if hasattr(bars[-1].ts, "isoformat") else str(bars[-1].ts)
+                if len(bars) >= 2 and bars[-2].close:
+                    prev_close = round(bars[-2].close, 2)
+                    change_pct = (bars[-1].close / bars[-2].close - 1) * 100
+            except Exception:  # noqa: BLE001
+                change_pct = 0.0
+                prev_close = None
         ps = float(
             getattr(d, "_priority_score", None)
             or compute_priority_score(
@@ -1091,6 +1279,8 @@ class TradingService:
             "name": d.name,
             "sector": d.sector,
             "price": d.price,
+            "bid": bid,
+            "ask": ask,
             "prev_close": prev_close,
             "change_pct": round(change_pct, 2),
             "quote_ts": quote_ts,

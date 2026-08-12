@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -74,7 +75,7 @@ class YahooBistMarketDataProvider:
     is_stub = False
     is_real_provider = True
 
-    def __init__(self, symbols: list[str] | None = None, *, timeout_sec: float = 12.0) -> None:
+    def __init__(self, symbols: list[str] | None = None, *, timeout_sec: float = 4.0) -> None:
         self.timeout_sec = timeout_sec
         self._symbols = list(symbols) if symbols else _default_symbols()
         self._quotes: dict[str, QuoteSnapshot] = {}
@@ -82,8 +83,18 @@ class YahooBistMarketDataProvider:
         self._last_ok: datetime | None = None
         self._connected = False
         self._error = ""
+        self._rate_limited_until: float = 0.0
+
+    def _rate_limited(self) -> bool:
+        return time.time() < self._rate_limited_until
+
+    def _mark_rate_limited(self, sec: float = 45.0) -> None:
+        self._rate_limited_until = time.time() + sec
+        self._error = "YAHOO_RATE_LIMITED"
 
     def _get_json(self, url: str) -> Any:
+        if self._rate_limited():
+            raise RuntimeError("YAHOO_RATE_LIMITED")
         req = urllib.request.Request(
             url,
             headers={
@@ -92,9 +103,15 @@ class YahooBistMarketDataProvider:
                 "Accept-Language": "en-US,en;q=0.9",
             },
         )
-        with urllib.request.urlopen(req, timeout=self.timeout_sec) as resp:  # noqa: S310
-            body = resp.read().decode("utf-8")
-            return json.loads(body) if body else {}
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout_sec) as resp:  # noqa: S310
+                body = resp.read().decode("utf-8")
+                return json.loads(body) if body else {}
+        except urllib.error.HTTPError as exc:
+            if int(getattr(exc, "code", 0) or 0) == 429:
+                self._mark_rate_limited(60.0)
+                raise RuntimeError("YAHOO_RATE_LIMITED") from exc
+            raise
 
     def _fetch_quotes_batch(self, symbols: list[str]) -> None:
         if not symbols:
@@ -127,6 +144,12 @@ class YahooBistMarketDataProvider:
                 else now
             )
             spread = max(0.01, price * 0.0008)
+            change_pct = 0.0
+            if len(closes) >= 2 and closes[-2]:
+                try:
+                    change_pct = (float(closes[-1]) / float(closes[-2]) - 1.0) * 100.0
+                except (TypeError, ValueError, ZeroDivisionError):
+                    change_pct = 0.0
             q = QuoteSnapshot(
                 symbol=app_sym,
                 name=_name_for(app_sym),
@@ -148,6 +171,7 @@ class YahooBistMarketDataProvider:
                 provider=self.provider_id,
                 origin=EnvironmentOrigin.LIVE,
             )
+            setattr(self._quotes[app_sym], "change_pct", round(change_pct, 2))
 
     def _fetch_bars(self, symbol: str, lookback: int) -> list[Bar]:
         sym = normalize_app_symbol(symbol)
@@ -217,16 +241,32 @@ class YahooBistMarketDataProvider:
                 return
             self._connected = False
             return
+        if self._rate_limited():
+            # Keep last good quotes — do not hammer Yahoo
+            if self._quotes:
+                self._connected = True
+                return
+            self._connected = False
+            return
         try:
             chunk = 18
             for i in range(0, len(self._symbols), chunk):
+                if self._rate_limited():
+                    break
                 self._fetch_quotes_batch(self._symbols[i : i + chunk])
+                time.sleep(0.15)
             if not self._quotes:
                 raise RuntimeError("no quotes returned")
             self._connected = True
             self._last_ok = datetime.now(timezone.utc)
-            self._error = ""
+            if not self._rate_limited():
+                self._error = ""
         except Exception as exc:  # noqa: BLE001
+            if "RATE_LIMITED" in str(exc):
+                if self._quotes:
+                    self._connected = True
+                    logger.warning("YahooBist rate-limited — serving cached quotes")
+                    return
             self._connected = False
             self._error = f"YAHOO_FETCH_FAILED:{type(exc).__name__}"
             logger.warning("YahooBist tick failed: %s", exc)
@@ -246,7 +286,18 @@ class YahooBistMarketDataProvider:
         cached = self._bars.get(sym)
         if cached and len(cached) >= need:
             return cached[-lookback:]
-        return self._fetch_bars(sym, lookback)
+        if cached:
+            # Prefer stale/partial cache over blocking on rate limit
+            if self._rate_limited():
+                return cached[-lookback:]
+        if self._rate_limited():
+            raise RuntimeError(f"NO_MARKET_DATA: Yahoo rate-limited ({sym})")
+        try:
+            return self._fetch_bars(sym, lookback)
+        except Exception:
+            if cached:
+                return cached[-lookback:]
+            raise
 
     def list_symbols(self) -> list[str]:
         return [s for s in self._symbols if s != INDEX_SYMBOL]

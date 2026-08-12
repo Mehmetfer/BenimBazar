@@ -145,6 +145,9 @@
     .watch-row{display:flex;justify-content:space-between;font-size:.68rem;opacity:.95;margin-top:2px}
     .watch-row span{opacity:.8}
     .watch-pct{text-align:center;font-weight:800;font-size:.82rem;margin-top:6px}
+    .watch-dec{text-align:center;font-size:.58rem;font-weight:800;margin-top:4px;opacity:.9}
+    .watch-tile.on{outline:2px solid rgba(91,141,239,.65);outline-offset:1px}
+    .watch-tile.outside{opacity:.92;border-style:dashed}
   /* Stock detail overlay */
     .stock-overlay,.order-overlay{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
     .stock-overlay{align-items:stretch}
@@ -395,7 +398,7 @@
   <div class="sysline" id="clockLine">Son veri: —</div>
 
   <div id="bistShell">
-  <div class="panel on" id="panel-home">
+  <div class="panel" id="panel-home">
     <div class="search">
       <input id="q" placeholder="Hisse ara (THYAO, ASELS…)" autocomplete="off" />
       <button type="button" id="searchBtn">Ara</button>
@@ -413,7 +416,7 @@
     <button class="more" id="moreBtn" type="button" style="display:none">DAHA FAZLA</button>
   </div>
 
-  <div class="panel" id="panel-fav">
+  <div class="panel on" id="panel-fav">
     <div class="fav-head">
       <h2>★ Takip Listem</h2>
       <div class="fav-wallet-pill" id="favWalletPill">Cüzdan: —</div>
@@ -437,7 +440,7 @@
       <div class="b100-summary" id="b100Summary">Tam evren taraması başlıyor…</div>
     </div>
     <div class="bist100-layout">
-      <div class="bist100-list-wrap" id="bist100List"></div>
+      <div class="bist100-list-wrap watch-grid" id="bist100List"></div>
       <div class="tv-sticky">
         <div class="tv-wrap">
           <div class="tv-head">
@@ -608,16 +611,16 @@
   </div>
 
   <nav class="nav">
-    <button class="on" data-nav="home" type="button"><span class="ico">🏠</span>Ana</button>
-    <button data-nav="fav" type="button"><span class="ico">★</span>Favori</button>
-    <button data-nav="mkt" type="button"><span class="ico">📈</span>BIST100</button>
+    <button class="on" data-nav="fav" type="button"><span class="ico">📱</span>Ekranım</button>
+    <button data-nav="home" type="button"><span class="ico">📊</span>Sinyaller</button>
+    <button data-nav="mkt" type="button"><span class="ico">📈</span>Piyasalar</button>
     <button data-nav="port" type="button"><span class="ico">💼</span>Portföyüm</button>
     <button data-nav="set" type="button"><span class="ico">⚙</span>Ayar</button>
   </nav>
 
 <script>
 (() => {
-  let daily = null, dash = null, filter = 'ALL', showAll = false, lastPanel = 'home';
+  let daily = null, dash = null, filter = 'ALL', showAll = false, lastPanel = 'fav';
   let activeMarket = 'BIST';
   let cryptoDash = null, cFilter = 'ALL', lastCryptoPanel = 'home', cryptoTf = '15m';
   let bist100 = {companies: [], sectors: [], selected: null, summary: {}, note: '', extra: []};
@@ -699,10 +702,6 @@
     return paperWallet;
   }
 
-  function bidAsk(price){
-    const p = Number(price)||0;
-    return {bid: p*0.999, ask: p*1.001, mid: p};
-  }
 
   function updateFavWalletPill(){
     const el = document.getElementById('favWalletPill');
@@ -812,7 +811,7 @@
     sideEl.className = 'order-side ' + (isSell ? 'sell' : 'buy');
     document.getElementById('orderSymLabel').textContent = sym;
     const px = orderCtx.price;
-    const ba = bidAsk(px);
+    const ba = bidAsk(px, item);
     const defaultPrice = isSell ? (ba.bid||px) : (ba.ask||px);
     document.getElementById('orderPriceInput').value = defaultPrice ? Number(defaultPrice).toFixed(2) : '';
     const maxSell = Math.floor(positionQty||0);
@@ -878,7 +877,7 @@
     stockDetailCtx = item;
     const sym = item.symbol || item.ticker;
     const px = Number(item.price||0);
-    const ba = bidAsk(px);
+    const ba = bidAsk(px, item);
     const chg = Number(item.change_pct||0);
     document.getElementById('sdPrice').textContent = px ? money(px) : '—';
     const chgEl = document.getElementById('sdChg');
@@ -899,50 +898,85 @@
     document.getElementById('stockDetailOverlay').setAttribute('aria-hidden','false');
   }
 
-  function watchTileHtml(item){
+  function bidAsk(price, item){
+    if(item && item.bid!=null && item.ask!=null && Number(item.bid)>0 && Number(item.ask)>0){
+      return {bid: Number(item.bid), ask: Number(item.ask), mid: Number(item.price||item.bid)};
+    }
+    const p = Number(price)||0;
+    return {bid: p*0.999, ask: p*1.001, mid: p};
+  }
+
+  function formatQuoteTs(item){
+    const raw = item && (item.quote_ts || item.ts);
+    if(!raw) return new Date().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    try{
+      const d = new Date(raw);
+      if(!isNaN(d.getTime())) return d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    }catch(_e){}
+    return new Date().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  }
+
+  function watchTileHtml(item, opts){
+    const outside = !!(opts && opts.outside);
     const sym = item.symbol || item.ticker;
     const px = Number(item.price||0);
-    const ba = bidAsk(px);
-    const chg = Number(item.change_pct||0);
+    const ba = bidAsk(px, item);
+    const chg = item.change_pct!=null ? Number(item.change_pct) : 0;
     const cls = chg>0.05?'up':(chg<-0.05?'down':'flat');
-    const ts = new Date().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-    return `<div class="watch-tile ${cls}" data-watch="${sym}">
-      <div class="watch-top"><b>${sym}</b><span class="watch-ts">${ts}</span></div>
+    const ts = formatQuoteTs(item);
+    const dec = item.decision_label || item.decision;
+    const decHtml = (dec && !['NO_DATA','VERİ YOK','OUTSIDE_XU100','XU100'].includes(String(dec)))
+      ? `<div class="watch-dec">${dec}</div>` : '';
+    const fav = item.is_favorite ? ' ★' : '';
+    const port = (item.in_portfolio || (item.position_qty||0)>0) ? ' ·P' : '';
+    return `<div class="watch-tile ${cls} ${outside?'outside':''} ${(bist100.selected&&(bist100.selected.ticker||bist100.selected.symbol)===sym)?'on':''}" data-watch="${sym}" data-b100="${sym}">
+      <div class="watch-top"><b>${sym}${fav}${port}</b><span class="watch-ts">${ts}</span></div>
       <div class="watch-row"><span>Son</span><b>${px?money(px):'—'}</b></div>
       <div class="watch-row"><span>Alış</span><b>${px?money(ba.bid):'—'}</b></div>
       <div class="watch-row"><span>Satış</span><b>${px?money(ba.ask):'—'}</b></div>
       <div class="watch-pct">${px?('%'+(chg>=0?'+':'')+chg.toFixed(2)):'—'}</div>
+      ${decHtml}
     </div>`;
   }
 
   async function loadFavorites(){
     const el = document.getElementById('favHome');
-    el.innerHTML = '<div class="empty">Yükleniyor…</div>';
+    el.innerHTML = '<div class="empty" style="grid-column:1/-1">Yükleniyor…</div>';
     await ensureWallet();
     updateFavWalletPill();
     try{
-      const body = await (await fetch('/api/favorites')).json();
-      const favs = body.favorites||[];
-      if(!favs.length){
-        el.innerHTML = '<div class="empty">Favori yok — ana sayfadan ★ ekleyin</div>';
-        return;
-      }
+      const body = await (await fetch('/api/watchlist/quotes')).json();
+      const favs = body.quotes || [];
       const held = new Set((paperWallet?.positions||[]).map(p=>p.symbol));
       favs.forEach(f=>{
         f.in_portfolio = held.has(f.symbol);
         const pos = (paperWallet?.positions||[]).find(p=>p.symbol===f.symbol);
         f.position_qty = pos ? pos.quantity : 0;
+        f.is_favorite = true;
       });
-      el.innerHTML = favs.map(watchTileHtml).join('');
+      if(!favs.length && !body.index){
+        el.innerHTML = '<div class="empty" style="grid-column:1/-1">Takip listesi boş — ★ ile hisse ekleyin</div>';
+        return;
+      }
+      let html = '';
+      if(body.index && body.index.price != null){
+        html += watchTileHtml({...body.index, symbol:'XU100', ticker:'XU100'}, {outside:false});
+      }
+      html += favs.map(w => watchTileHtml(w)).join('');
+      el.innerHTML = html;
       el.querySelectorAll('[data-watch]').forEach(tile=>{
         tile.onclick = ()=>{
           const sym = tile.dataset.watch;
+          if(sym === 'XU100' && body.index){
+            openStockDetail({...body.index, symbol:'XU100', ticker:'XU100'});
+            return;
+          }
           const item = favs.find(f=>(f.symbol||f.ticker)===sym);
           if(item) openStockDetail(item);
         };
       });
     }catch(e){
-      el.innerHTML = '<div class="empty">Favoriler yüklenemedi</div>';
+      el.innerHTML = '<div class="empty" style="grid-column:1/-1">Takip listesi yüklenemedi</div>';
     }
   }
 
@@ -1724,26 +1758,20 @@
   }
 
   function bindBist100ListHandlers(list){
-    list.querySelectorAll('[data-b100]').forEach(btn=>{
-      btn.onclick = ()=>{
+    list.querySelectorAll('[data-b100],[data-watch]').forEach(tile=>{
+      tile.onclick = ()=>{
+        const sym = tile.dataset.b100 || tile.dataset.watch;
         const all = [...(bist100.companies||[]), ...(bist100.extra||[])];
-        const company = all.find(x => (x.ticker||x.symbol) === btn.dataset.b100);
-        if(!company) return;
-        bist100.selected = company;
+        if(sym === 'XU100' && bist100.index){
+          bist100.selected = bist100.index;
+        } else {
+          const company = all.find(x => (x.ticker||x.symbol) === sym);
+          if(!company) return;
+          bist100.selected = company;
+        }
         renderBist100List();
-        renderTradingView(company);
-      };
-    });
-    list.querySelectorAll('[data-b100-buy]').forEach(btn=>{
-      btn.onclick = (e)=>{
-        e.stopPropagation();
-        b100Trade(btn.dataset.b100Buy, 'BUY');
-      };
-    });
-    list.querySelectorAll('[data-b100-sell]').forEach(btn=>{
-      btn.onclick = (e)=>{
-        e.stopPropagation();
-        b100Trade(btn.dataset.b100Sell, 'SELL');
+        if(bist100.selected) renderTradingView(bist100.selected);
+        openStockDetail(bist100.selected);
       };
     });
   }
@@ -1792,26 +1820,43 @@
         : '<div class="empty">Sonuç yok</div>';
       return;
     }
-    let html = rows.map(c => b100RowHtml(c, {outside:false})).join('');
+    let html = '';
+    if(bist100.index && bist100.index.price!=null){
+      html += watchTileHtml({...bist100.index, symbol:'XU100', ticker:'XU100'}, {outside:false});
+    }
+    html += rows.map(c => watchTileHtml(c, {outside:false})).join('');
     if(extra.length){
-      html += `<div class="b100-outside-head">BIST100 dışı sonuçlar</div>` +
-        extra.map(c => b100RowHtml(c, {outside:true})).join('');
+      html += `<div class="b100-outside-head" style="grid-column:1/-1">BIST100 dışı sonuçlar</div>` +
+        extra.map(c => watchTileHtml(c, {outside:true})).join('');
     }
     list.innerHTML = html;
     bindBist100ListHandlers(list);
   }
 
+  function mergeBist100Analysis(analysisBody){
+    const bySym = {};
+    (analysisBody.companies||[]).forEach(c=>{ bySym[c.ticker||c.symbol] = c; });
+    bist100.companies = (bist100.companies||[]).map(c=>{
+      const sym = c.ticker||c.symbol;
+      const a = bySym[sym];
+      return a ? {...c, ...a, price: c.price!=null?c.price:a.price, bid: c.bid!=null?c.bid:a.bid, ask: c.ask!=null?c.ask:a.ask} : c;
+    });
+    bist100.summary = analysisBody.summary || bist100.summary || {};
+    bist100.note = analysisBody.note || bist100.note || '';
+    bist100.analyzed = analysisBody.analyzed || bist100.analyzed || 0;
+    bist100.analysisReady = true;
+  }
+
   async function loadBist100(){
-    document.getElementById('bist100List').innerHTML = '<div class="empty">100 hisse analiz ediliyor… (30–60 sn sürebilir)</div>';
-    document.getElementById('b100Summary').textContent = 'Tam evren taraması…';
+    document.getElementById('bist100List').innerHTML = '<div class="empty" style="grid-column:1/-1">Kotasyonlar yükleniyor…</div>';
+    document.getElementById('b100Summary').textContent = 'Son · Alış · Satış · %G';
+    bist100.analysisReady = false;
     try{
-      const body = await (await fetch('/api/bist100/analysis?sort=decision')).json();
-      bist100.companies = body.companies || [];
-      bist100.total = body.total || body.count || 100;
-      bist100.analyzed = body.analyzed || 0;
-      bist100.sectors = body.sectors || bist100.sectors || [];
-      bist100.summary = body.summary || {};
-      bist100.note = body.note || '';
+      const qBody = await (await fetch('/api/bist100/quotes')).json();
+      bist100.index = qBody.index || null;
+      bist100.companies = qBody.quotes || [];
+      bist100.total = qBody.count || bist100.companies.length;
+      bist100.data_source = qBody.data_source || null;
       try{
         const w = await (await fetch('/api/paper/wallet')).json();
         paperWallet = w;
@@ -1823,22 +1868,30 @@
         });
       }catch(_e){}
       const sel = document.getElementById('b100Sector');
-      if((body.sectors||[]).length && sel.options.length <= 1){
+      const sectors = [...new Set((bist100.companies||[]).map(c=>c.sector).filter(Boolean))].sort();
+      if(sectors.length && sel.options.length <= 1){
         const current = sel.value;
         sel.innerHTML = '<option value="">Tüm sektörler</option>' +
-          (body.sectors||[]).map(s => `<option value="${s}">${s}</option>`).join('');
-        if(current && body.sectors.includes(current)) sel.value = current;
+          sectors.map(s => `<option value="${s}">${s}</option>`).join('');
+        if(current && sectors.includes(current)) sel.value = current;
       }
       if(!bist100.selected && bist100.companies.length){
-        const thy = bist100.companies.find(c => c.ticker === 'THYAO' || c.symbol === 'THYAO');
+        const thy = bist100.companies.find(c => (c.ticker||c.symbol) === 'THYAO');
         bist100.selected = thy || bist100.companies[0];
       }
       renderBist100List();
       if(bist100.selected) renderTradingView(bist100.selected);
+      document.getElementById('b100Summary').textContent = 'Sinyal analizi arka planda yükleniyor…';
+      fetch('/api/bist100/analysis?sort=decision').then(async res=>{
+        if(!res.ok) return;
+        const body = await res.json();
+        mergeBist100Analysis(body);
+        renderBist100List();
+      }).catch(()=>{});
     }catch(e){
-      document.getElementById('b100Meta').textContent = 'BIST 100 analizi yüklenemedi';
+      document.getElementById('b100Meta').textContent = 'BIST 100 kotasyonları yüklenemedi';
       document.getElementById('b100Summary').textContent = '';
-      document.getElementById('bist100List').innerHTML = '<div class="empty">API hatası — yenileyin</div>';
+      document.getElementById('bist100List').innerHTML = '<div class="empty" style="grid-column:1/-1">API hatası — yenileyin</div>';
     }
   }
 
@@ -1847,14 +1900,17 @@
     beginDataSourceLoading({quick});
     let data = null;
     try{
-      const res = await fetch('/api/daily');
+      const ctrl = new AbortController();
+      const timer = setTimeout(()=>ctrl.abort(), 15000);
+      const res = await fetch('/api/daily', { signal: ctrl.signal });
+      clearTimeout(timer);
       data = await res.json();
     }catch(e){
       endDataSourceLoading(()=>{
         const banner = document.getElementById('integrityBanner');
         if(banner){
           banner.className = 'banner bad';
-          banner.innerHTML = '<div class="banner-status">⚠ Veri kaynağı yüklenemedi — yenileyin</div>';
+          banner.innerHTML = '<div class="banner-status">⚠ Veri kaynağı yüklenemedi / zaman aşımı — yenileyin</div>';
         }
       });
       return;
@@ -1872,7 +1928,16 @@
     });
     renderHome();
     bindCards();
+    if(data.scan_pending){
+      const banner = document.getElementById('integrityBanner');
+      if(banner){
+        banner.className = 'banner warn';
+        banner.innerHTML = '<div class="banner-status">⏳ Tarama arka planda (Yahoo DELAYED) — otomatik yenileniyor…</div>';
+      }
+      setTimeout(()=>load({quick:true}), 8000);
+    }
     if(document.getElementById('panel-port')?.classList.contains('on')) loadPortfolio();
+    if(document.getElementById('panel-fav')?.classList.contains('on')) loadFavorites();
     try {
       dash = await (await fetch('/api/dashboard')).json();
       const sh = (dash.health||{}).system_health||{};
@@ -2055,8 +2120,14 @@
   document.getElementById('stockDetailOverlay').onclick=(e)=>{ if(e.target.id==='stockDetailOverlay') closeStockDetail(); };
   setMarket('BIST');
   load();
+  loadFavorites();
   loadBist100();
-  setInterval(()=>{ if(activeMarket==='BIST') load({quick:true}); else loadCrypto(); }, 15000);
+  setInterval(()=>{
+    if(activeMarket==='BIST'){
+      load({quick:true});
+      if(document.getElementById('panel-fav')?.classList.contains('on')) loadFavorites();
+    } else loadCrypto();
+  }, 15000);
 })();
 </script>
 </body>

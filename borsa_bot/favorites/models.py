@@ -38,6 +38,24 @@ DEFAULT_GROUPS = (
     "YÜKSEK POTANSİYEL",
 )
 
+# İnfoyatırım-style default Takip Listem when user has no BIST favorites yet.
+DEFAULT_WATCHLIST_BIST = (
+    "GARAN",
+    "AKBNK",
+    "THYAO",
+    "EUPWR",
+    "ASTOR",
+    "ALFAS",
+    "CWENE",
+    "NUGYO",
+    "PETKM",
+    "MIATK",
+    "ZOREN",
+    "KONTR",
+    "SISE",
+    "TCELL",
+)
+
 
 @dataclass
 class PriceAlertRule:
