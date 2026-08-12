@@ -61,7 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
           gradient: RadialGradient(
             center: Alignment(0, -0.35),
             radius: 1.15,
-            colors: [Color(0xFF143528), AppColors.bg],
+            colors: [Color(0xFF1F2633), AppColors.bg],
           ),
         ),
         child: SafeArea(
@@ -73,20 +73,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      'CHANGE X',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.syne(
-                        fontSize: 34,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
+                    const Center(child: BrandMark()),
+                    const SizedBox(height: 18),
                     Text(
                       'Takas için hesabına giriş yap',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.dmSans(
+                      style: GoogleFonts.montserrat(
                         fontSize: 14,
                         color: AppColors.muted,
                       ),
@@ -97,16 +89,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     TextField(
                       controller: _userCtrl,
                       autocorrect: false,
-                      style: GoogleFonts.dmSans(),
-                      decoration: _dec('Kullanıcı adı'),
+                      decoration: const InputDecoration(labelText: 'Kullanıcı adı'),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _passCtrl,
                       obscureText: _obscure,
                       onSubmitted: (_) => _submit(),
-                      style: GoogleFonts.dmSans(),
-                      decoration: _dec('Şifre').copyWith(
+                      decoration: InputDecoration(
+                        labelText: 'Şifre',
                         suffixIcon: IconButton(
                           onPressed: () =>
                               setState(() => _obscure = !_obscure),
@@ -123,7 +114,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 12),
                       Text(
                         _error!,
-                        style: GoogleFonts.dmSans(
+                        style: GoogleFonts.montserrat(
                           color: AppColors.danger,
                           fontSize: 13,
                         ),
@@ -134,20 +125,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       height: 54,
                       child: FilledButton(
                         onPressed: _busy ? null : _submit,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.accent,
-                          foregroundColor: AppColors.bg,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: Text(
-                          _busy ? 'Giriş…' : 'Giriş yap',
-                          style: GoogleFonts.syne(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                        child: Text(_busy ? 'Giriş…' : 'Giriş yap'),
                       ),
                     ),
                     TextButton(
@@ -162,7 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             },
                       child: Text(
                         'Hesabın yok mu? Kayıt ol',
-                        style: GoogleFonts.dmSans(
+                        style: GoogleFonts.montserrat(
                           color: AppColors.gold,
                           fontWeight: FontWeight.w600,
                         ),
@@ -179,7 +157,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                       child: Text(
                         'Ziyaretçi olarak gez',
-                        style: GoogleFonts.dmSans(color: AppColors.muted),
+                        style: GoogleFonts.montserrat(color: AppColors.muted),
                       ),
                     ),
                   ],
@@ -191,19 +169,4 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-
-  InputDecoration _dec(String label) => InputDecoration(
-        labelText: label,
-        labelStyle: GoogleFonts.dmSans(color: AppColors.muted),
-        filled: true,
-        fillColor: AppColors.bgElevated,
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.line),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.accent),
-        ),
-      );
 }

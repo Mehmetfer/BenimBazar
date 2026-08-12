@@ -84,7 +84,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       appBar: AppBar(
         title: Text(
           'Takas kaydı',
-          style: GoogleFonts.syne(fontWeight: FontWeight.w700),
+          style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
         ),
       ),
       body: ListView(
@@ -123,7 +123,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
           const SizedBox(height: 10),
           TextField(controller: _itemName, decoration: const InputDecoration(labelText: 'Ürün adı')),
           const SizedBox(height: 10),
-          Text('Takas değeri (sunucu hesaplar)', style: GoogleFonts.dmSans(color: AppColors.muted)),
+          Text('Takas değeri (sunucu hesaplar)', style: GoogleFonts.montserrat(color: AppColors.muted)),
           const SizedBox(height: 8),
           Row(
             children: [

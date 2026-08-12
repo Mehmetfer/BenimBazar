@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../api/client.dart';
 import '../theme/app_theme.dart';
+import '../widgets/value_widgets.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 
@@ -34,7 +35,7 @@ class _SplashScreenState extends State<SplashScreen>
     } catch (_) {
       user = null;
     }
-    await Future<void>.delayed(const Duration(milliseconds: 1400));
+    await Future<void>.delayed(const Duration(milliseconds: 1600));
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
@@ -59,56 +60,54 @@ class _SplashScreenState extends State<SplashScreen>
       body: DecoratedBox(
         decoration: const BoxDecoration(
           gradient: RadialGradient(
-            center: Alignment(0, -0.25),
-            radius: 1.1,
-            colors: [Color(0xFF143528), AppColors.bg],
+            center: Alignment(0, -0.3),
+            radius: 1.15,
+            colors: [Color(0xFF1F2633), AppColors.bg],
           ),
         ),
         child: SafeArea(
           child: FadeTransition(
             opacity: _controller,
-            child: Column(
-              children: [
-                const Spacer(flex: 3),
-                Text(
-                  'CHANGE X',
-                  style: GoogleFonts.syne(
-                    fontSize: 42,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 3,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: Column(
+                children: [
+                  const Spacer(flex: 3),
+                  const BrandMark(),
+                  const SizedBox(height: 22),
+                  Text(
+                    'SAHİP OLDUĞUNLA,\nİSTEDİĞİNE ULAŞ.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.montserrat(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      height: 1.25,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Sadece takas',
-                  style: GoogleFonts.dmSans(
-                    fontSize: 16,
-                    color: AppColors.muted,
+                  const SizedBox(height: 10),
+                  Text(
+                    'Paran değil, değerin konuşur.',
+                    style: GoogleFonts.montserrat(
+                      fontSize: 14,
+                      color: AppColors.gold,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  'Mandal · Dirhem · Madalyon',
-                  style: GoogleFonts.dmSans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.accent,
+                  const Spacer(flex: 4),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      );
+                    },
+                    child: Text(
+                      'Giriş / Kayıt',
+                      style: GoogleFonts.montserrat(color: AppColors.gold),
+                    ),
                   ),
-                ),
-                const Spacer(flex: 4),
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    );
-                  },
-                  child: Text(
-                    'Giriş / Kayıt',
-                    style: GoogleFonts.dmSans(color: AppColors.gold),
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ],
+                  const SizedBox(height: 18),
+                ],
+              ),
             ),
           ),
         ),

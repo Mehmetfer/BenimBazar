@@ -43,7 +43,7 @@ class _TradesScreenState extends State<TradesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Takaslarım', style: GoogleFonts.syne(fontWeight: FontWeight.w700)),
+        title: Text('Takaslarım', style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -51,7 +51,7 @@ class _TradesScreenState extends State<TradesScreen> {
               ? Center(
                   child: Text(
                     'Henüz takas yok',
-                    style: GoogleFonts.dmSans(color: AppColors.muted),
+                    style: GoogleFonts.montserrat(color: AppColors.muted),
                   ),
                 )
               : ListView.separated(
@@ -74,19 +74,19 @@ class _TradesScreenState extends State<TradesScreen> {
                         children: [
                           Text(
                             'Durum: ${t['state']}',
-                            style: GoogleFonts.syne(fontWeight: FontWeight.w700),
+                            style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 8),
-                          Text('Karşı taraf değeri', style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.muted)),
+                          Text('Karşı taraf değeri', style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.muted)),
                           ValueChip(value: a),
                           const SizedBox(height: 6),
-                          Text('Senin teklifin', style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.muted)),
+                          Text('Senin teklifin', style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.muted)),
                           ValueChip(value: b),
                           if (t['exact_match'] != true) ...[
                             const SizedBox(height: 8),
                             Text(
                               'Fark gerçek para ile kapatılamaz.',
-                              style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.gold),
+                              style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.gold),
                             ),
                           ],
                         ],

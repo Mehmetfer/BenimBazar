@@ -24,9 +24,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loading = true;
   String? _error;
   String? _category;
+  int _balanceMandal = 0;
 
   static const categories = [
-    'Tümü',
+    'Lobi',
     'Elektronik',
     'Spor',
     'Ev',
@@ -38,6 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _category = 'Lobi';
     _load();
   }
 
@@ -55,11 +57,22 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final list = await api.listings(
         q: _search.text.trim(),
-        category: _category == null || _category == 'Tümü' ? null : _category,
+        category: _category == null || _category == 'Lobi' ? null : _category,
       );
+      var bal = 0;
+      for (final raw in list) {
+        final item = Map<String, dynamic>.from(raw as Map);
+        final owner = Map<String, dynamic>.from(item['owner'] as Map? ?? {});
+        if (widget.user != null &&
+            owner['username'] == widget.user!['username']) {
+          final value = Map<String, dynamic>.from(item['value'] as Map? ?? {});
+          bal += (value['total_mandal'] as num?)?.toInt() ?? 0;
+        }
+      }
       if (!mounted) return;
       setState(() {
         _listings = list;
+        _balanceMandal = bal;
         _loading = false;
       });
     } catch (e) {
@@ -82,11 +95,12 @@ class _HomeScreenState extends State<HomeScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFF102018), AppColors.bg],
+            colors: [Color(0xFF171A22), AppColors.bg],
           ),
         ),
         child: SafeArea(
           child: RefreshIndicator(
+            color: AppColors.gold,
             onRefresh: _load,
             child: CustomScrollView(
               slivers: [
@@ -97,13 +111,22 @@ class _HomeScreenState extends State<HomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const BrandMark(compact: true),
+                            const Spacer(),
+                            if (_loggedIn)
+                              BalanceChip(totalMandal: _balanceMandal),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
                           children: [
                             Text(
-                              'CHANGE X',
-                              style: GoogleFonts.syne(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 1.5,
+                              name != null ? 'Merhaba, $name' : 'Ziyaretçi',
+                              style: GoogleFonts.montserrat(
+                                color: AppColors.muted,
+                                fontSize: 13,
                               ),
                             ),
                             const Spacer(),
@@ -122,8 +145,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 },
                                 child: Text(
                                   'Çıkış',
-                                  style: GoogleFonts.dmSans(
+                                  style: GoogleFonts.montserrat(
                                     color: AppColors.gold,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               )
@@ -138,54 +162,26 @@ class _HomeScreenState extends State<HomeScreen> {
                                 },
                                 child: Text(
                                   'Giriş',
-                                  style: GoogleFonts.dmSans(
-                                    color: AppColors.accent,
+                                  style: GoogleFonts.montserrat(
+                                    color: AppColors.gold,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ),
                           ],
                         ),
-                        if (name != null)
-                          Text(
-                            'Merhaba, $name',
-                            style: GoogleFonts.dmSans(
-                              color: AppColors.muted,
-                              fontSize: 13,
-                            ),
-                          ),
-                        const SizedBox(height: 12),
                         const PlatformBanner(),
-                        const SizedBox(height: 18),
-                        Text(
-                          'Takas kayıtları',
-                          style: GoogleFonts.syne(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Ziyaretçi gezebilir. Teklif ve kayıt için giriş gerekir.',
-                          style: GoogleFonts.dmSans(
-                            color: AppColors.muted,
-                            fontSize: 13,
-                          ),
-                        ),
                         const SizedBox(height: 14),
+                        const PillarsRow(),
+                        const SizedBox(height: 16),
                         TextField(
                           controller: _search,
                           onSubmitted: (_) => _load(),
                           decoration: InputDecoration(
-                            hintText: 'Ara…',
-                            filled: true,
-                            fillColor: AppColors.bgElevated,
+                            hintText: 'Takas kaydı ara…',
                             suffixIcon: IconButton(
-                              icon: const Icon(Icons.search),
+                              icon: const Icon(Icons.search, color: AppColors.gold),
                               onPressed: _load,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
                             ),
                           ),
                         ),
@@ -199,8 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 const SizedBox(width: 8),
                             itemBuilder: (context, i) {
                               final c = categories[i];
-                              final selected =
-                                  (_category ?? 'Tümü') == c;
+                              final selected = (_category ?? 'Lobi') == c;
                               return ChoiceChip(
                                 label: Text(c),
                                 selected: selected,
@@ -208,26 +203,51 @@ class _HomeScreenState extends State<HomeScreen> {
                                   setState(() => _category = c);
                                   _load();
                                 },
-                                selectedColor: AppColors.accent,
-                                labelStyle: GoogleFonts.dmSans(
+                                selectedColor: AppColors.gold,
+                                labelStyle: GoogleFonts.montserrat(
                                   color: selected
                                       ? AppColors.bg
                                       : AppColors.ink,
                                   fontWeight: FontWeight.w600,
+                                  fontSize: 12,
                                 ),
                                 backgroundColor: AppColors.bgElevated,
+                                side: BorderSide(
+                                  color: selected
+                                      ? AppColors.gold
+                                      : AppColors.line,
+                                ),
+                                showCheckmark: false,
                               );
                             },
                           ),
                         ),
                         const SizedBox(height: 16),
+                        Text(
+                          'Takas kayıtları',
+                          style: GoogleFonts.montserrat(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Change Score · doğrulanmış üyeler · güvenli takas',
+                          style: GoogleFonts.montserrat(
+                            color: AppColors.muted,
+                            fontSize: 11,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                       ],
                     ),
                   ),
                 ),
                 if (_loading)
                   const SliverFillRemaining(
-                    child: Center(child: CircularProgressIndicator()),
+                    child: Center(
+                      child: CircularProgressIndicator(color: AppColors.gold),
+                    ),
                   )
                 else if (_error != null)
                   SliverFillRemaining(
@@ -237,7 +257,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Text(
                           _error!,
                           textAlign: TextAlign.center,
-                          style: GoogleFonts.dmSans(color: AppColors.danger),
+                          style: GoogleFonts.montserrat(color: AppColors.danger),
                         ),
                       ),
                     ),
@@ -248,7 +268,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Text(
                         'Henüz takas kaydı yok.\nİlk kaydı sen oluştur.',
                         textAlign: TextAlign.center,
-                        style: GoogleFonts.dmSans(color: AppColors.muted),
+                        style: GoogleFonts.montserrat(color: AppColors.muted),
                       ),
                     ),
                   )
@@ -298,12 +318,12 @@ class _HomeScreenState extends State<HomeScreen> {
           )
               .then((_) => _load());
         },
-        backgroundColor: AppColors.accent,
+        backgroundColor: AppColors.gold,
         foregroundColor: AppColors.bg,
-        icon: const Icon(Icons.add),
+        icon: const Icon(Icons.swap_horiz),
         label: Text(
           'Takas kaydı',
-          style: GoogleFonts.syne(fontWeight: FontWeight.w700),
+          style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
         ),
       ),
       bottomNavigationBar: _loggedIn
@@ -311,6 +331,10 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
                 child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.gold,
+                    side: const BorderSide(color: AppColors.gold),
+                  ),
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -318,8 +342,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     );
                   },
-                  icon: const Icon(Icons.swap_horiz),
-                  label: const Text('Takaslarım'),
+                  icon: const Icon(Icons.account_tree_outlined),
+                  label: const Text('Takaslarım / Zincir'),
                 ),
               ),
             )
@@ -344,7 +368,7 @@ class _ListingCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.bgElevated,
+          color: AppColors.bgCard,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.line),
         ),
@@ -353,26 +377,30 @@ class _ListingCard extends StatelessWidget {
           children: [
             Text(
               item['title']?.toString() ?? '',
-              style: GoogleFonts.syne(
-                fontSize: 18,
+              style: GoogleFonts.montserrat(
+                fontSize: 17,
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 6),
             Text(
-              '${item['category']} · ${owner['username'] ?? '?'}',
-              style: GoogleFonts.dmSans(
+              '${item['category']} · ${owner['username'] ?? '?'} · skor ${owner['change_score'] ?? '-'}',
+              style: GoogleFonts.montserrat(
                 color: AppColors.muted,
-                fontSize: 12,
+                fontSize: 11,
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             ValueChip(value: value),
             if ((item['wanted_items']?.toString() ?? '').isNotEmpty) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Text(
                 'İstiyor: ${item['wanted_items']}',
-                style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.gold),
+                style: GoogleFonts.montserrat(
+                  fontSize: 12,
+                  color: AppColors.blue,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ],

@@ -58,7 +58,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Kayıt ol', style: GoogleFonts.syne(fontWeight: FontWeight.w700)),
+        title: Text('Kayıt ol', style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),

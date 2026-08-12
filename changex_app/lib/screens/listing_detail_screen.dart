@@ -92,7 +92,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       appBar: AppBar(
         title: Text(
           'Takas kaydı',
-          style: GoogleFonts.syne(fontWeight: FontWeight.w700),
+          style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
         ),
       ),
       body: ListView(
@@ -100,31 +100,31 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         children: [
           Text(
             widget.listing['title']?.toString() ?? '',
-            style: GoogleFonts.syne(fontSize: 26, fontWeight: FontWeight.w800),
+            style: GoogleFonts.montserrat(fontSize: 26, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
           Text(
             '${widget.listing['category']} · ${owner['username']} · skor ${owner['change_score']}',
-            style: GoogleFonts.dmSans(color: AppColors.muted),
+            style: GoogleFonts.montserrat(color: AppColors.muted),
           ),
           const SizedBox(height: 12),
           ValueChip(value: value),
           const SizedBox(height: 14),
           Text(
             widget.listing['description']?.toString() ?? '',
-            style: GoogleFonts.dmSans(height: 1.4),
+            style: GoogleFonts.montserrat(height: 1.4),
           ),
           if ((widget.listing['wanted_items']?.toString() ?? '').isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(
               'İstiyor: ${widget.listing['wanted_items']}',
-              style: GoogleFonts.dmSans(color: AppColors.gold),
+              style: GoogleFonts.montserrat(color: AppColors.gold),
             ),
           ],
           const SizedBox(height: 24),
           Text(
             'Takas teklifi ver',
-            style: GoogleFonts.syne(fontSize: 18, fontWeight: FontWeight.w700),
+            style: GoogleFonts.montserrat(fontSize: 18, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           const PlatformBanner(),
@@ -155,7 +155,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           ),
           if (_result != null) ...[
             const SizedBox(height: 14),
-            Text(_result!, style: GoogleFonts.dmSans(height: 1.35)),
+            Text(_result!, style: GoogleFonts.montserrat(height: 1.35)),
           ],
         ],
       ),
