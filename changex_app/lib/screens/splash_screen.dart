@@ -17,6 +17,7 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  bool _navigated = false;
 
   @override
   void initState() {
@@ -31,12 +32,13 @@ class _SplashScreenState extends State<SplashScreen>
   Future<void> _boot() async {
     Map<String, dynamic>? user;
     try {
-      user = await api.me();
+      user = await api.me().timeout(const Duration(milliseconds: 800), onTimeout: () => null);
     } catch (_) {
       user = null;
     }
-    await Future<void>.delayed(const Duration(milliseconds: 1600));
-    if (!mounted) return;
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    if (!mounted || _navigated) return;
+    _navigated = true;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
         transitionDuration: const Duration(milliseconds: 450),

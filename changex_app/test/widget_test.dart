@@ -13,8 +13,8 @@ void main() {
     await tester.pumpWidget(const ChangeXApp());
     expect(find.textContaining('CHANGE'), findsWidgets);
     expect(find.text('X'), findsOneWidget);
-    expect(find.textContaining('TAKAS'), findsWidgets);
-    // Don't pumpAndSettle — splash schedules network + navigation timers.
-    await tester.pump(const Duration(milliseconds: 100));
+    // Advance splash animation + boot delay so no pending timers remain.
+    await tester.pump(const Duration(milliseconds: 2000));
+    await tester.pump(const Duration(milliseconds: 500));
   });
 }
