@@ -1,0 +1,184 @@
+..FFF.F..FF.FF.FFFFFFFFFF.FF.                                            [100%]
+=================================== FAILURES ===================================
+___________________________ test_kill_switch_blocks ____________________________
+tests/test_trading_safety.py:38: in test_kill_switch_blocks
+    pipe = SafeExecutionPipeline(mode=TradingExecutionMode.PAPER, kill=kill, db_dir=tmp_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+_________________________ test_stale_data_fail_closed __________________________
+tests/test_trading_safety.py:49: in test_stale_data_fail_closed
+    pipe = SafeExecutionPipeline(db_dir=tmp_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+______________________ test_idempotency_blocks_duplicate _______________________
+tests/test_trading_safety.py:58: in test_idempotency_blocks_duplicate
+    pipe = SafeExecutionPipeline(db_dir=tmp_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+_______________________ test_pipeline_unknown_on_timeout _______________________
+tests/test_trading_safety.py:90: in test_pipeline_unknown_on_timeout
+    pipe = SafeExecutionPipeline(db_dir=tmp_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+__________________________ test_circuit_breaker_trips __________________________
+tests/test_trading_safety.py:145: in test_circuit_breaker_trips
+    pipe = SafeExecutionPipeline(db_dir=tmp_path, breaker=cb)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+_____________________ test_shadow_never_hits_paper_broker ______________________
+tests/test_trading_safety.py:155: in test_shadow_never_hits_paper_broker
+    pipe = SafeExecutionPipeline(db_dir=tmp_path, mode=TradingExecutionMode.SHADOW)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+_______________________ test_micro_live_not_auto_enabled _______________________
+tests/test_trading_safety.py:177: in test_micro_live_not_auto_enabled
+    pipe = SafeExecutionPipeline(db_dir=tmp_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+__________________________ test_audit_failure_blocks ___________________________
+tests/test_trading_safety.py:194: in test_audit_failure_blocks
+    pipe = SafeExecutionPipeline(db_dir=tmp_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+_________________________ test_e2e_normal_paper_trade __________________________
+tests/test_trading_safety_e2e.py:25: in test_e2e_normal_paper_trade
+    pipe = SafeExecutionPipeline(db_dir=tmp_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+__________________________ test_e2e_provider_failure ___________________________
+tests/test_trading_safety_e2e.py:33: in test_e2e_provider_failure
+    pipe = SafeExecutionPipeline(db_dir=tmp_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+_______________________ test_e2e_broker_timeout_unknown ________________________
+tests/test_trading_safety_e2e.py:40: in test_e2e_broker_timeout_unknown
+    pipe = SafeExecutionPipeline(db_dir=tmp_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+__________________________ test_e2e_duplicate_request __________________________
+tests/test_trading_safety_e2e.py:50: in test_e2e_duplicate_request
+    pipe = SafeExecutionPipeline(db_dir=tmp_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+____________________ test_e2e_process_restart_no_duplicate _____________________
+tests/test_trading_safety_e2e.py:56: in test_e2e_process_restart_no_duplicate
+    pipe = SafeExecutionPipeline(db_dir=tmp_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+__________________________ test_e2e_risk_limit_breach __________________________
+tests/test_trading_safety_e2e.py:70: in test_e2e_risk_limit_breach
+    pipe = SafeExecutionPipeline(db_dir=tmp_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+__________________________ test_e2e_stale_market_data __________________________
+tests/test_trading_safety_e2e.py:77: in test_e2e_stale_market_data
+    pipe = SafeExecutionPipeline(db_dir=tmp_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+_____________________________ test_e2e_kill_switch _____________________________
+tests/test_trading_safety_e2e.py:85: in test_e2e_kill_switch
+    pipe = SafeExecutionPipeline(db_dir=tmp_path, kill=kill)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+_______________________ test_e2e_reconciliation_mismatch _______________________
+tests/test_trading_safety_e2e.py:92: in test_e2e_reconciliation_mismatch
+    pipe = SafeExecutionPipeline(db_dir=tmp_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+________________________ test_adversarial_invalid_price ________________________
+tests/test_trading_safety_e2e.py:98: in test_adversarial_invalid_price
+    pipe = SafeExecutionPipeline(db_dir=tmp_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+___________________ test_adversarial_malformed_provider_kind ___________________
+tests/test_trading_safety_e2e.py:116: in test_adversarial_malformed_provider_kind
+    pipe = SafeExecutionPipeline(db_dir=tmp_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+_______________ test_adversarial_circuit_breaker_after_failures ________________
+tests/test_trading_safety_e2e.py:124: in test_adversarial_circuit_breaker_after_failures
+    pipe = SafeExecutionPipeline(db_dir=tmp_path, breaker=cb)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+trading_safety/pipeline.py:68: in __init__
+    self.paper = paper or PaperBroker()
+                          ^^^^^^^^^^^^^
+E   TypeError: PaperBroker.__init__() missing 1 required positional argument: 'ledger'
+=========================== short test summary info ============================
+FAILED tests/test_trading_safety.py::test_kill_switch_blocks - TypeError: Pap...
+FAILED tests/test_trading_safety.py::test_stale_data_fail_closed - TypeError:...
+FAILED tests/test_trading_safety.py::test_idempotency_blocks_duplicate - Type...
+FAILED tests/test_trading_safety.py::test_pipeline_unknown_on_timeout - TypeE...
+FAILED tests/test_trading_safety.py::test_circuit_breaker_trips - TypeError: ...
+FAILED tests/test_trading_safety.py::test_shadow_never_hits_paper_broker - Ty...
+FAILED tests/test_trading_safety.py::test_micro_live_not_auto_enabled - TypeE...
+FAILED tests/test_trading_safety.py::test_audit_failure_blocks - TypeError: P...
+FAILED tests/test_trading_safety_e2e.py::test_e2e_normal_paper_trade - TypeEr...
+FAILED tests/test_trading_safety_e2e.py::test_e2e_provider_failure - TypeErro...
+FAILED tests/test_trading_safety_e2e.py::test_e2e_broker_timeout_unknown - Ty...
+FAILED tests/test_trading_safety_e2e.py::test_e2e_duplicate_request - TypeErr...
+FAILED tests/test_trading_safety_e2e.py::test_e2e_process_restart_no_duplicate
+FAILED tests/test_trading_safety_e2e.py::test_e2e_risk_limit_breach - TypeErr...
+FAILED tests/test_trading_safety_e2e.py::test_e2e_stale_market_data - TypeErr...
+FAILED tests/test_trading_safety_e2e.py::test_e2e_kill_switch - TypeError: Pa...
+FAILED tests/test_trading_safety_e2e.py::test_e2e_reconciliation_mismatch - T...
+FAILED tests/test_trading_safety_e2e.py::test_adversarial_invalid_price - Typ...
+FAILED tests/test_trading_safety_e2e.py::test_adversarial_malformed_provider_kind
+FAILED tests/test_trading_safety_e2e.py::test_adversarial_circuit_breaker_after_failures
+20 failed, 9 passed in 0.21s

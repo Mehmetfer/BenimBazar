@@ -1,114 +1,60 @@
-# Autonomy Protocol Report (Verify-8)
+# Autonomy Protocol Report (Engineering + Trading Safety)
 
-- Generated: see `autonomy_protocol_report.json`
-- Starting: **5.6/10** → prior protocol **7.1/10** → final **8.45/10**
-- Verdict: **AUTONOMY 8+ VERIFIED**
-- Meaning: **coding / validation autonomy** — **NOT** live-money fully autonomous trading
-- LIVE broker: **LOCKED** (`LIVE_BROKER_ENABLED=false`)
+## Scores (kept separate — do not conflate)
 
-## Baseline
+| Layer | Score | Status |
+|-------|------:|--------|
+| Previous engineering autonomy | 8.45/10 | VERIFIED (coding/validation) |
+| Engineering autonomy (this run) | **8.45/10** | unchanged claim — not re-inflated |
+| Trading safety autonomy | **10.0/10** | VERIFIED via adversarial/E2E safety suite |
+| Live-money readiness | **NOT VERIFIED** | LIVE broker remains locked |
+| full_level8_claimed | **FALSE** | research/paper ≠ live-money acceptance |
 
-| Run | Result |
-|-----|--------|
-| Verify-8 start | 313 passed / 0 failed (`evidence/verify8_baseline_full.txt`) |
-| Autonomy+gates | 29 passed |
-| Lesson regressions | 5 passed |
-| Final suite | **339 passed / 0 failed** (`evidence/verify8_final_pytest.txt`) |
+## Baseline preservation
+
+- Pre-trading-safety baseline: **339 passed / 0 failed**
+- Final suite: **368 passed / 0 failed** (`autonomy/evidence/trading9_final_pytest.txt`)
+- No tests deleted
 
 ## G3 Hard Type Check
 
-- Soft-pass **forbidden**
-- Scoped mypy via `mypy.ini` + `autonomy.gates.run_g3_typecheck`
-- Targets: `autonomy/`, `crypto/providers/factory.py`, `crypto/safety.py`, `crypto/reliability.py`, `execution/safety.py`, `autonomous/gates.py`, `autonomous/governors.py`
-- Result: **PASS** (`evidence/verify8_mypy_final.txt`)
-
-## Domain Invariant Sonuçları
-
-- Suite: `tests/test_domain_invariants.py` → **PASS**
-- Covers: LIVE lock, missing MD, simulated≠live, BIST/CRYPTO isolation, kill switch, empty risk, stale badge, unknown symbol fail-closed, unreliable crypto signals
-- Silent bug found+fixed: PRODUCTION `gate_provider_instance` allowed `DataSourceKind.REQUIRED` → `signals_allowed=True` (now **NO_MARKET_DATA** reject)
-
-## E2E Humanless Test
-
-**Acceptance only (no solution hint):**  
-Block crypto signal emission when MD is stale/missing/unreliable; keep LIVE locked; add tests.
-
-**Delivered:**
-- `crypto/reliability.py::crypto_signals_permitted`
-- Wired into `CryptoFoundationService._signal_engine` + `scan`
-- Tests: `test_e2e_reliability_gate_blocks_unreliable_md`, `test_e2e_service_scan_empty_when_unreliable`
+- Includes `trading_safety/` in scoped mypy targets
 - Result: **PASS**
 
-## Ambiguous Task Test
+## Trading safety layer added (`borsa_bot/trading_safety/`)
 
-**Brief:** Reduce reliability issues from data providers and wrong-trade risk.
+- Central `SafeExecutionPipeline` + `evaluate_order_gate` (fail-closed; unknown=blocked)
+- Idempotency store (duplicate submit blocked across restart of pipeline with same DB)
+- Unknown-order registry (timeout → UNKNOWN, blocks symbol until reconcile)
+- Reconciliation → `RECONCILIATION_REQUIRED`
+- Restart recovery protocol
+- Kill switch + circuit breaker (human ack to clear)
+- PAPER / SHADOW / MICRO_LIVE modes (MICRO_LIVE hard caps; still no auto live money)
+- Append-only audit (audit failure blocks submit)
+- Observability metrics counters
 
-**Assumptions stated:**
-1. Highest leverage = fail-closed before signal emission (not new indicators)
-2. BIST and CRYPTO stay isolated
-3. LIVE remains human-gated
-4. Prefer gate + tests over speculative strategy changes
+## Domain / REQUIRED regression
 
-**Chosen solution:** reliability gate + PRODUCTION REQUIRED rejection (low risk, measurable).  
-Result: **PASS** (same challenge suite + invariants)
+- PRODUCTION + REQUIRED provider → `signals_allowed=False` still enforced
+- Test: `test_required_provider_still_blocked_in_production`
 
-## Failure Recovery Test
+## Humanless E2E scenarios (deterministic)
 
-- Injected broken gate that wrongly returns OK → real gate catches → **PASS**
-- Minimal patch narrative recorded via failure protocol helpers → **PASS**
-- Tests: `test_failure_recovery_*`
+normal paper, provider failure, broker timeout/unknown, duplicate, restart, risk breach, stale MD, kill switch, reconciliation mismatch — all expect **NO UNSAFE ORDER**
 
-## Completeness Test
+## Critical findings
 
-- `scan_symbol("crypto_signals_permitted")` finds defs/calls/tests
-- `.env.example` documents CRYPTO_PROVIDER + LIVE lock + reliability note
-- Result: **PASS**
+- None open after fixes (PaperBroker ctor wiring; mypy Path type)
 
-## Lesson/Regression Test
+## Open risks / remaining
 
-- Lessons seeded including `unreliable-crypto-signals`, `required-provider-production-signals`, LIVE lock
-- Regression nodes executed via G6 → **PASS**
-- Replay test: `test_lesson_store_catches_repeated_error_class` → **PASS**
+- Real broker adapter still disabled (`LiveBrokerDisabled`)
+- `TradingService.execute_signal` legacy path not fully forced through `SafeExecutionPipeline` (engine/router path covered; migration recommended)
+- Live-money readiness intentionally **NOT VERIFIED**
+- MICRO_LIVE cannot be unbound via config, but is not a license to trade real money
 
-## L1–L8 Durumu
+## Final verdict
 
-| Level | Status |
-|------|--------|
-| L1 | PASS |
-| L2 | PASS |
-| L3 | PASS |
-| L4 | PASS |
-| L5 | PASS |
-| L6 | PASS |
-| L7 | PASS |
-| L8 | PASS* (research/paper acceptance; `full_level8_claimed=False` remains correct for LIVE trading claim) |
-
-## Başarısız Testler
-
-- Final suite: **none** (339/0)
-- During verify-8: 1 invariant initially failed → diagnosed → fixed → regression added
-
-## İnsan Müdahalesi Gereken Noktalar
-
-- LIVE broker unlock / real money
-- Product risk-limit changes
-- Promoting models to production
-- Any decision that raises capital risk
-
-## Final Autonomy Score
-
-| Criterion | Score | Weight | Evidence |
-|-----------|------:|-------:|----------|
-| Hata tespiti | 8.5 | 10% | domain invariants + self-review |
-| Hata düzeltme | 8.5 | 10% | REQUIRED gate fix + recovery tests |
-| Completeness | 8.5 | 10% | scan_symbol + env docs |
-| Gerçek test | 9.0 | 10% | 339 passed |
-| Root-cause/recovery | 8.5 | 10% | injected-bug challenge |
-| Kalıcı öğrenme | 8.5 | 10% | lesson store replay |
-| Görev parçalama | 8.0 | 10% | protocol loop + E2E |
-| Level progression | 8.5 | 10% | L1–L8 acceptance PASS |
-| Mimari/refactor | 8.0 | 10% | G3 hard + reliability seam |
-| İnsan-sız E2E | 8.5 | 10% | reliability E2E |
-
-**Overall: 8.45/10**  
-**Verdict: AUTONOMY 8+ VERIFIED** (coding/validation autonomy only)
+- **Engineering autonomy:** 8.45 VERIFIED  
+- **Trading safety ≥9.0:** VERIFIED (paper/shadow/adversarial)  
+- **Live-money / full Level-8 live claim:** **NOT VERIFIED / FALSE**

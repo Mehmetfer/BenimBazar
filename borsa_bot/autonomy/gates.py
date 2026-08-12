@@ -163,6 +163,7 @@ def _rename(g: GateResult, name: str) -> GateResult:
 
 G3_TARGETS = [
     "autonomy",
+    "trading_safety",
     "crypto/providers/factory.py",
     "crypto/safety.py",
     "crypto/reliability.py",

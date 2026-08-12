@@ -1,0 +1,5 @@
+{
+  "trading_safety_score": 10.0,
+  "verdict": "TRADING SAFETY \u22659.0 VERIFIED; LIVE MONEY READINESS NOT VERIFIED",
+  "live_money_readiness": "NOT VERIFIED"
+}

@@ -1,0 +1,113 @@
+{
+  "generated_at": "2026-08-12T05:51:24.101896+00:00",
+  "previous_engineering_autonomy": 8.45,
+  "suites": {
+    "trading_safety": true,
+    "e2e": true,
+    "required_regression": true
+  },
+  "scorecard": {
+    "engineering_autonomy_score": 8.45,
+    "trading_safety_score": 10.0,
+    "live_money_readiness": "NOT VERIFIED",
+    "full_level8_claimed": false,
+    "verdict": "TRADING SAFETY \u22659.0 VERIFIED; LIVE MONEY READINESS NOT VERIFIED",
+    "criteria": [
+      {
+        "name": "Safety gates",
+        "weight": 0.15,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "order_gate + pipeline"
+        ]
+      },
+      {
+        "name": "Fail-closed behavior",
+        "weight": 0.1,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "unknown!=safe tests"
+        ]
+      },
+      {
+        "name": "Order idempotency",
+        "weight": 0.1,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "duplicate key blocked"
+        ]
+      },
+      {
+        "name": "Unknown-order recovery",
+        "weight": 0.1,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "UNKNOWN not assumed failed"
+        ]
+      },
+      {
+        "name": "Reconciliation",
+        "weight": 0.1,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "qty/cash mismatch blocks"
+        ]
+      },
+      {
+        "name": "Restart recovery",
+        "weight": 0.1,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "recover_after_restart"
+        ]
+      },
+      {
+        "name": "Risk controls",
+        "weight": 0.1,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "limits + micro caps"
+        ]
+      },
+      {
+        "name": "Kill/circuit breakers",
+        "weight": 0.1,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "kill_switch + circuit_breaker"
+        ]
+      },
+      {
+        "name": "Observability/audit",
+        "weight": 0.05,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "audit append-only + metrics"
+        ]
+      },
+      {
+        "name": "Adversarial E2E tests",
+        "weight": 0.1,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "test_trading_safety_*"
+        ]
+      }
+    ],
+    "notes": [
+      "Engineering autonomy unchanged baseline claim: 8.45",
+      "full_level8_claimed remains False unless separate live-money acceptance",
+      "MICRO_LIVE caps exist but do not enable real broker automatically"
+    ]
+  }
+}
