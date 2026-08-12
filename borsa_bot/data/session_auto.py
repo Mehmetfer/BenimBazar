@@ -121,4 +121,10 @@ class SessionAutoBistProvider:
         try:
             return self._yahoo.period_returns(symbol)
         except Exception:  # noqa: BLE001
-            return {"daily_pct": None, "monthly_pct": None, "yearly_pct": None}
+            return {"daily_pct": None, "weekly_pct": None, "monthly_pct": None, "yearly_pct": None}
+
+    def board_market_pack(self, symbol: str) -> dict:
+        try:
+            return self._yahoo.board_market_pack(symbol)
+        except Exception:  # noqa: BLE001
+            return self.period_returns(symbol)

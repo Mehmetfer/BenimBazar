@@ -179,6 +179,10 @@
     .stock-ret b{display:block;margin-top:4px;font-size:.95rem}
     .stock-ret b.up{color:var(--buy2)}
     .stock-ret b.down{color:#ff6b6b}
+    .stock-ret-range{display:flex;justify-content:space-between;gap:4px;margin-top:6px;font-size:.62rem;color:var(--mute)}
+    .stock-ret-bar{height:4px;border-radius:999px;background:rgba(255,255,255,.08);margin-top:6px;position:relative;overflow:hidden}
+    .stock-ret-dot{position:absolute;top:50%;width:8px;height:8px;border-radius:50%;transform:translate(-50%,-50%);background:var(--buy2)}
+    .stock-ret-dot.down{background:#ff6b6b}
     .stock-kap{font-size:.78rem;color:var(--mute);line-height:1.4}
     .stock-kap a{color:var(--buy2);font-weight:700;text-decoration:none}
     .stock-close{margin-top:10px;width:100%}
@@ -676,9 +680,20 @@
       <div class="stock-section">
         <div class="stock-sec-title">Kazanç</div>
         <div class="stock-returns" id="sdReturns">
-          <div class="stock-ret"><span>Günlük</span><b id="sdRetD">—</b></div>
-          <div class="stock-ret"><span>Aylık</span><b id="sdRetM">—</b></div>
-          <div class="stock-ret"><span>Yıllık</span><b id="sdRetY">—</b></div>
+          <div class="stock-ret">
+            <span>Günlük</span><b id="sdRetD">—</b>
+            <div class="stock-ret-range"><span id="sdRetDDip"></span><span id="sdRetDPeak"></span></div>
+          </div>
+          <div class="stock-ret">
+            <span>Aylık</span><b id="sdRetM">—</b>
+            <div class="stock-ret-range"><span>Dip <i id="sdRetMDip">—</i></span><span>Zirve <i id="sdRetMPeak">—</i></span></div>
+            <div class="stock-ret-bar"><i class="stock-ret-dot" id="sdRetMDot"></i></div>
+          </div>
+          <div class="stock-ret">
+            <span>Yıllık</span><b id="sdRetY">—</b>
+            <div class="stock-ret-range"><span>Dip <i id="sdRetYDip">—</i></span><span>Zirve <i id="sdRetYPeak">—</i></span></div>
+            <div class="stock-ret-bar"><i class="stock-ret-dot" id="sdRetYDot"></i></div>
+          </div>
         </div>
       </div>
       <div class="stock-section">
@@ -985,6 +1000,32 @@
     return {txt:(n>=0?'+':'')+n.toFixed(2)+'%', cls:n>=0?'up':'down'};
   }
 
+  function setRetRange(dipId, peakId, dotId, pack, price){
+    const dip = pack && pack.dip != null ? Number(pack.dip) : null;
+    const zirve = pack && pack.zirve != null ? Number(pack.zirve) : null;
+    const dipEl = document.getElementById(dipId);
+    const peakEl = document.getElementById(peakId);
+    const dotEl = document.getElementById(dotId);
+    if(dipEl) dipEl.textContent = dip!=null ? money(dip) : '—';
+    if(peakEl) peakEl.textContent = zirve!=null ? money(zirve) : '—';
+    if(!dotEl) return;
+    if(dip==null || zirve==null || !(zirve>dip) || !(price>0)){
+      dotEl.style.left = '50%';
+      return;
+    }
+    const pctPos = Math.max(0, Math.min(1, (Number(price)-dip)/(zirve-dip)));
+    dotEl.style.left = (pctPos*100).toFixed(1)+'%';
+    const chg = pack && pack.pct != null ? Number(pack.pct) : 0;
+    dotEl.className = 'stock-ret-dot ' + (chg>=0?'':'down');
+  }
+
+  function fmtMcap(n){
+    if(n==null || n==='') return '—';
+    const v = Number(n);
+    if(!Number.isFinite(v)) return '—';
+    return Math.round(v).toLocaleString('tr-TR');
+  }
+
   function openStockDetail(item){
     stockDetailCtx = item;
     const sym = String(item.symbol || item.ticker || '').toUpperCase();
@@ -1107,11 +1148,14 @@
       const chg = Number(ret.daily_pct!=null?ret.daily_pct:(d.change_pct||0));
       const chgEl = document.getElementById('sdChg');
       if(d.change_pct!=null || ret.daily_pct!=null){
-        chgEl.textContent = `${chg>=0?'+':''}${chg.toFixed(2)}%`;
+        const abs = ret.change_abs!=null ? Number(ret.change_abs) : (mkt.fark!=null?Number(mkt.fark):null);
+        chgEl.textContent = abs!=null
+          ? `${chg>=0?'+':''}${chg.toFixed(2)}% · ${abs>=0?'+':''}${abs.toFixed(2)}`
+          : `${chg>=0?'+':''}${chg.toFixed(2)}%`;
         chgEl.className = 'stock-chg ' + (chg>=0?'up':'down');
       }
       document.getElementById('sdMeta').textContent =
-        [mkt.session_label||'', mkt.price_label||'', mkt.sector||d.sector||''].filter(Boolean).join(' · ');
+        [mkt.session_label||'', mkt.price_label||'', mkt.market_group||'', mkt.sector||d.sector||''].filter(Boolean).join(' · ');
       const decCode = String(sig.decision||d.final_decision||d.decision||'').toUpperCase();
       const sigEl = document.getElementById('sdSignal');
       sigEl.textContent = sig.label || d.decision_label || decCode || '—';
@@ -1125,22 +1169,37 @@
       favBtn.classList.toggle('on', isFav);
       favBtn.textContent = isFav ? '★' : '☆';
       const rd = fmtRet(ret.daily_pct);
-      const rm = fmtRet(ret.monthly_pct);
-      const ry = fmtRet(ret.yearly_pct);
+      const rm = fmtRet(ret.monthly_pct!=null?ret.monthly_pct:(ret.monthly&&ret.monthly.pct));
+      const ry = fmtRet(ret.yearly_pct!=null?ret.yearly_pct:(ret.yearly&&ret.yearly.pct));
       document.getElementById('sdRetD').textContent = rd.txt;
       document.getElementById('sdRetD').className = rd.cls;
       document.getElementById('sdRetM').textContent = rm.txt;
       document.getElementById('sdRetM').className = rm.cls;
       document.getElementById('sdRetY').textContent = ry.txt;
       document.getElementById('sdRetY').className = ry.cls;
+      setRetRange('sdRetMDip','sdRetMPeak','sdRetMDot', ret.monthly||{}, px);
+      setRetRange('sdRetYDip','sdRetYPeak','sdRetYDot', ret.yearly||{}, px);
       const posQty = (r.position&&r.position.quantity) || 0;
+      const prev = d.prev_close!=null?d.prev_close:mkt.prev_close;
+      const low = mkt.day_low!=null?mkt.day_low:d.day_low;
+      const high = mkt.day_high!=null?mkt.day_high:d.day_high;
+      const floor = mkt.floor!=null?mkt.floor:d.floor;
+      const ceil = mkt.ceiling!=null?mkt.ceiling:d.ceiling;
+      const fark = mkt.fark!=null?mkt.fark:d.fark;
+      const mcap = mkt.market_cap!=null?mkt.market_cap:d.market_cap;
+      const grp = mkt.market_group||d.market_group||'—';
       document.getElementById('sdStats').innerHTML = `
-        <div class="stock-stat"><span>Kod</span><b>${sym}</b></div>
-        <div class="stock-stat"><span>Sektör</span><b>${mkt.sector||d.sector||'—'}</b></div>
-        <div class="stock-stat"><span>Seans</span><b>${mkt.session_label||'—'}</b></div>
         <div class="stock-stat"><span>Alış</span><b>${px?money(ba.bid):'—'}</b></div>
         <div class="stock-stat"><span>Satış</span><b>${px?money(ba.ask):'—'}</b></div>
-        <div class="stock-stat"><span>Ö. Kapanış</span><b>${d.prev_close!=null?money(d.prev_close):(mkt.prev_close!=null?money(mkt.prev_close):'—')}</b></div>
+        <div class="stock-stat"><span>Fark</span><b>${fark!=null?((fark>=0?'+':'')+Number(fark).toFixed(2)):'—'}</b></div>
+        <div class="stock-stat"><span>Düşük</span><b>${low!=null?money(low):'—'}</b></div>
+        <div class="stock-stat"><span>Yüksek</span><b>${high!=null?money(high):'—'}</b></div>
+        <div class="stock-stat"><span>Taban</span><b>${floor!=null?money(floor):'—'}</b></div>
+        <div class="stock-stat"><span>Tavan</span><b>${ceil!=null?money(ceil):'—'}</b></div>
+        <div class="stock-stat"><span>Ö. Kapanış</span><b>${prev!=null?money(prev):'—'}</b></div>
+        <div class="stock-stat"><span>Pazar Grubu</span><b>${grp}</b></div>
+        <div class="stock-stat"><span>Piyasa Değeri</span><b>${fmtMcap(mcap)}</b></div>
+        <div class="stock-stat"><span>Sektör</span><b>${mkt.sector||d.sector||'—'}</b></div>
         <div class="stock-stat"><span>Portföy</span><b>${posQty?posQty+' lot':'—'}</b></div>
         <div class="stock-stat"><span>AL skoru</span><b>${sig.buy_score!=null?Number(sig.buy_score).toFixed(0):'—'}</b></div>
         <div class="stock-stat"><span>SAT skoru</span><b>${sig.sell_score!=null?Number(sig.sell_score).toFixed(0):'—'}</b></div>`;

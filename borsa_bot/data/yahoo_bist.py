@@ -345,13 +345,42 @@ class YahooBistMarketDataProvider:
         )
 
     def period_returns(self, symbol: str) -> dict[str, float | None]:
-        """Daily / monthly / yearly % from Yahoo daily chart. Missing → None."""
+        """Daily / monthly / yearly % — thin wrapper over board_market_pack."""
+        pack = self.board_market_pack(symbol)
+        return {
+            "daily_pct": pack.get("daily_pct"),
+            "weekly_pct": pack.get("weekly_pct"),
+            "monthly_pct": pack.get("monthly_pct"),
+            "yearly_pct": pack.get("yearly_pct"),
+        }
+
+    def board_market_pack(self, symbol: str) -> dict:
+        """Info-style board stats from Yahoo 1d chart + quote meta."""
         sym = normalize_app_symbol(symbol)
         ysym = to_provider_symbol(sym, "yahoo")
-        out: dict[str, float | None] = {"daily_pct": None, "monthly_pct": None, "yearly_pct": None}
+        out: dict = {
+            "daily_pct": None,
+            "weekly_pct": None,
+            "monthly_pct": None,
+            "yearly_pct": None,
+            "change_abs": None,
+            "prev_close": None,
+            "day_low": None,
+            "day_high": None,
+            "floor": None,
+            "ceiling": None,
+            "market_cap": None,
+            "market_group": "Yıldız Pazar" if sym != "XU100" else "Endeks",
+            "weekly": {"pct": None, "dip": None, "zirve": None},
+            "monthly": {"pct": None, "dip": None, "zirve": None},
+            "yearly": {"pct": None, "dip": None, "zirve": None},
+        }
+        q = self._quotes.get(sym)
+        last_px = float(q.price) if q is not None else None
+
         if self._rate_limited():
-            q = self._quotes.get(sym)
             if q is not None and getattr(q, "change_pct", None) is not None:
+                # Only as last resort — spark 15m change is unreliable for daily %
                 out["daily_pct"] = round(float(q.change_pct), 2)
             return out
         try:
@@ -363,21 +392,110 @@ class YahooBistMarketDataProvider:
             result = ((data or {}).get("chart") or {}).get("result") or []
             if not result:
                 return out
-            q0 = (((result[0].get("indicators") or {}).get("quote") or [{}])[0]) or {}
-            closes = [float(c) for c in (q0.get("close") or []) if c is not None and float(c) > 0]
-            if len(closes) < 2:
+            block = result[0] or {}
+            meta = block.get("meta") or {}
+            q0 = (((block.get("indicators") or {}).get("quote") or [{}])[0]) or {}
+            closes_raw = q0.get("close") or []
+            highs_raw = q0.get("high") or []
+            lows_raw = q0.get("low") or []
+            closes: list[float] = []
+            highs: list[float] = []
+            lows: list[float] = []
+            for i, c in enumerate(closes_raw):
+                if c is None or float(c) <= 0:
+                    continue
+                closes.append(float(c))
+                h = highs_raw[i] if i < len(highs_raw) else c
+                l = lows_raw[i] if i < len(lows_raw) else c
+                highs.append(float(h) if h is not None else float(c))
+                lows.append(float(l) if l is not None else float(c))
+            if not closes:
                 return out
             last = closes[-1]
-            prev = closes[-2]
-            out["daily_pct"] = round((last / prev - 1.0) * 100.0, 2)
-            if len(closes) >= 22:
-                out["monthly_pct"] = round((last / closes[-22] - 1.0) * 100.0, 2)
-            if len(closes) >= 2:
-                out["yearly_pct"] = round((last / closes[0] - 1.0) * 100.0, 2)
-            # Prefer live quote change when present
-            q = self._quotes.get(sym)
-            if q is not None and getattr(q, "change_pct", None) is not None:
-                out["daily_pct"] = round(float(q.change_pct), 2)
+            if last_px is None:
+                last_px = last
+            # For range=1y, Yahoo chartPreviousClose is often the year-ago ref — wrong for daily %.
+            # Prefer prior daily bar close; accept meta only if near last price.
+            prev = closes[-2] if len(closes) >= 2 else None
+            meta_prev = None
+            for key in ("regularMarketPreviousClose", "previousClose", "chartPreviousClose"):
+                v = meta.get(key)
+                if v is not None and float(v) > 0:
+                    meta_prev = float(v)
+                    break
+            if meta_prev and last_px and abs(meta_prev / float(last_px) - 1.0) <= 0.12:
+                prev = meta_prev
+            out["prev_close"] = round(prev, 2) if prev else None
+            if prev and prev > 0 and last_px:
+                out["daily_pct"] = round((float(last_px) / prev - 1.0) * 100.0, 2)
+                out["change_abs"] = round(float(last_px) - prev, 2)
+            day_high = meta.get("regularMarketDayHigh")
+            day_low = meta.get("regularMarketDayLow")
+            # Day range from last daily bar when meta missing / stale
+            if highs:
+                day_high = day_high if day_high is not None else highs[-1]
+            if lows:
+                day_low = day_low if day_low is not None else lows[-1]
+            # Prefer last bar OHLC when meta day range looks like multi-day
+            if highs and lows and day_high is not None and day_low is not None:
+                if float(day_high) - float(day_low) > float(last_px or last) * 0.25:
+                    day_high, day_low = highs[-1], lows[-1]
+            out["day_high"] = round(float(day_high), 2) if day_high else None
+            out["day_low"] = round(float(day_low), 2) if day_low else None
+            ref = prev or last_px
+            if ref and float(ref) > 0:
+                # BIST free band ≈ ±10% of reference (prev close)
+                out["floor"] = round(float(ref) * 0.90, 2)
+                out["ceiling"] = round(float(ref) * 1.10, 2)
+
+            def _range_pack(n: int) -> dict:
+                if len(closes) < max(2, n):
+                    return {"pct": None, "dip": None, "zirve": None}
+                base = closes[-n]
+                pct_v = round((last / base - 1.0) * 100.0, 2) if base else None
+                window_h = highs[-n:]
+                window_l = lows[-n:]
+                return {
+                    "pct": pct_v,
+                    "dip": round(min(window_l), 2) if window_l else None,
+                    "zirve": round(max(window_h), 2) if window_h else None,
+                }
+
+            weekly = _range_pack(5)
+            monthly = _range_pack(22)
+            yearly = _range_pack(len(closes))
+            out["weekly"] = weekly
+            out["monthly"] = monthly
+            out["yearly"] = yearly
+            out["weekly_pct"] = weekly.get("pct")
+            out["monthly_pct"] = monthly.get("pct")
+            out["yearly_pct"] = yearly.get("pct")
+
+            mcap = meta.get("marketCap")
+            if mcap is None:
+                # Secondary quote endpoint (best-effort)
+                try:
+                    qurl = (
+                        "https://query1.finance.yahoo.com/v7/finance/quote"
+                        f"?symbols={urllib.parse.quote(ysym)}"
+                    )
+                    qdata = self._get_json(qurl)
+                    results = (((qdata or {}).get("quoteResponse") or {}).get("result")) or []
+                    if results:
+                        mcap = results[0].get("marketCap")
+                        if out["prev_close"] is None and results[0].get("regularMarketPreviousClose"):
+                            out["prev_close"] = round(float(results[0]["regularMarketPreviousClose"]), 2)
+                        if out["day_high"] is None and results[0].get("regularMarketDayHigh"):
+                            out["day_high"] = round(float(results[0]["regularMarketDayHigh"]), 2)
+                        if out["day_low"] is None and results[0].get("regularMarketDayLow"):
+                            out["day_low"] = round(float(results[0]["regularMarketDayLow"]), 2)
+                except Exception:  # noqa: BLE001
+                    mcap = None
+            if mcap is not None:
+                try:
+                    out["market_cap"] = int(float(mcap))
+                except (TypeError, ValueError):
+                    out["market_cap"] = None
         except Exception as exc:  # noqa: BLE001
-            logger.warning("period_returns failed for %s: %s", sym, exc)
+            logger.warning("board_market_pack failed for %s: %s", sym, exc)
         return out

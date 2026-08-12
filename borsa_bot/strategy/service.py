@@ -1985,15 +1985,36 @@ class TradingService:
         is_fav = bool(fav_rec and fav_rec.active)
         pos = self.ledger.get_position(sym)
 
-        returns = {"daily_pct": None, "monthly_pct": None, "yearly_pct": None}
+        pack: dict = {}
         try:
-            fn = getattr(self.provider, "period_returns", None)
+            fn = getattr(self.provider, "board_market_pack", None) or getattr(self.provider, "period_returns", None)
             if callable(fn):
-                returns = fn(sym) or returns
+                pack = fn(sym) or {}
         except Exception:  # noqa: BLE001
-            pass
+            pack = {}
+        returns = {
+            "daily_pct": pack.get("daily_pct"),
+            "weekly_pct": pack.get("weekly_pct"),
+            "monthly_pct": pack.get("monthly_pct"),
+            "yearly_pct": pack.get("yearly_pct"),
+            "change_abs": pack.get("change_abs"),
+            "weekly": pack.get("weekly") or {"pct": None, "dip": None, "zirve": None},
+            "monthly": pack.get("monthly") or {"pct": None, "dip": None, "zirve": None},
+            "yearly": pack.get("yearly") or {"pct": None, "dip": None, "zirve": None},
+        }
         if returns.get("daily_pct") is None and quote is not None and getattr(quote, "change_pct", None) is not None:
             returns["daily_pct"] = round(float(quote.change_pct), 2)
+
+        prev_close = pack.get("prev_close")
+        day_low = pack.get("day_low")
+        day_high = pack.get("day_high")
+        floor_px = pack.get("floor")
+        ceiling_px = pack.get("ceiling")
+        market_cap = pack.get("market_cap")
+        market_group = pack.get("market_group") or ("Yıldız Pazar" if company else "BIST")
+        fark = returns.get("change_abs")
+        if fark is None and prev_close and quote is not None:
+            fark = round(float(quote.price) - float(prev_close), 2)
 
         # Prefer warm full-scan cache; otherwise fast lite scores (full scan can take minutes).
         decision = None
@@ -2018,7 +2039,14 @@ class TradingService:
                 "bid": round(float(quote.bid), 4) if quote and quote.bid else None,
                 "ask": round(float(quote.ask), 4) if quote and quote.ask else None,
                 "change_pct": returns.get("daily_pct"),
-                "prev_close": None,
+                "prev_close": prev_close,
+                "day_low": day_low,
+                "day_high": day_high,
+                "floor": floor_px,
+                "ceiling": ceiling_px,
+                "fark": fark,
+                "market_cap": market_cap,
+                "market_group": market_group,
                 "decision": (lite or {}).get("decision") or "NO_DATA",
                 "final_decision": (lite or {}).get("final_decision") or "NO_DATA",
                 "decision_label": (lite or {}).get("decision_label") or "VERİ YOK",
@@ -2032,6 +2060,17 @@ class TradingService:
         if is_fav:
             detail["is_favorite"] = True
             detail["watchlist_priority"] = fav_rec.priority if fav_rec else detail.get("watchlist_priority")
+        # Merge Info-style fields onto detail even when full-scan serialize was used
+        detail["prev_close"] = detail.get("prev_close") if detail.get("prev_close") is not None else prev_close
+        detail["day_low"] = day_low
+        detail["day_high"] = day_high
+        detail["floor"] = floor_px
+        detail["ceiling"] = ceiling_px
+        detail["fark"] = fark
+        detail["market_cap"] = market_cap
+        detail["market_group"] = market_group
+        if returns.get("daily_pct") is not None:
+            detail["change_pct"] = returns.get("daily_pct")
 
         dec = str(detail.get("final_decision") or detail.get("decision") or "NO_DATA").upper()
         label_map = {
@@ -2079,6 +2118,13 @@ class TradingService:
                 "bid": detail.get("bid"),
                 "ask": detail.get("ask"),
                 "prev_close": detail.get("prev_close"),
+                "day_low": day_low,
+                "day_high": day_high,
+                "floor": floor_px,
+                "ceiling": ceiling_px,
+                "fark": fark,
+                "market_cap": market_cap,
+                "market_group": market_group,
                 "volume": getattr(quote, "volume", None) if quote else None,
             },
             "signal": {
