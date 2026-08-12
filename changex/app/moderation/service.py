@@ -513,6 +513,7 @@ def assert_listing_approved_for_trade(row: dict[str, Any]) -> None:
 
         raise DomainError(
             "LISTING_NOT_APPROVED",
-            f"Listing {row.get('id')} onaylı değil ({status.value})",
+            f"İlan #{row.get('id')} onaylı değil ({status.value}). "
+            "Teklif için yalnızca onaylanmış ilanlar kullanılabilir.",
             409,
         )

@@ -5,8 +5,10 @@ import '../api/client.dart';
 import '../theme/app_theme.dart';
 import '../widgets/listing_media.dart';
 import '../widgets/value_widgets.dart';
+import 'create_listing_screen.dart';
 import 'edit_listing_screen.dart';
 import 'login_screen.dart';
+import 'my_listings_screen.dart';
 
 class ListingDetailScreen extends StatefulWidget {
   const ListingDetailScreen({
@@ -23,25 +25,62 @@ class ListingDetailScreen extends StatefulWidget {
 }
 
 class _ListingDetailScreenState extends State<ListingDetailScreen> {
-  final _offerName = TextEditingController(text: 'Teklif ürünüm');
-  final _madalyon = TextEditingController(text: '1');
-  final _dirhem = TextEditingController(text: '0');
-  final _mandal = TextEditingController(text: '0');
   bool _busy = false;
   String? _result;
+  bool _loadingMine = false;
+  List<Map<String, dynamic>> _approvedMine = [];
+  int? _selectedOfferId;
 
   @override
-  void dispose() {
-    _offerName.dispose();
-    _madalyon.dispose();
-    _dirhem.dispose();
-    _mandal.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    if (widget.user != null) {
+      _loadApprovedMine();
+    }
   }
 
   bool get _tradeOpen {
     final ribbon = resolveListingRibbon(widget.listing);
     return ribbon == ListingTradeRibbon.none;
+  }
+
+  Future<void> _loadApprovedMine() async {
+    setState(() => _loadingMine = true);
+    try {
+      final raw = await api.myListings();
+      final targetId = widget.listing['id'];
+      final approved = <Map<String, dynamic>>[];
+      for (final item in raw) {
+        final m = Map<String, dynamic>.from(item as Map);
+        final status = (m['status']?.toString() ?? '').toUpperCase();
+        if (status != 'APPROVED' && status != 'ACTIVE') continue;
+        if (m['id'] == targetId) continue; // can't offer a listing for itself
+        approved.add(m);
+      }
+      if (!mounted) return;
+      setState(() {
+        _approvedMine = approved;
+        _selectedOfferId = approved.isEmpty ? null : approved.first['id'] as int?;
+        // handle num from json
+        if (_selectedOfferId == null && approved.isNotEmpty) {
+          final v = approved.first['id'];
+          _selectedOfferId = v is int ? v : (v as num).toInt();
+        }
+        _loadingMine = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _approvedMine = [];
+        _loadingMine = false;
+      });
+    }
+  }
+
+  int _asInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.parse(v.toString());
   }
 
   Future<void> _offer() async {
@@ -55,31 +94,23 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       );
       return;
     }
+    if (_selectedOfferId == null) {
+      setState(() => _result =
+          'Teklif için onaylı bir ilanınız yok. Önce fotoğraflı ilan oluşturup onaylatın.');
+      return;
+    }
     setState(() {
       _busy = true;
       _result = null;
     });
     try {
-      final offeredListing = await api.createListing({
-        'title': _offerName.text.trim().isEmpty ? 'Teklif ürünü' : _offerName.text.trim(),
-        'description': 'CHANGE X takas teklifi ürünü',
-        'category': widget.listing['category'] ?? 'Diğer',
-        'items': [
-          {
-            'name': _offerName.text.trim().isEmpty ? 'Teklif ürünü' : _offerName.text.trim(),
-            'value': {
-              'madalyon': int.tryParse(_madalyon.text) ?? 0,
-              'dirhem': int.tryParse(_dirhem.text) ?? 0,
-              'mandal': int.tryParse(_mandal.text) ?? 0,
-            },
-          }
-        ],
-      });
+      final requestedId = _asInt(widget.listing['id']);
+      final offeredId = _selectedOfferId!;
       final res = await api.createOffer({
-        'requested_listing_ids': [widget.listing['id']],
-        'offered_listing_ids': [offeredListing['id']],
+        'requested_listing_ids': [requestedId],
+        'offered_listing_ids': [offeredId],
         'idempotency_key':
-            'offer-${widget.listing['id']}-${offeredListing['id']}-${DateTime.now().millisecondsSinceEpoch}',
+            'offer-$requestedId-$offeredId-${DateTime.now().millisecondsSinceEpoch}',
       });
       final gap = res['value_gap'] as Map<String, dynamic>?;
       final exact = res['exact_match'] == true;
@@ -89,13 +120,18 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         } else if (gap != null) {
           _result =
               '${res['value_gap_display'] ?? gap['display']}\n'
-              'Fark gerçek para ile kapatılamaz. Ürün ekleyin veya yeni teklif verin.';
+              'Fark gerçek para ile kapatılamaz. Başka onaylı ilan seçin veya yeni ilan ekleyin.';
         } else {
           _result = 'Teklif gönderildi · ${res['status'] ?? res['state']}';
         }
       });
     } on ApiException catch (e) {
-      setState(() => _result = e.message);
+      var msg = e.message;
+      if (msg.contains('onaylı değil') || msg.contains('LISTING_NOT_APPROVED')) {
+        msg =
+            'Yalnızca onaylı ilanlarla teklif verilebilir. Seçtiğiniz ilan henüz onaylanmamış olabilir.';
+      }
+      setState(() => _result = msg);
     } catch (_) {
       setState(() => _result = 'Teklif gönderilemedi');
     } finally {
@@ -170,7 +206,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                         if (ok == true && context.mounted) {
                           try {
                             final fresh = await api.getListing(
-                              widget.listing['id'] as int,
+                              _asInt(widget.listing['id']),
                             );
                             if (!context.mounted) return;
                             Navigator.of(context).pushReplacement(
@@ -239,6 +275,14 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
+                  Text(
+                    'Yalnızca onaylanmış kendi ilanlarınızla teklif verebilirsiniz.',
+                    style: GoogleFonts.montserrat(
+                      color: AppColors.muted,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   const PlatformBanner(),
                   const SizedBox(height: 12),
                   if (!_tradeOpen)
@@ -248,54 +292,95 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                           : 'Bu ilan takasa kapalıdır.',
                       style: GoogleFonts.montserrat(color: AppColors.danger),
                     )
-                  else ...[
-                    TextField(
-                      controller: _offerName,
-                      decoration:
-                          const InputDecoration(labelText: 'Teklif ürün adı'),
+                  else if (widget.user == null)
+                    SizedBox(
+                      height: 52,
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const LoginScreen()),
+                          );
+                        },
+                        child: const Text('Giriş yap & teklif ver'),
+                      ),
+                    )
+                  else if (_loadingMine)
+                    const Center(child: CircularProgressIndicator())
+                  else if (_approvedMine.isEmpty) ...[
+                    Text(
+                      'Onaylı ilanınız yok. Teklif için önce fotoğraflı ilan oluşturun; yönetim onayından sonra burada seçebilirsiniz.',
+                      style: GoogleFonts.montserrat(
+                        color: AppColors.muted,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 48,
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  CreateListingScreen(user: widget.user!),
+                            ),
+                          );
+                          _loadApprovedMine();
+                        },
+                        icon: const Icon(Icons.add_a_photo_outlined),
+                        label: const Text('Fotoğraflı ilan oluştur'),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => MyListingsScreen(user: widget.user!),
+                          ),
+                        );
+                      },
+                      child: Text(
+                        'İlanlarımı gör',
+                        style: GoogleFonts.montserrat(color: AppColors.gold),
+                      ),
+                    ),
+                  ] else ...[
+                    DropdownButtonFormField<int>(
+                      value: _selectedOfferId,
+                      decoration: const InputDecoration(
+                        labelText: 'Teklif edeceğin onaylı ilan',
+                      ),
+                      items: [
+                        for (final m in _approvedMine)
+                          DropdownMenuItem(
+                            value: _asInt(m['id']),
+                            child: Text(
+                              '${m['title']} · #${m['id']}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: _busy
+                          ? null
+                          : (v) => setState(() => _selectedOfferId = v),
+                    ),
+                    const SizedBox(height: 10),
+                    TextButton(
+                      onPressed: _busy ? null : _loadApprovedMine,
+                      child: Text(
+                        'Listeyi yenile',
+                        style: GoogleFonts.montserrat(color: AppColors.muted),
+                      ),
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _madalyon,
-                            keyboardType: TextInputType.number,
-                            decoration:
-                                const InputDecoration(labelText: 'Madalyon'),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextField(
-                            controller: _dirhem,
-                            keyboardType: TextInputType.number,
-                            decoration:
-                                const InputDecoration(labelText: 'Dirhem'),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextField(
-                            controller: _mandal,
-                            keyboardType: TextInputType.number,
-                            decoration:
-                                const InputDecoration(labelText: 'Mandal'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
                     SizedBox(
                       height: 52,
                       width: double.infinity,
                       child: FilledButton(
                         onPressed: _busy ? null : _offer,
-                        child: Text(
-                          widget.user == null
-                              ? 'Giriş yap & teklif ver'
-                              : 'Takas teklifi ver',
-                        ),
+                        child: Text(_busy ? 'Gönderiliyor…' : 'Takas teklifi ver'),
                       ),
                     ),
                   ],

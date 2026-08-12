@@ -57,7 +57,8 @@ def _sum_listings(conn, listing_ids: list[int]) -> tuple[ChangeValue, list[dict]
         if status not in OFFERABLE_LISTING:
             raise DomainError(
                 "LISTING_NOT_APPROVED",
-                f"Listing {lid} onaylı değil ({status.value})",
+                f"İlan #{lid} onaylı değil ({status.value}). "
+                "Teklif için yalnızca onaylanmış ilanlar kullanılabilir.",
                 409,
             )
         units = _listing_units(d)
