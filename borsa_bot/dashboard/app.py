@@ -1562,29 +1562,53 @@ def paper_orders() -> dict:
 
 @app.post("/api/live/confirm")
 def live_confirm(body: LiveConfirmBody, authorization: str | None = Header(default=None)) -> dict:
-    """Explicit LIVE confirmation gate — does NOT enable broker by itself."""
-    auth_store.require(authorization, min_role=Role.ADMIN)
+    """Explicit LIVE confirmation — opens the UI/runtime gate when phrase matches."""
+    if bool(getattr(settings, "auth_enabled", False)):
+        auth_store.require(authorization, min_role=Role.ADMIN)
     if not body.confirm or body.phrase.strip().upper() != "I_UNDERSTAND_LIVE_RISK":
         raise HTTPException(400, "Confirmation phrase required: I_UNDERSTAND_LIVE_RISK")
-    if not bool(getattr(settings, "live_broker_enabled", False)):
-        return {
-            "ok": False,
-            "live": "DISABLED",
-            "message": "LIVE_BROKER_ENABLED=false — confirmation recorded logically but LIVE remains locked in this process (set env + restart with real adapter).",
-            "readiness": _live_readiness_payload(),
-        }
-    # Frozen settings — cannot mutate; document requirement
+    from trading_safety.live_gate import live_gate_store
+
+    snap = live_gate_store.enable(phrase=body.phrase, confirmed_by="dashboard")
+    # Align execution path with the open gate (still fail-closed without real adapter)
+    engine.set_execution_mode("LIVE")
     return {
         "ok": True,
-        "message": "Admin confirmation accepted. Set LIVE_CONFIRMED=true in environment to persist. LIVE still requires real broker adapter.",
-        "live_broker_enabled": bool(settings.live_broker_enabled),
-        "live_confirmed_env": bool(getattr(settings, "live_confirmed", False)),
+        "live_gate": snap.to_dict(),
+        "execution_mode": engine.execution_mode().value,
+        "message": snap.message,
+        "readiness": _live_readiness_payload(),
+    }
+
+
+@app.post("/api/live/enable")
+def live_enable(body: LiveConfirmBody | None = None, authorization: str | None = Header(default=None)) -> dict:
+    """Open canlı para gate (same confirmation as /api/live/confirm)."""
+    payload = body or LiveConfirmBody(confirm=False, phrase="")
+    return live_confirm(payload, authorization)
+
+
+@app.post("/api/live/disable")
+def live_disable(authorization: str | None = Header(default=None)) -> dict:
+    """Close canlı para gate and return execution to PAPER."""
+    if bool(getattr(settings, "auth_enabled", False)):
+        auth_store.require(authorization, min_role=Role.TRADER)
+    from trading_safety.live_gate import live_gate_store
+
+    snap = live_gate_store.disable(by="dashboard")
+    engine.set_execution_mode("PAPER")
+    return {
+        "ok": True,
+        "live_gate": snap.to_dict(),
+        "execution_mode": engine.execution_mode().value,
+        "message": snap.message,
         "readiness": _live_readiness_payload(),
     }
 
 
 def _live_readiness_payload() -> dict:
     from execution.live_factory import live_adapter_status
+    from trading_safety.live_gate import is_live_broker_enabled, is_live_confirmed, live_gate_status
     from trading_safety.live_readiness import evaluate_live_money_readiness
 
     md_ok = None
@@ -1595,23 +1619,26 @@ def _live_readiness_payload() -> dict:
     report = evaluate_live_money_readiness(market_data_ok=md_ok)
     out = report.to_dict()
     out["adapter"] = live_adapter_status()
+    out["live_gate"] = live_gate_status()
     out["flags"] = {
         "MODE": settings.mode,
         "EXECUTION_MODE": settings.execution_mode,
-        "LIVE_BROKER_ENABLED": bool(settings.live_broker_enabled),
-        "LIVE_CONFIRMED": bool(settings.live_confirmed),
+        "LIVE_BROKER_ENABLED": is_live_broker_enabled(),
+        "LIVE_CONFIRMED": is_live_confirmed(),
         "LIVE_CONFIRMATION_REQUIRED": bool(settings.live_confirmation_required),
         "LIVE_BROKER_ADAPTER": getattr(settings, "live_broker_adapter", "disabled"),
         "LIVE_DRY_RUN": bool(getattr(settings, "live_dry_run", True)),
         "AUTH_ENABLED": bool(settings.auth_enabled),
         "KILL_SWITCH": bool(settings.kill_switch),
+        "ENV_LIVE_BROKER_ENABLED": bool(settings.live_broker_enabled),
+        "ENV_LIVE_CONFIRMED": bool(settings.live_confirmed),
     }
     return out
 
 
 @app.get("/api/live/readiness")
 def live_readiness() -> dict:
-    """Live-money checklist — foundation only; never auto-unlocks."""
+    """Live-money checklist — foundation only; never auto-unlocks real adapter."""
     return {"ok": True, **_live_readiness_payload()}
 
 
@@ -1619,15 +1646,18 @@ def live_readiness() -> dict:
 def live_status() -> dict:
     """Compact live lock status for UI / ops."""
     payload = _live_readiness_payload()
+    gate = payload.get("live_gate") or {}
     return {
         "ok": True,
-        "live_trading": False,
+        "live_trading": bool(gate.get("can_send_live_orders")),
         "ready": bool(payload.get("ready")),
         "verdict": payload.get("verdict"),
         "live_money_readiness": payload.get("live_money_readiness"),
         "adapter": payload.get("adapter"),
         "flags": payload.get("flags"),
-        "message": "Canlı para altyapısı hazır · emir yolu kilitli · ileride manuel açılır",
+        "live_gate": gate,
+        "open": bool(gate.get("open")),
+        "message": gate.get("message") or "Canlı para kapalı · sadece paper",
     }
 
 

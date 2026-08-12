@@ -38,6 +38,7 @@ from config.settings import settings
 from decision.engine import AIDecisionEngine
 from execution.broker_adapter import ExecutionRouter, LiveBrokerDisabled
 from strategy.service import TradingService
+from trading_safety.live_gate import is_live_broker_enabled, live_gate_status
 
 logger = logging.getLogger(__name__)
 ENTRY = {SignalAction.BUY, SignalAction.STRONG_BUY, SignalAction.AL}
@@ -111,8 +112,8 @@ class AutonomousTradingEngine:
         return {
             "ok": True,
             "execution_mode": m.value,
-            "live_broker_enabled": bool(getattr(settings, "live_broker_enabled", False)),
-            "note": "LIVE requires LIVE_BROKER_ENABLED + real adapter; default PAPER",
+            "live_broker_enabled": is_live_broker_enabled(),
+            "note": "LIVE requires gate open + real adapter; default PAPER",
         }
 
     def status(self) -> dict[str, Any]:
@@ -128,7 +129,8 @@ class AutonomousTradingEngine:
         )
         if not gov.new_trades_allowed:
             blocked = True
-        live_flag = bool(getattr(settings, "live_broker_enabled", False))
+        live_flag = is_live_broker_enabled()
+        gate = live_gate_status()
         return {
             "autonomous_mode": bool(getattr(settings, "autonomy_enabled", True)) and not self._halted,
             "autonomy_level": level.to_dict(),
@@ -141,14 +143,19 @@ class AutonomousTradingEngine:
             "halt_reason": self._halt_reason,
             "halted": self._halted,
             "health": health.to_dict(),
-            "live_broker": "DISABLED" if not live_flag else "ENABLED_FLAG_ONLY",
-            "live_trading": False,
+            "live_broker": (
+                "REAL"
+                if gate.get("can_send_live_orders")
+                else ("GATE_OPEN" if live_flag else "DISABLED")
+            ),
+            "live_trading": bool(gate.get("can_send_live_orders")),
+            "live_gate": gate,
             "desk_gate_auto": bool(getattr(settings, "desk_gate_auto", True)),
             "honesty": {
                 "trading_maturity_level": level.level,
                 "trading_maturity_label": level.label,
                 "full_level8_claimed": False,
-                "live_ready": False,
+                "live_ready": bool(gate.get("can_send_live_orders")),
                 "live_exec_selected_but_locked": em is ExecutionMode.LIVE and not live_flag,
                 "desk_gate_auto": bool(getattr(settings, "desk_gate_auto", True)),
                 "signal_ne_order": True,
@@ -197,7 +204,11 @@ class AutonomousTradingEngine:
             user_mode=um.value,
             execution_mode=em.value,
             started_at=utc_now().isoformat(),
-            live_broker="DISABLED" if not getattr(settings, "live_broker_enabled", False) else "FLAG_ON_ADAPTER_PENDING",
+            live_broker=(
+                "GATE_OPEN"
+                if is_live_broker_enabled()
+                else "DISABLED"
+            ),
         )
 
         if self._halted and not force:
@@ -416,7 +427,7 @@ class AutonomousTradingEngine:
         report.exits = monitor_and_exit(self.trading, execution_mode=em.value)
 
         # 6) RECONCILE
-        if em is ExecutionMode.LIVE and getattr(settings, "live_broker_enabled", False):
+        if em is ExecutionMode.LIVE and is_live_broker_enabled():
             rec = reconcile_live(self.trading, self.router.live)
         else:
             rec = reconcile_paper(self.trading)
@@ -648,7 +659,7 @@ class AutonomousTradingEngine:
 
         if em is ExecutionMode.LIVE:
             # Fail-closed unless unlocked
-            if not bool(getattr(settings, "live_broker_enabled", False)):
+            if not is_live_broker_enabled():
                 self.events.emit(
                     AutonomyEventType.ORDER_BLOCKED,
                     cycle_id=report.cycle_id,

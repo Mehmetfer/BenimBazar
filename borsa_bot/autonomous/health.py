@@ -66,16 +66,23 @@ def run_health_check(trading: Any, *, execution_mode: str = "PAPER") -> HealthCh
         failures.append("DATA_PROVIDER_FAILURE")
 
     # Broker
-    live_enabled = bool(getattr(settings, "live_broker_enabled", False))
+    from trading_safety.live_gate import is_live_broker_enabled, live_gate_status
+
+    live_enabled = is_live_broker_enabled()
+    gate = live_gate_status()
     checks["broker"] = {
         "ok": True,
         "paper": True,
         "live_broker_enabled": live_enabled,
-        "live_adapter": "DISABLED" if not live_enabled else "PENDING",
+        "live_adapter": "REAL" if gate.get("real_adapter") else ("GATE_OPEN" if live_enabled else "DISABLED"),
+        "live_gate": gate.get("source"),
     }
     if execution_mode.upper() == "LIVE" and not live_enabled:
         failures.append("LIVE_BROKER_DISABLED")
         checks["broker"]["ok"] = False
+    elif execution_mode.upper() == "LIVE" and live_enabled and not gate.get("real_adapter"):
+        warnings.append("LIVE_ADAPTER_NOT_LOADED")
+        checks["broker"]["note"] = "Kapı açık · gerçek broker yok · emir gitmez"
 
     # Account
     try:

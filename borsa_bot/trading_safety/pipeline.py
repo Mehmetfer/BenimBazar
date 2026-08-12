@@ -220,7 +220,9 @@ class SafeExecutionPipeline:
 
         if mode is TradingExecutionMode.MICRO_LIVE:
             # Even MICRO_LIVE does not auto-send without unlock; if unlocked, still go through router LIVE path
-            if not bool(getattr(settings, "live_broker_enabled", False)):
+            from trading_safety.live_gate import is_live_broker_enabled
+
+            if not is_live_broker_enabled():
                 self.metrics.record_reject()
                 return SafeSubmitResult(
                     False,

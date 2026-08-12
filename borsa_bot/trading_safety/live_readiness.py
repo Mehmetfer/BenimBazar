@@ -60,10 +60,12 @@ def evaluate_live_money_readiness(
     checks: list[ReadinessCheck] = []
     warnings: list[str] = []
 
+    from trading_safety.live_gate import is_live_broker_enabled, is_live_confirmed
+
     mode = str(getattr(settings, "mode", "PAPER")).upper()
     exec_mode = str(getattr(settings, "execution_mode", "PAPER")).upper()
-    enabled = bool(getattr(settings, "live_broker_enabled", False))
-    confirmed = bool(getattr(settings, "live_confirmed", False))
+    enabled = is_live_broker_enabled()
+    confirmed = is_live_confirmed()
     confirm_req = bool(getattr(settings, "live_confirmation_required", True))
     kill = bool(getattr(settings, "kill_switch", False))
     auth_enabled = bool(getattr(settings, "auth_enabled", False))

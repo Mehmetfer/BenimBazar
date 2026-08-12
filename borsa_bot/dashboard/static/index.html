@@ -488,7 +488,7 @@
 
   <div class="panel" id="panel-set">
     <h2>Ayarlar</h2>
-    <p class="why set-lead">Paper işlem · gerçek para yok · sinyal otomatik emir değildir</p>
+    <p class="why set-lead">Paper varsayılan · canlı para kapısı Ayarlar’dan aç/kapa · sinyal otomatik emir değildir</p>
 
     <div class="set-card" id="sysHealth">
       <h3>Durum</h3>
@@ -499,9 +499,23 @@
       </div>
     </div>
 
+    <div class="set-card" id="liveMoneyCard">
+      <h3>Canlı para</h3>
+      <p class="set-note">Aç/kapa buradan. Gerçek broker yoksa emir yine gönderilmez.</p>
+      <div class="set-status" style="margin-bottom:10px">
+        <div class="set-row"><span>Kapı</span><b id="setLiveState">Kapalı</b></div>
+        <div class="set-row"><span>Gerçek emir</span><b id="setLiveOrders">Hayır</b></div>
+      </div>
+      <div id="liveMoneyBody" class="meta" style="margin-bottom:10px">Yükleniyor…</div>
+      <div class="set-actions">
+        <button class="more" id="liveEnableBtn" type="button">Aç</button>
+        <button class="more set-halt" id="liveDisableBtn" type="button">Kapat</button>
+      </div>
+    </div>
+
     <div class="set-card" id="autonomyCard">
       <h3>Otomatik işlem</h3>
-      <p class="set-note">Bot ne kadar kendi başına karar versin? Canlı emir yolu kilitli.</p>
+      <p class="set-note">Bot ne kadar kendi başına karar versin?</p>
       <div class="set-modes" id="autonomyModes">
         <button class="filter" data-amode="PAPER" type="button">Manuel</button>
         <button class="filter" data-amode="SEMI_AUTO" type="button">Onaylı</button>
@@ -528,15 +542,9 @@
     <button type="button" class="set-adv-toggle" id="setAdvToggle" aria-expanded="false" aria-controls="setAdvanced">Gelişmiş ayarlar ▾</button>
 
     <div class="set-adv" id="setAdvanced" hidden>
-      <div class="set-card" id="liveMoneyCard">
-        <h3>Canlı para</h3>
-        <p class="set-note">Altyapı hazır · emir yolu kilitli · şimdilik sadece paper</p>
-        <div id="liveMoneyBody" class="meta">Yükleniyor…</div>
-      </div>
-
       <div class="set-card">
         <h3>Emir yolu</h3>
-        <p class="set-note">LIVE seçilse bile broker kapalı kalır</p>
+        <p class="set-note">Canlı kapı kapalıysa LIVE seçimi emir göndermez</p>
         <div class="filters" id="execModes">
           <button class="filter" data-emode="PAPER" type="button">Paper</button>
           <button class="filter" data-emode="SHADOW" type="button">Gölge</button>
@@ -2158,21 +2166,36 @@
     const MODE_TR = {PAPER:'Manuel', SEMI_AUTO:'Onaylı', AUTO:'Otomatik', PAUSED:'Duraklatılmış'};
     try{
       const live = await (await fetch('/api/live/status')).json();
+      const gate = live.live_gate || {};
+      const open = !!(live.open || gate.open);
       const el = document.getElementById('liveMoneyBody');
-      if(el){
-        el.textContent = (live.message || 'Canlı para kapalı · sadece paper') +
-          ` · hazırlık: ${live.live_money_readiness||'doğrulanmadı'}`;
+      if(el) el.textContent = live.message || gate.message || (open ? 'Canlı kapı açık' : 'Canlı para kapalı');
+      const st = document.getElementById('setLiveState');
+      if(st){
+        st.textContent = open ? 'Açık' : 'Kapalı';
+        st.className = open ? 'warn' : 'ok';
       }
+      const lo = document.getElementById('setLiveOrders');
+      if(lo){
+        const can = !!(live.live_trading || gate.can_send_live_orders);
+        lo.textContent = can ? 'Evet — dikkat' : 'Hayır';
+        lo.className = can ? 'warn' : 'ok';
+      }
+      const en = document.getElementById('liveEnableBtn');
+      const dis = document.getElementById('liveDisableBtn');
+      if(en) en.disabled = open;
+      if(dis) dis.disabled = !open;
     }catch(_e){
       const el = document.getElementById('liveMoneyBody');
-      if(el) el.textContent = 'Canlı para kapalı · paper only';
+      if(el) el.textContent = 'Canlı durum alınamadı';
     }
     try{
       const st = await (await fetch('/api/autonomy/status')).json();
       let mode = st.user_trading_mode||'PAPER';
       let em = st.execution_mode||'PAPER';
-      // LIVE seçili ama broker kilitli → turlar BLOCKED görünür; paper'a çek
-      if(em === 'LIVE' && st.live_broker === 'DISABLED'){
+      const gateOpen = !!(st.live_gate && st.live_gate.open);
+      // Only auto-fix stuck LIVE when the canlı kapı is closed
+      if(em === 'LIVE' && !gateOpen && st.live_broker === 'DISABLED'){
         try{
           await fetch('/api/autonomy/execution-mode',{
             method:'POST',
@@ -2197,11 +2220,13 @@
           ? ((checks.data_provider.kind || 'OK') + (checks.data_provider.fresh === false ? ' · gecikmeli' : ''))
           : (health.ok === false ? 'Sorunlu' : 'Hazır');
         const mkt = (checks.market_status && checks.market_status.status) || '—';
+        const liveLabel = gateOpen ? 'Açık' : 'Kapalı';
+        const liveCls = gateOpen ? 'warn' : 'ok';
         setBody.innerHTML = `
           <div class="set-row"><span>Veri</span><b>${md}</b></div>
           <div class="set-row"><span>Piyasa</span><b>${mkt}</b></div>
-          <div class="set-row"><span>İşlem</span><b>Paper</b></div>
-          <div class="set-row"><span>Canlı para</span><b class="ok">Kapalı</b></div>`;
+          <div class="set-row"><span>İşlem</span><b>${em==='LIVE'?'Canlı yol':'Paper'}</b></div>
+          <div class="set-row"><span>Canlı para</span><b class="${liveCls}">${liveLabel}</b></div>`;
       }
       const last = st.last_cycle||{};
       const dg = (last.desk_gate&&last.desk_gate.stats)||{};
@@ -2437,6 +2462,38 @@
     await fetch('/api/autonomy/clear-halt',{method:'POST'});
     await loadAutonomy();
   };
+  const liveEnableBtn = document.getElementById('liveEnableBtn');
+  if(liveEnableBtn){
+    liveEnableBtn.onclick = async ()=>{
+      if(!confirm('Canlı para kapısı AÇILSIN mı?\n\nGerçek broker bağlı değilse emir yine gönderilmez.\nBağlıysa gerçek para riski vardır.')) return;
+      if(!confirm('Son onay: Canlı kapıyı açıyorum.')) return;
+      try{
+        const res = await fetch('/api/live/enable',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({confirm:true, phrase:'I_UNDERSTAND_LIVE_RISK'})
+        });
+        const body = await res.json().catch(()=>({}));
+        if(!res.ok){
+          alert(body.detail || body.message || 'Canlı kapı açılamadı');
+        } else if(body.message){
+          alert(body.message);
+        }
+      }catch(_e){
+        alert('Canlı kapı açılamadı');
+      }
+      await loadAutonomy();
+    };
+  }
+  const liveDisableBtn = document.getElementById('liveDisableBtn');
+  if(liveDisableBtn){
+    liveDisableBtn.onclick = async ()=>{
+      try{
+        await fetch('/api/live/disable',{method:'POST'});
+      }catch(_e){}
+      await loadAutonomy();
+    };
+  }
   const l7btn=document.getElementById('level7CycleBtn');
   if(l7btn) l7btn.onclick=async()=>{
     document.getElementById('level7Body').textContent='L7 cycle…';

@@ -1,7 +1,8 @@
 """Live broker adapter factory — foundation only; real money stays OFF by default.
 
-Adapters registered here are never selected unless LIVE_BROKER_ENABLED=true
-AND LIVE_BROKER_ADAPTER names a known implementation. Unknown / empty → disabled.
+Adapters registered here are never selected unless the live gate is open
+(env LIVE_BROKER_ENABLED or UI gate) AND LIVE_BROKER_ADAPTER names a known
+implementation. Unknown / empty → disabled.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from typing import Any
 
 from config.settings import settings
 from execution.broker_adapter import BrokerAdapter, LiveBrokerDisabled
+from trading_safety.live_gate import is_live_broker_enabled, is_live_confirmed
 
 
 # Reserved adapter ids for future venues (not implemented → still disabled).
@@ -28,14 +30,14 @@ def resolve_live_adapter(*, force_disabled: bool = False) -> BrokerAdapter:
 
     Default and fail-closed path: LiveBrokerDisabled.
     When a real venue adapter is added later, gate it behind:
-      LIVE_BROKER_ENABLED=true
+      LIVE_BROKER_ENABLED=true (or UI gate open)
       LIVE_BROKER_ADAPTER=<id>
       LIVE_CONFIRMED=true (if confirmation required)
     """
     if force_disabled:
         return LiveBrokerDisabled()
 
-    enabled = bool(getattr(settings, "live_broker_enabled", False))
+    enabled = is_live_broker_enabled()
     adapter_id = str(getattr(settings, "live_broker_adapter", "") or "disabled").strip().lower()
 
     if not enabled:
@@ -47,9 +49,6 @@ def resolve_live_adapter(*, force_disabled: bool = False) -> BrokerAdapter:
         )
 
     # Future venue adapters plug in here. Until then → disabled.
-    # Example:
-    #   if adapter_id == "custom_http":
-    #       return CustomHttpLiveBroker(...)
     return LiveBrokerDisabled(
         name=f"LiveBrokerDisabled(unknown_adapter:{adapter_id})",
     )
@@ -57,8 +56,8 @@ def resolve_live_adapter(*, force_disabled: bool = False) -> BrokerAdapter:
 
 def live_adapter_status() -> dict[str, Any]:
     adapter = resolve_live_adapter()
-    enabled = bool(getattr(settings, "live_broker_enabled", False))
-    confirmed = bool(getattr(settings, "live_confirmed", False))
+    enabled = is_live_broker_enabled()
+    confirmed = is_live_confirmed()
     adapter_id = str(getattr(settings, "live_broker_adapter", "") or "disabled")
     dry_run = bool(getattr(settings, "live_dry_run", True))
     real = not isinstance(adapter, LiveBrokerDisabled) and not str(adapter.name).startswith("LiveBrokerDisabled")

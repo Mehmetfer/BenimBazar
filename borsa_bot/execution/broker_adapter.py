@@ -82,11 +82,11 @@ class ExecutionRouter:
                 },
             )
         if mode == "LIVE":
-            if not bool(getattr(settings, "live_broker_enabled", False)):
+            from trading_safety.live_gate import is_live_broker_enabled, is_live_confirmed
+
+            if not is_live_broker_enabled():
                 return OrderResult(False, None, "BLOCKED", "LIVE_BROKER_ENABLED=false")
-            if bool(getattr(settings, "live_confirmation_required", True)) and not bool(
-                getattr(settings, "live_confirmed", False)
-            ):
+            if bool(getattr(settings, "live_confirmation_required", True)) and not is_live_confirmed():
                 return OrderResult(
                     False,
                     None,
