@@ -28,7 +28,6 @@ from .moderation import (
     apply_superadmin_decision,
     remoderate_after_edit,
     run_ai_premoderation,
-    set_provider,
     user_status_message,
 )
 from .observability import safe_log_fields
