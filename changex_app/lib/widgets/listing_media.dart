@@ -51,7 +51,7 @@ String ribbonLabel(ListingTradeRibbon ribbon) {
 }
 
 /// Full-bleed listing media with optional status ribbon across the image.
-class ListingHeroMedia extends StatelessWidget {
+class ListingHeroMedia extends StatefulWidget {
   const ListingHeroMedia({
     super.key,
     required this.listing,
@@ -66,28 +66,38 @@ class ListingHeroMedia extends StatelessWidget {
   final bool showGalleryHint;
 
   @override
+  State<ListingHeroMedia> createState() => _ListingHeroMediaState();
+}
+
+class _ListingHeroMediaState extends State<ListingHeroMedia> {
+  int _index = 0;
+
+  @override
   Widget build(BuildContext context) {
-    final photos = _photoUrls(listing);
-    final ribbon = resolveListingRibbon(listing);
+    final photos = resolvePhotoUrls(widget.listing);
+    final ribbon = resolveListingRibbon(widget.listing);
     final hasPhoto = photos.isNotEmpty;
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
+      borderRadius: BorderRadius.circular(widget.borderRadius),
       child: SizedBox(
-        height: height,
+        height: widget.height,
         width: double.infinity,
         child: Stack(
           fit: StackFit.expand,
           children: [
             if (hasPhoto)
-              Image.network(
-                photos.first,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _placeholder(),
+              PageView.builder(
+                itemCount: photos.length,
+                onPageChanged: (i) => setState(() => _index = i),
+                itemBuilder: (_, i) => Image.network(
+                  photos[i],
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _placeholder(),
+                ),
               )
             else
               _placeholder(),
-            // Soft bottom scrim for readability
             const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -97,7 +107,7 @@ class ListingHeroMedia extends StatelessWidget {
                 ),
               ),
             ),
-            if (showGalleryHint && photos.length > 1)
+            if (widget.showGalleryHint && photos.length > 1)
               Positioned(
                 top: 12,
                 right: 12,
@@ -109,13 +119,34 @@ class ListingHeroMedia extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    '1/${photos.length}',
+                    '${_index + 1}/${photos.length}',
                     style: GoogleFonts.montserrat(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                       color: Colors.white,
                     ),
                   ),
+                ),
+              ),
+            if (photos.length > 1)
+              Positioned(
+                bottom: 10,
+                left: 0,
+                right: 0,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (var i = 0; i < photos.length && i < 8; i++)
+                      Container(
+                        width: 6,
+                        height: 6,
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: i == _index ? AppColors.gold : Colors.white54,
+                        ),
+                      ),
+                  ],
                 ),
               ),
             if (ribbon != ListingTradeRibbon.none)
@@ -127,7 +158,7 @@ class ListingHeroMedia extends StatelessWidget {
   }
 
   Widget _placeholder() {
-    final category = listing['category']?.toString() ?? 'Takas';
+    final category = widget.listing['category']?.toString() ?? 'Takas';
     return ColoredBox(
       color: AppColors.bgCard,
       child: Center(
@@ -355,10 +386,17 @@ class ListingAttributeList extends StatelessWidget {
   }
 }
 
-List<String> _photoUrls(Map<String, dynamic> listing) {
-  final raw = listing['photo_urls'];
-  if (raw is List) {
-    return raw.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
-  }
-  return const [];
+List<String> resolvePhotoUrls(Map<String, dynamic> listing) {
+  final raw = listing['photo_urls'] ?? listing['all_photo_urls'];
+  if (raw is! List) return const [];
+  final origin = Uri.base.origin;
+  return raw
+      .map((e) => e.toString())
+      .where((s) => s.isNotEmpty)
+      .map((s) {
+        if (s.startsWith('http://') || s.startsWith('https://')) return s;
+        if (s.startsWith('/')) return '$origin$s';
+        return s;
+      })
+      .toList();
 }

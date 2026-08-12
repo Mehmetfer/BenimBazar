@@ -5,6 +5,7 @@ import '../api/client.dart';
 import '../theme/app_theme.dart';
 import '../widgets/listing_media.dart';
 import 'admin_login_screen.dart';
+import 'create_listing_screen.dart';
 import 'home_screen.dart';
 
 class AdminPanelScreen extends StatefulWidget {
@@ -235,17 +236,46 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                   ],
                 ),
       bottomNavigationBar: SafeArea(
-        child: TextButton(
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => HomeScreen(user: widget.user),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.gold,
+                    side: const BorderSide(color: AppColors.gold),
+                  ),
+                  onPressed: () {
+                    Navigator.of(context)
+                        .push(
+                      MaterialPageRoute(
+                        builder: (_) => CreateListingScreen(user: widget.user),
+                      ),
+                    )
+                        .then((_) => _refreshAll());
+                  },
+                  icon: const Icon(Icons.add_a_photo_outlined),
+                  label: const Text('Fotoğraflı ilan'),
+                ),
               ),
-            );
-          },
-          child: Text(
-            'Kullanıcı uygulamasını aç',
-            style: GoogleFonts.montserrat(color: AppColors.muted),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => HomeScreen(user: widget.user),
+                      ),
+                    );
+                  },
+                  child: Text(
+                    'Uygulama',
+                    style: GoogleFonts.montserrat(color: AppColors.muted),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

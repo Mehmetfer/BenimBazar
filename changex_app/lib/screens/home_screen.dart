@@ -362,9 +362,9 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         backgroundColor: AppColors.gold,
         foregroundColor: AppColors.bg,
-        icon: const Icon(Icons.swap_horiz),
+        icon: const Icon(Icons.add_a_photo_outlined),
         label: Text(
-          'Takas kaydı',
+          'Fotoğraflı ilan',
           style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
         ),
       ),

@@ -418,6 +418,23 @@ def _parse_value(body: ValueIn) -> ChangeValue:
         ) from exc
 
 
+def _normalize_photo_urls(urls: list[str]) -> list[str]:
+    """Store portable /uploads/... paths (strip absolute origins)."""
+    out: list[str] = []
+    for raw in urls:
+        s = str(raw or "").strip()
+        if not s:
+            continue
+        if "/uploads/" in s:
+            s = "/uploads/" + s.split("/uploads/", 1)[1]
+        if len(s) > 500:
+            continue
+        out.append(s)
+        if len(out) >= 9:
+            break
+    return out
+
+
 @app.get("/api/health")
 def health() -> dict:
     return {
@@ -592,6 +609,7 @@ def create_listing(
 ) -> dict:
     _rate_limit(request, limit=40, endpoint="/api/listings", user_id=int(user["id"]))
     # Bypass attempts via unexpected status field are ignored (not in model for create)
+    photo_urls = _normalize_photo_urls(list(body.photo_urls or []))
     try:
         item_vals = [
             (it.name, _parse_value(it.value)) for it in body.items
@@ -670,7 +688,7 @@ def create_listing(
                     body.wanted_items.strip(),
                     min_v.mandal_units,
                     max_v.mandal_units,
-                    db.dumps(body.photo_urls),
+                    db.dumps(photo_urls),
                     ListingStatus.PENDING_MODERATION.value,
                     1,
                     1,
@@ -1901,6 +1919,7 @@ async def upload_listing_image(
     path = UPLOAD_DIR / fname
     path.write_bytes(raw)
     url = f"/uploads/{fname}"
+    absolute = str(request.base_url).rstrip("/") + url
     with db.connect() as conn:
         db.audit(
             conn,
@@ -1911,7 +1930,12 @@ async def upload_listing_image(
             detail=db.dumps({"url": url, "bytes": len(raw), "content_type": content_type}),
             correlation_id=_cid(request),
         )
-    return {"url": url, "bytes": len(raw), "content_type": content_type or f"image/{ext[1:]}"}
+    return {
+        "url": url,
+        "absolute_url": absolute,
+        "bytes": len(raw),
+        "content_type": content_type or f"image/{ext[1:]}",
+    }
 
 
 def _web_root() -> Path | None:

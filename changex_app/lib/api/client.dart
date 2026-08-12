@@ -117,9 +117,13 @@ class ChangeXApi {
     final streamed = await req.send();
     final res = await http.Response.fromStream(streamed);
     final data = _decode(res);
-    final url = data['url']?.toString();
+    final url = data['absolute_url']?.toString() ?? data['url']?.toString();
     if (url == null || url.isEmpty) {
       throw ApiException('Görsel yüklenemedi');
+    }
+    // Normalize relative /uploads paths against API origin
+    if (url.startsWith('/')) {
+      return '$_root$url';
     }
     return url;
   }
