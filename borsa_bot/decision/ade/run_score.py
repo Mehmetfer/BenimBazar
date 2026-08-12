@@ -109,19 +109,24 @@ def main() -> int:
     )
     (REPORTS / "ADE_AUTONOMY_REPORT.md").write_text("\n".join(lines), encoding="utf-8")
 
-    # Keep trading report pointer honest
+    # Keep trading report pointer honest (idempotent replace of follow-on block)
     ptr = REPORTS / "AUTONOMY_REPORT.md"
     if ptr.exists():
-        extra = (
-            "\n\n## Autonomous Decision Engine (follow-on)\n\n"
-            f"- Decision autonomy: **{sc.decision_autonomy_score}/10**\n"
+        text = ptr.read_text(encoding="utf-8")
+        marker = "## Autonomous Decision Engine (follow-on)"
+        block = (
+            f"{marker}\n\n"
+            f"- Decision autonomy level: **{sc.decision_autonomy_score}/10**\n"
             f"- Verdict: {sc.verdict}\n"
             "- Details: `ADE_AUTONOMY_REPORT.md`\n"
             "- LIVE-MONEY AUTONOMY: NOT VERIFIED\n"
         )
-        text = ptr.read_text(encoding="utf-8")
-        if "Autonomous Decision Engine (follow-on)" not in text:
-            ptr.write_text(text.rstrip() + extra, encoding="utf-8")
+        if marker in text:
+            pre = text.split(marker)[0].rstrip()
+            text = pre + "\n\n" + block
+        else:
+            text = text.rstrip() + "\n\n" + block
+        ptr.write_text(text + "\n", encoding="utf-8")
 
     print(json.dumps(sc.to_dict(), indent=2))
     return 0 if (unit_ok and e2e_ok and safety_ok) else 1

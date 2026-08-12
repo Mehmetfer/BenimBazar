@@ -1,6 +1,6 @@
 # Autonomous Decision Engine Report
 
-- Generated: `2026-08-12T06:01:05.491728+00:00`
+- Generated: `2026-08-12T06:04:22.449955+00:00`
 - Engineering autonomy (prior): **8.45/10**
 - Decision autonomy: **8.5/10**
 - Trading safety (prior): **10.0/10**
