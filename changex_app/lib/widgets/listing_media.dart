@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../theme/app_theme.dart';
+import '../utils/url_utils.dart';
 
 /// Listing trade-status ribbon (Letgo/Instagram-style overlay).
 ///
@@ -480,14 +481,9 @@ class ListingAttributeList extends StatelessWidget {
 List<String> resolvePhotoUrls(Map<String, dynamic> listing) {
   final raw = listing['photo_urls'] ?? listing['all_photo_urls'];
   if (raw is! List) return const [];
-  final origin = Uri.base.origin;
   return raw
       .map((e) => e.toString())
       .where((s) => s.isNotEmpty)
-      .map((s) {
-        if (s.startsWith('http://') || s.startsWith('https://')) return s;
-        if (s.startsWith('/')) return '$origin$s';
-        return s;
-      })
+      .map(resolveMediaUrl)
       .toList();
 }

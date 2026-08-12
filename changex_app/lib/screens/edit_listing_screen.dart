@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../api/client.dart';
 import '../theme/app_theme.dart';
 import '../utils/photo_pick.dart';
+import '../utils/url_utils.dart';
 import '../widgets/listing_media.dart';
 
 /// Edit listing + add/remove photos (PATCH photo_urls).
@@ -133,7 +134,6 @@ class _EditListingScreenState extends State<EditListingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final origin = Uri.base.origin;
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
@@ -162,9 +162,7 @@ class _EditListingScreenState extends State<EditListingScreen> {
                     child: Stack(
                       children: [
                         Image.network(
-                          _photoUrls[i].startsWith('/')
-                              ? '$origin${_photoUrls[i]}'
-                              : _photoUrls[i],
+                          resolveMediaUrl(_photoUrls[i]),
                           width: 96,
                           height: 96,
                           fit: BoxFit.cover,

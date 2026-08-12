@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/url_utils.dart';
+
 class ChangeXApi {
   ChangeXApi({String? baseUrl}) : baseUrl = baseUrl ?? _defaultBase;
 
@@ -18,7 +20,10 @@ class ChangeXApi {
   String get _root {
     if (baseUrl.isNotEmpty) return baseUrl;
     // Same origin when served by FastAPI static host.
-    return Uri.base.origin;
+    final origin = safeOrigin();
+    if (origin.isNotEmpty) return origin;
+    // Last resort for non-http hosts (tests / unusual embeds).
+    return Uri.base.toString().replaceAll(RegExp(r'/$'), '');
   }
 
   Future<String?> getToken() async {
