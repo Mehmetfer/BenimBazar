@@ -184,10 +184,22 @@ def test_approved_edit_resets_moderation(client):
 def test_new_photo_requires_moderation(client):
     a = register(client, "ts_photo")
     listing = make_listing(client, a["token"], "PhotoItem", approve=True)
+    png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00"
+        b"\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    up = client.post(
+        "/api/uploads/image",
+        headers=auth(a["token"]),
+        files={"file": ("new.png", png, "image/png")},
+    )
+    assert up.status_code == 200, up.text
+    url = up.json()["url"]
     r = client.patch(
         f"/api/listings/{listing['id']}",
         headers=auth(a["token"]),
-        json={"photo_urls": ["https://cdn.example.com/new.jpg"]},
+        json={"photo_urls": [url]},
     )
     assert r.status_code == 200
     assert r.json()["status"] != "APPROVED"

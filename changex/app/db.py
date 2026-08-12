@@ -342,6 +342,15 @@ def _migrate(conn: sqlite3.Connection) -> None:
           moderation_version INTEGER NOT NULL DEFAULT 1,
           created_at REAL NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS media_uploads (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          url TEXT NOT NULL UNIQUE,
+          uploader_id INTEGER NOT NULL REFERENCES users(id),
+          bytes INTEGER NOT NULL DEFAULT 0,
+          content_type TEXT NOT NULL DEFAULT '',
+          created_at REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_media_uploads_uploader ON media_uploads(uploader_id);
         CREATE TABLE IF NOT EXISTS moderation_reviews (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           listing_id INTEGER NOT NULL REFERENCES trade_listings(id) ON DELETE CASCADE,

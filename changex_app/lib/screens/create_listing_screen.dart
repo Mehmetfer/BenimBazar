@@ -9,9 +9,16 @@ import 'listing_detail_screen.dart';
 
 /// Instagram / Letgo tarzı takas ilanı oluşturma — fotoğraf önce.
 class CreateListingScreen extends StatefulWidget {
-  const CreateListingScreen({super.key, required this.user});
+  const CreateListingScreen({
+    super.key,
+    required this.user,
+    this.initialPhotos,
+  });
 
   final Map<String, dynamic> user;
+
+  /// Test / deep-link injection of already-picked preview bytes.
+  final List<PickedPhoto>? initialPhotos;
 
   @override
   State<CreateListingScreen> createState() => _CreateListingScreenState();
@@ -36,7 +43,8 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   String? _error;
   String? _status;
   int _photoIndex = 0;
-  final List<PickedPhoto> _photos = [];
+  late final List<PickedPhoto> _photos =
+      List<PickedPhoto>.from(widget.initialPhotos ?? const []);
 
   @override
   void dispose() {

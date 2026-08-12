@@ -435,6 +435,66 @@ def _normalize_photo_urls(urls: list[str]) -> list[str]:
     return out
 
 
+def _image_payload_ok(raw: bytes) -> bool:
+    """Reject truncated / corrupt payloads that only share a magic header."""
+    if raw.startswith(b"\xff\xd8\xff"):
+        # JPEG must end with EOI
+        return len(raw) >= 4 and raw[-2:] == b"\xff\xd9"
+    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        # Minimal PNG: signature + IHDR + IEND
+        return b"IHDR" in raw and b"IEND" in raw and len(raw) >= 33
+    if raw.startswith(b"GIF87a") or raw.startswith(b"GIF89a"):
+        return len(raw) >= 14 and raw[-1:] == b"\x3b"
+    if raw.startswith(b"RIFF") and len(raw) >= 12 and raw[8:12] == b"WEBP":
+        return len(raw) >= 16
+    return False
+
+
+def _assert_photo_urls_owned(
+    conn,
+    *,
+    user_id: int,
+    urls: list[str],
+    existing: list[str] | None = None,
+    is_staff: bool = False,
+) -> None:
+    """New /uploads paths must belong to the uploader (or already be on the listing)."""
+    existing_set = set(existing or [])
+    for url in urls:
+        if not url.startswith("/uploads/"):
+            raise HTTPException(
+                400,
+                detail={
+                    "code": "INVALID_PHOTO_URL",
+                    "message": "Yalnızca yüklenmiş /uploads görselleri kullanılabilir",
+                },
+            )
+        if url in existing_set:
+            continue
+        row = conn.execute(
+            "SELECT uploader_id FROM media_uploads WHERE url = ?", (url,)
+        ).fetchone()
+        if row is None:
+            # Legacy files without registry: staff may keep; users must re-upload
+            if is_staff:
+                continue
+            raise HTTPException(
+                403,
+                detail={
+                    "code": "UPLOAD_NOT_OWNED",
+                    "message": "Bu görsel size ait değil veya kayıtlı değil — yeniden yükleyin",
+                },
+            )
+        if int(row["uploader_id"]) != int(user_id) and not is_staff:
+            raise HTTPException(
+                403,
+                detail={
+                    "code": "UPLOAD_NOT_OWNED",
+                    "message": "Başka kullanıcının yüklediği görseli ilana ekleyemezsiniz",
+                },
+            )
+
+
 @app.get("/api/health")
 def health() -> dict:
     return {
@@ -610,6 +670,11 @@ def create_listing(
     _rate_limit(request, limit=40, endpoint="/api/listings", user_id=int(user["id"]))
     # Bypass attempts via unexpected status field are ignored (not in model for create)
     photo_urls = _normalize_photo_urls(list(body.photo_urls or []))
+    is_staff = user.get("role") in {
+        UserRole.ADMIN.value,
+        UserRole.SUPERADMIN.value,
+        UserRole.MODERATOR.value,
+    }
     try:
         item_vals = [
             (it.name, _parse_value(it.value)) for it in body.items
@@ -661,6 +726,14 @@ def create_listing(
     cid = _cid(request)
     with db.connect() as conn:
         with db.immediate_tx(conn):
+            if photo_urls:
+                _assert_photo_urls_owned(
+                    conn,
+                    user_id=int(user["id"]),
+                    urls=photo_urls,
+                    existing=[],
+                    is_staff=is_staff,
+                )
             cur = conn.execute(
                 """
                 INSERT INTO trade_listings(
@@ -782,6 +855,19 @@ def update_listing(
             )
             if body.photo_urls is not None:
                 photos = _normalize_photo_urls(list(body.photo_urls or []))
+                existing_photos = db.loads(row["photo_urls"], [])
+                staff = user.get("role") in {
+                    UserRole.ADMIN.value,
+                    UserRole.SUPERADMIN.value,
+                    UserRole.MODERATOR.value,
+                }
+                _assert_photo_urls_owned(
+                    conn,
+                    user_id=int(user["id"]),
+                    urls=photos,
+                    existing=existing_photos,
+                    is_staff=staff,
+                )
             else:
                 photos = db.loads(row["photo_urls"], [])
             accept_cats = (
@@ -1905,14 +1991,8 @@ async def upload_listing_image(
             400,
             detail={"code": "FILE_TOO_LARGE", "message": "Görsel en fazla 8 MB olabilir"},
         )
-    # Basic magic-byte sniff
-    if not (
-        raw.startswith(b"\xff\xd8\xff")  # jpeg
-        or raw.startswith(b"\x89PNG\r\n\x1a\n")  # png
-        or raw.startswith(b"GIF87a")
-        or raw.startswith(b"GIF89a")
-        or raw.startswith(b"RIFF")  # webp container
-    ):
+    # Magic + structural sniff (rejects truncated “PNG header only” junk)
+    if not _image_payload_ok(raw):
         raise HTTPException(
             400,
             detail={"code": "INVALID_IMAGE", "message": "Geçersiz görsel içeriği"},
@@ -1920,24 +2000,43 @@ async def upload_listing_image(
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     fname = f"{uuid.uuid4().hex}{ext}"
     path = UPLOAD_DIR / fname
-    path.write_bytes(raw)
+    try:
+        path.write_bytes(raw)
+    except OSError as exc:
+        raise HTTPException(
+            500,
+            detail={
+                "code": "UPLOAD_STORE_FAILED",
+                "message": "Görsel kaydedilemedi — tekrar deneyin",
+            },
+        ) from exc
     url = f"/uploads/{fname}"
     absolute = str(request.base_url).rstrip("/") + url
+    ctype = content_type or f"image/{ext[1:]}"
+    now = time.time()
     with db.connect() as conn:
-        db.audit(
-            conn,
-            actor_id=user["id"],
-            action="upload.image",
-            entity="upload",
-            entity_id=None,
-            detail=db.dumps({"url": url, "bytes": len(raw), "content_type": content_type}),
-            correlation_id=_cid(request),
-        )
+        with db.immediate_tx(conn):
+            conn.execute(
+                """
+                INSERT INTO media_uploads(url, uploader_id, bytes, content_type, created_at)
+                VALUES (?,?,?,?,?)
+                """,
+                (url, int(user["id"]), len(raw), ctype, now),
+            )
+            db.audit(
+                conn,
+                actor_id=user["id"],
+                action="upload.image",
+                entity="upload",
+                entity_id=None,
+                detail=db.dumps({"url": url, "bytes": len(raw), "content_type": ctype}),
+                correlation_id=_cid(request),
+            )
     return {
         "url": url,
         "absolute_url": absolute,
         "bytes": len(raw),
-        "content_type": content_type or f"image/{ext[1:]}",
+        "content_type": ctype,
     }
 
 

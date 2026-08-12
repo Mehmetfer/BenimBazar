@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'dart:typed_data';
+
 import 'package:changex/main.dart';
 import 'package:changex/screens/create_listing_screen.dart';
 import 'package:changex/screens/edit_listing_screen.dart';
@@ -10,6 +12,7 @@ import 'package:changex/screens/listing_detail_screen.dart';
 import 'package:changex/screens/login_screen.dart';
 import 'package:changex/screens/my_listings_screen.dart';
 import 'package:changex/screens/splash_screen.dart';
+import 'package:changex/utils/photo_pick.dart';
 import 'package:changex/widgets/listing_media.dart';
 
 void main() {
@@ -211,6 +214,34 @@ void main() {
     await tester.tap(find.text('ÜRÜN FOTOĞRAFI EKLE'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('create listing previews real fixture bytes before upload', (tester) async {
+    // Minimal valid 1x1 PNG (same bytes as backend fixtures/sample.png)
+    final png = Uint8List.fromList([
+      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+      0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+      0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00,
+      0x0C, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+      0x00, 0x00, 0x03, 0x00, 0x01, 0x00, 0x05, 0xFE, 0xD4, 0xEF, 0x00, 0x00,
+      0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ]);
+    final photos = [
+      PickedPhoto(bytes: png, filename: 'sample.png', contentType: 'image/png'),
+      PickedPhoto(bytes: png, filename: 'sample2.png', contentType: 'image/png'),
+    ];
+    await pumpApp(
+      tester,
+      CreateListingScreen(
+        user: {'id': 1, 'username': 'tester', 'role': 'user'},
+        initialPhotos: photos,
+      ),
+    );
+    await tester.pump();
+    expect(find.text('ÜRÜN FOTOĞRAFI EKLE'), findsNothing);
+    expect(find.text('1/2'), findsOneWidget);
+    expect(find.byType(Image), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 }
