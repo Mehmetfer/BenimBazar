@@ -179,6 +179,24 @@
     .order-submit{flex:1;min-height:52px;border-radius:999px;border:0;background:linear-gradient(90deg,#1f9d6a,#2ecf8a);color:#fff;font-weight:900;font-size:1rem}
     .order-submit.sell{background:linear-gradient(90deg,#c44b4b,#ff6b6b)}
     .order-topup{min-height:44px;padding:0 14px;border-radius:12px;border:1px solid rgba(91,141,239,.35);background:rgba(91,141,239,.12);color:#c9dbff;font-weight:800;font-size:.78rem;white-space:nowrap}
+    /* Hisse portföyüm table */
+    .port-summary{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+    .port-summary .wallet-stat{padding:10px}
+    .port-toolbar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+    .port-toolbar button{flex:1;min-width:110px;min-height:38px;font-size:.75rem;padding:6px 8px}
+    .port-table-wrap{overflow:auto;border:1px solid var(--line);border-radius:14px;background:rgba(0,0,0,.18)}
+    .port-table{width:100%;border-collapse:collapse;font-size:.78rem;min-width:520px}
+    .port-table th,.port-table td{padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.06);text-align:right;white-space:nowrap}
+    .port-table th:first-child,.port-table td:first-child{text-align:left;font-weight:800}
+    .port-table thead th{color:#9eb5ff;font-size:.68rem;font-weight:700;letter-spacing:.03em;background:rgba(91,141,239,.08)}
+    .port-table tbody tr:hover{background:rgba(255,255,255,.03)}
+    .port-table tfoot td{font-weight:800;background:rgba(0,0,0,.22)}
+    .port-table .sym-cell{font-size:.88rem}
+    .port-trade{min-width:42px;min-height:30px;border-radius:8px;border:0;font-weight:900;font-size:.68rem;padding:4px 8px;margin-left:4px}
+    .port-trade.buy{background:#1f9d6a;color:#fff}
+    .port-trade.sell{background:#c44b4b;color:#fff}
+    .port-trades-toggle{width:100%;margin-top:12px}
+    .port-trades-panel{margin-top:8px}
     .b100-sig.NO_TRADE,.b100-sig.NO_DATA{background:rgba(143,163,150,.12);color:var(--mute)}
     .b100-summary{font-size:.78rem;color:var(--mute);margin:6px 0 10px;line-height:1.4}
     .tv-wrap{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;min-height:480px}
@@ -275,8 +293,8 @@
   </div>
 
   <div class="panel" id="panel-port">
-    <h2>💼 BIST Paper Cüzdan</h2>
-    <p class="why">100.000 TL simülasyon · önerilerden otomatik al/sat · gerçek para değil · CRYPTO sonra</p>
+    <h2>Hisse Portföyüm</h2>
+    <p class="why">Paper cüzdan · K/Z · miktar · maliyet · kapanış · AL/SAT</p>
     <div id="port"></div>
   </div>
 
@@ -430,7 +448,7 @@
     <button class="on" data-nav="home" type="button"><span class="ico">🏠</span>Ana</button>
     <button data-nav="fav" type="button"><span class="ico">★</span>Favori</button>
     <button data-nav="mkt" type="button"><span class="ico">📈</span>BIST100</button>
-    <button data-nav="port" type="button"><span class="ico">💼</span>Portföy</button>
+    <button data-nav="port" type="button"><span class="ico">💼</span>Portföyüm</button>
     <button data-nav="set" type="button"><span class="ico">⚙</span>Ayar</button>
   </nav>
 
@@ -951,56 +969,114 @@
     return Number(n||0) >= 0 ? 'up' : 'down';
   }
 
+  function fmtNum(n, digits=2){
+    return Number(n||0).toLocaleString('tr-TR',{minimumFractionDigits:digits,maximumFractionDigits:digits});
+  }
+
+  function bindPortfolioRows(){
+    document.querySelectorAll('[data-port-buy]').forEach(btn=>{
+      btn.onclick = ()=> b100Trade(btn.dataset.portBuy, 'BUY');
+    });
+    document.querySelectorAll('[data-port-sell]').forEach(btn=>{
+      btn.onclick = ()=> b100Trade(btn.dataset.portSell, 'SELL');
+    });
+    const toggle = document.getElementById('portTradesToggle');
+    const panel = document.getElementById('portTradesPanel');
+    if(toggle && panel){
+      toggle.onclick = ()=>{
+        const open = panel.style.display !== 'none';
+        panel.style.display = open ? 'none' : 'block';
+        toggle.textContent = open ? 'Son işlemleri göster' : 'Son işlemleri gizle';
+      };
+    }
+  }
+
   function renderPortfolio(w){
     if(!w) return '<div class="empty">Cüzdan yükleniyor…</div>';
     const pnl = w.total_pnl||0;
     const pnlPct = w.total_pnl_pct||0;
     const daily = w.daily_pnl||0;
-  const positions = (w.positions||[]).map(p=>{
-      const u = p.unrealized_pnl||0;
-      const up = p.unrealized_pnl_pct||0;
-      return `<div class="pos-row">
-        <div><b>${p.symbol}</b><div class="meta">${p.quantity} lot · maliyet ${money(p.avg_cost)}</div></div>
-        <div style="text-align:right">
-          <div>${money(p.price)} TL</div>
-          <div class="${pnlClass(u)}">${u>=0?'+':''}${money(u)} (${up>=0?'+':''}${Number(up).toFixed(1)}%)</div>
-        </div>
-      </div>`;
-    }).join('') || '<div class="empty">Açık pozisyon yok — Güçlü AL / AL önerileri gelince otomatik alınır</div>';
+    const pos = w.positions||[];
+    let totalUnreal = 0;
+    let totalCost = 0;
+    let totalValue = 0;
+    const rows = pos.map(p=>{
+      const u = Number(p.unrealized_pnl||0);
+      const up = Number(p.unrealized_pnl_pct||0);
+      const qty = Number(p.quantity||0);
+      const cost = Number(p.avg_cost||0);
+      const close = Number(p.price||0);
+      const tutar = Number(p.market_value||qty*close);
+      totalUnreal += u;
+      totalCost += qty * cost;
+      totalValue += tutar;
+      const uCls = pnlClass(u);
+      return `<tr>
+        <td class="sym-cell">${p.symbol}</td>
+        <td class="${uCls}">${fmtNum(up)}</td>
+        <td class="${uCls}">${u>=0?'+':''}${fmtNum(u)}</td>
+        <td>${fmtNum(qty, 0)}</td>
+        <td>${fmtNum(cost)}</td>
+        <td>${fmtNum(close)}</td>
+        <td>${fmtNum(tutar)}</td>
+        <td style="white-space:nowrap">
+          <button type="button" class="port-trade buy" data-port-buy="${p.symbol}">AL</button>
+          <button type="button" class="port-trade sell" data-port-sell="${p.symbol}">SAT</button>
+        </td>
+      </tr>`;
+    }).join('');
+    const totalPct = totalCost > 0 ? (totalUnreal / totalCost * 100) : 0;
+    const totalRow = pos.length ? `<tr class="port-total">
+      <td>Toplam</td>
+      <td class="${pnlClass(totalUnreal)}">${fmtNum(totalPct)}</td>
+      <td class="${pnlClass(totalUnreal)}">${totalUnreal>=0?'+':''}${fmtNum(totalUnreal)}</td>
+      <td colspan="3"></td>
+      <td>${fmtNum(totalValue)}</td>
+      <td></td>
+    </tr>` : '';
+    const tableBody = rows || `<tr><td colspan="8" class="empty" style="text-align:center;padding:18px">Açık pozisyon yok</td></tr>`;
     const trades = (w.recent_trades||[]).map(t=>{
       const sideCls = t.side==='BUY'?'buy':'sell';
-      const pnlTxt = t.pnl!=null ? ` · K/Z ${t.pnl>=0?'+':''}${money(t.pnl)}` : '';
+      const pnlTxt = t.pnl!=null ? ` · K/Z ${t.pnl>=0?'+':''}${fmtNum(t.pnl)}` : '';
       return `<div class="trade-row">
         <div><span class="trade-side ${sideCls}">${t.side_label||t.side}</span> <b>${t.symbol}</b><div class="meta">${(t.ts||'').slice(0,19).replace('T',' ')}</div></div>
-        <div style="text-align:right">${t.quantity} × ${money(t.price)}${pnlTxt}</div>
+        <div style="text-align:right">${fmtNum(t.quantity,0)} × ${fmtNum(t.price)}${pnlTxt}</div>
       </div>`;
     }).join('') || '<div class="empty">Henüz işlem yok</div>';
     return `
-      <div class="wallet-hero">
-        <div class="wallet-stat big"><span>Toplam Varlık</span><b>${money(w.equity)} TL</b></div>
-        <div class="wallet-stat wallet-pnl ${pnlClass(pnl)}"><span>Kar / Zarar</span><b>${pnl>=0?'+':''}${money(pnl)} (${pnlPct>=0?'+':''}${Number(pnlPct).toFixed(2)}%)</b></div>
-        <div class="wallet-stat"><span>Nakit</span><b>${money(w.cash)} TL</b></div>
-        <div class="wallet-stat wallet-pnl ${pnlClass(daily)}"><span>Günlük</span><b>${daily>=0?'+':''}${money(daily)} TL</b></div>
+      <div class="port-summary wallet-hero">
+        <div class="wallet-stat big"><span>Toplam Varlık</span><b>${fmtNum(w.equity)} ₺</b></div>
+        <div class="wallet-stat wallet-pnl ${pnlClass(pnl)}"><span>Kar / Zarar</span><b>${pnl>=0?'+':''}${fmtNum(pnl)} (${pnlPct>=0?'+':''}${fmtNum(pnlPct)}%)</b></div>
+        <div class="wallet-stat"><span>Nakit (limit)</span><b>${fmtNum(w.cash)} ₺</b></div>
+        <div class="wallet-stat wallet-pnl ${pnlClass(daily)}"><span>Günlük</span><b>${daily>=0?'+':''}${fmtNum(daily)} ₺</b></div>
       </div>
-      <div class="card" style="cursor:default">
-        <div class="grid">
-          <div class="k"><span>Başlangıç</span><b>${money(w.starting_cash)} TL</b></div>
-          <div class="k"><span>Hisse Değeri</span><b>${money(w.holdings_value)} TL</b></div>
-          <div class="k"><span>Gerçekleşen K/Z</span><b class="${pnlClass(w.realized_pnl)}">${money(w.realized_pnl)}</b></div>
-          <div class="k"><span>Gerçekleşmeyen</span><b class="${pnlClass(w.unrealized_pnl)}">${money(w.unrealized_pnl)}</b></div>
-        </div>
-        <div class="meta" style="margin-top:8px">${w.note||''} · ${w.trade_count||0} işlem · ${w.open_position_count||0} pozisyon · auto=${w.auto_follow?'AÇIK':'KAPALI'}</div>
-      </div>
-      <div class="wallet-actions">
-        <button class="more" id="walletInitBtn" type="button">Cüzdanı Başlat (100.000 TL)</button>
-        <button class="more" id="walletTopupBtn" type="button">+100.000 TL Ekle</button>
-        <button class="more" id="walletFollowBtn" type="button">Önerilerden Al</button>
+      <div class="port-toolbar wallet-actions">
+        <button class="more" id="walletInitBtn" type="button">Sıfırla 100K</button>
+        <button class="more" id="walletTopupBtn" type="button">+100.000 ₺</button>
+        <button class="more" id="walletFollowBtn" type="button">Öneriden Al</button>
         <button class="more" id="walletRefreshBtn" type="button">Yenile</button>
       </div>
-      <h2 style="margin-top:14px">Açık Pozisyonlar</h2>
-      <div class="card" style="cursor:default">${positions}</div>
-      <h2 style="margin-top:14px">Son İşlemler</h2>
-      <div class="card" style="cursor:default">${trades}</div>`;
+      <div class="port-table-wrap">
+        <table class="port-table">
+          <thead>
+            <tr>
+              <th>Sembol</th>
+              <th>K/Z %</th>
+              <th>K/Z</th>
+              <th>Miktar</th>
+              <th>Maliyet</th>
+              <th>Kapanış</th>
+              <th>Tutar</th>
+              <th>Al/Sat</th>
+            </tr>
+          </thead>
+          <tbody>${tableBody}</tbody>
+          <tfoot>${totalRow}</tfoot>
+        </table>
+      </div>
+      <button class="more port-trades-toggle" id="portTradesToggle" type="button">Son işlemleri göster</button>
+      <div class="port-trades-panel card" id="portTradesPanel" style="display:none;cursor:default;margin-top:8px">${trades}</div>
+      <div class="meta" style="margin-top:8px">${w.note||''} · ${w.trade_count||0} işlem · başlangıç ${fmtNum(w.starting_cash)} ₺</div>`;
   }
 
   async function loadPortfolio(){
@@ -1040,6 +1116,7 @@
         followBtn.disabled = false;
       };
       if(refreshBtn) refreshBtn.onclick = loadPortfolio;
+      bindPortfolioRows();
     }catch(e){
       el.innerHTML = '<div class="empty">Cüzdan yüklenemedi</div>';
     }
