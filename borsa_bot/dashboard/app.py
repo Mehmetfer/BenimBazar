@@ -476,15 +476,31 @@ def paper_wallet() -> dict:
     return service.paper_wallet()
 
 
+@app.get("/api/paper/diagnostics")
+def paper_diagnostics() -> dict:
+    """Loss attribution from paper ledger — evidence only, no fabricated edge claims."""
+    from profit.diagnostics import analyze_paper_ledger
+
+    report = analyze_paper_ledger()
+    body = report.to_dict()
+    body["ok"] = True
+    body["autonomy_note"] = "AUTONOMY SCORE ≠ TRADING PROFITABILITY"
+    body["live_money_readiness"] = "NOT VERIFIED"
+    return body
+
+
 @app.post("/api/paper/wallet/init")
 def paper_wallet_init() -> dict:
-    """Reset BIST paper wallet to STARTING_CASH (default 100k) and enable auto-follow."""
+    """Reset BIST paper wallet to STARTING_CASH (default 100k). Does not unlock live money."""
     service.ledger.reset()
     autonomy.set_user_mode("AUTO")
     mode_store.set_execution_mode("PAPER")
     return {
         "ok": True,
-        "message": f"BIST paper cüzdan {settings.starting_cash:,.0f} TL ile sıfırlandı · öneri takibi açık",
+        "message": (
+            f"BIST paper cüzdan {settings.starting_cash:,.0f} TL ile sıfırlandı · "
+            f"auto_follow={settings.bist_paper_auto_follow}"
+        ),
         "wallet": service.paper_wallet(),
         "user_trading_mode": "AUTO",
         "execution_mode": "PAPER",

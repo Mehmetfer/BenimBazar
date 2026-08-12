@@ -52,8 +52,12 @@ def compute_opportunity(
         return None
     p_win = estimate_p_win(scores, regime=regime, conflict=conflict, mtf_aligned=mtf_aligned)
     p_loss = 1.0 - p_win
-    # EV in % of entry notional (pre-size)
-    ev = p_win * reward_pct - p_loss * risk_pct
+    # EV in % of entry notional (pre-size) — GROSS before costs
+    gross_ev = p_win * reward_pct - p_loss * risk_pct
+    from profit.costs import net_expectancy_pct, round_trip_cost_pct
+
+    # Store NET EV (after round-trip commission+slippage) so decide_matrix compares apples-to-apples
+    ev = net_expectancy_pct(gross_ev, cfg)
     atr_pct = ind.atr14 / price * 100 if price else 0.0
     # Drawdown impact proxy: risk fraction of portfolio if full R loss
     dd_impact = risk_pct * (cfg.max_position_risk_pct / max(risk_pct, 0.01))
@@ -136,7 +140,10 @@ def decide_matrix(
         return SignalAction.WAIT if not owned else SignalAction.WATCH
     if opp is None:
         return SignalAction.NO_TRADE
+    # expected_value is NET of round-trip costs (see compute_opportunity)
     if opp.expected_value <= cfg.min_expected_value:
+        return SignalAction.NO_TRADE
+    if opp.expected_value <= 0:
         return SignalAction.NO_TRADE
     if capital_mode == CapitalMode.CAPITAL_PROTECTION:
         return SignalAction.NO_TRADE

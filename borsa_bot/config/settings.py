@@ -58,7 +58,7 @@ class Settings:
     breakeven_r_multiple: float = _f("BREAKEVEN_R_MULTIPLE", 1.0)
     min_risk_reward: float = _f("MIN_RISK_REWARD", 1.5)
     preferred_risk_reward: float = _f("PREFERRED_RISK_REWARD", 2.0)
-    min_expected_value: float = _f("MIN_EXPECTED_VALUE", 0.0)
+    min_expected_value: float = _f("MIN_EXPECTED_VALUE", 0.0)  # compared to NET EV (after round-trip costs)
     buy_score_threshold: float = _f("BUY_SCORE_THRESHOLD", 60)
     strong_buy_threshold: float = _f("STRONG_BUY_THRESHOLD", 65)
     watch_threshold: float = _f("WATCH_THRESHOLD", 55)

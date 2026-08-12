@@ -82,6 +82,11 @@ def test_paper_wallet_topup_api():
 
 
 def test_follow_recommendations_buys_strong_buy(monkeypatch):
+  from dataclasses import replace
+
+  from config.models import OpportunityMetrics
+  from config.settings import settings as root_settings
+  import strategy.service as svc_mod
   from strategy.service import TradingService
 
   with tempfile.TemporaryDirectory() as tmp:
@@ -89,6 +94,17 @@ def test_follow_recommendations_buys_strong_buy(monkeypatch):
     svc.ledger = PortfolioLedger(db_path=Path(tmp) / "paper.db")
     svc.broker.ledger = svc.ledger
     svc.risk.ledger = svc.ledger
+    monkeypatch.setattr(
+      svc_mod,
+      "settings",
+      replace(root_settings, bist_paper_auto_follow=True, data_provider="yahoo"),
+    )
+
+    class Meta:
+      kind = type("K", (), {"value": "DELAYED"})()
+
+    monkeypatch.setattr(svc.provider, "source_meta", lambda *_a, **_k: Meta())
+    svc.provider.provider_id = "yahoo_bist"
 
     def fake_scan(self, symbols=None):
       return [
@@ -108,6 +124,18 @@ def test_follow_recommendations_buys_strong_buy(monkeypatch):
           target_price=310.0,
           explanation="strong",
           decision=SignalAction.STRONG_BUY,
+          final_decision="STRONG_BUY",
+          opportunity=OpportunityMetrics(
+            p_win=0.6,
+            expected_return_pct=3.0,
+            expected_loss_pct=2.0,
+            risk_reward=1.5,
+            expected_value=1.0,
+            volatility_pct=2.0,
+            drawdown_impact=0.5,
+            position_size_mult=1.0,
+            confidence=70.0,
+          ),
         )
       ]
 

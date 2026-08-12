@@ -1573,16 +1573,36 @@ class TradingService:
                 marks[p.symbol] = p.avg_cost
         self.ledger.set_marks(marks)
         snap = paper_wallet_snapshot(self.ledger)
-        snap["auto_follow"] = bool(getattr(settings, "bist_paper_auto_follow", True))
+        snap["auto_follow"] = bool(getattr(settings, "bist_paper_auto_follow", False))
         snap["max_open_positions"] = int(settings.max_open_positions)
         return snap
 
     def follow_recommendations(self, *, max_buys: int = 2) -> dict:
         """Paper-buy BIST STRONG_BUY/BUY recommendations; auto-exit on SAT/stop/target."""
         from dashboard.daily import SIGNAL_RANK
+        from profit.costs import edge_below_cost_reason
 
-        if not bool(getattr(settings, "bist_paper_auto_follow", True)):
+        if not bool(getattr(settings, "bist_paper_auto_follow", False)):
             return {"ok": False, "skipped": "BIST_PAPER_AUTO_FOLLOW=false"}
+
+        # Simulated / stub books are for plumbing tests — not an edge source.
+        meta = self.provider.source_meta(settings.data_freshness_sec)
+        kind = str(getattr(getattr(meta, "kind", None), "value", "") or "").upper()
+        provider_id = str(getattr(self.provider, "provider_id", "") or "").lower()
+        simulated = (
+            kind in {"SIMULATED", "TEST", "BACKTEST", "MOCK"}
+            or "simulated" in provider_id
+            or str(getattr(settings, "data_provider", "")).lower() in {"simulated", "sim", "mock"}
+        )
+        if simulated:
+            exits = self.monitor_exits()
+            return {
+                "ok": False,
+                "skipped": "SIMULATED_DATA_NO_AUTO_TRADE",
+                "exits": exits,
+                "note": "Auto-follow blocked on simulated/mock data — prevents noise stop-outs claiming edge",
+                "wallet": self.paper_wallet(),
+            }
 
         exits = self.monitor_exits()
         decisions = self.scan()
@@ -1604,7 +1624,7 @@ class TradingService:
 
         buy_candidates.sort(key=_rank)
 
-        results: dict[str, Any] = {"buys": [], "sells": [], "exits": exits}
+        results: dict[str, Any] = {"buys": [], "sells": [], "exits": exits, "skipped_buys": []}
         for d in sell_candidates:
             r = self.execute_signal(d.symbol, approved=True)
             results["sells"].append(
@@ -1620,6 +1640,18 @@ class TradingService:
                 continue
             if self.ledger.open_position_count() >= int(settings.max_open_positions):
                 break
+            opp = getattr(d, "opportunity", None)
+            net_ev = float(getattr(opp, "expected_value", 0) or 0) if opp else 0.0
+            # expected_value is already NET of round-trip costs
+            if opp is None or net_ev <= float(settings.min_expected_value) or net_ev <= 0:
+                results["skipped_buys"].append(
+                    {
+                        "symbol": d.symbol,
+                        "reason": edge_below_cost_reason(net_ev) if opp else "no_opportunity",
+                        "net_ev": net_ev,
+                    }
+                )
+                continue
             r = self.execute_signal(d.symbol, approved=True)
             row = {
                 "symbol": d.symbol,
