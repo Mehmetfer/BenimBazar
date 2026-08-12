@@ -552,21 +552,42 @@ DEFAULT_SUPERADMIN_PASSWORD = "14531453"
 
 
 def _seed_default_superadmin(conn: sqlite3.Connection) -> None:
-    """Ensure bootstrap Superadmin exists (password temporarily 14531453)."""
+    """Ensure bootstrap Superadmin exists and password stays synced (temp: 14531453)."""
     from .states import UserRole
 
+    user_cols = _table_cols(conn, "users")
+    if not user_cols:
+        return
+
+    # Guarantee columns used below exist even if earlier migrate steps were skipped
+    if "suspended" not in user_cols:
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN suspended INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+    if "user_risk_score" not in user_cols:
+        try:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN user_risk_score REAL NOT NULL DEFAULT 0.0"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+    pw = hash_password(DEFAULT_SUPERADMIN_PASSWORD)
     row = conn.execute(
-        "SELECT id, role FROM users WHERE username = ? COLLATE NOCASE",
+        "SELECT id FROM users WHERE username = ? COLLATE NOCASE",
         (DEFAULT_SUPERADMIN_USERNAME,),
     ).fetchone()
     if row:
-        if str(row["role"]) != UserRole.SUPERADMIN.value:
-            conn.execute(
-                "UPDATE users SET role = ?, suspended = 0 WHERE id = ?",
-                (UserRole.SUPERADMIN.value, row["id"]),
-            )
+        conn.execute(
+            """
+            UPDATE users
+            SET password_hash = ?, role = ?, suspended = 0
+            WHERE id = ?
+            """,
+            (pw, UserRole.SUPERADMIN.value, int(row["id"])),
+        )
         return
-    import time as _time
 
     conn.execute(
         """
@@ -575,9 +596,9 @@ def _seed_default_superadmin(conn: sqlite3.Connection) -> None:
         """,
         (
             DEFAULT_SUPERADMIN_USERNAME,
-            hash_password(DEFAULT_SUPERADMIN_PASSWORD),
+            pw,
             UserRole.SUPERADMIN.value,
-            _time.time(),
+            time.time(),
         ),
     )
 

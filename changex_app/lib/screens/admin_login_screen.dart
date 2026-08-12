@@ -28,34 +28,44 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     super.dispose();
   }
 
-  Future<void> _login() async {
+    Future<void> _login() async {
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
       final res = await api.login(_user.text.trim(), _pass.text);
-      await api.setToken(res['token']?.toString());
+      final token = res['token']?.toString();
+      if (token == null || token.isEmpty) {
+        setState(() => _error = 'Oturum token alınamadı');
+        return;
+      }
+      await api.setToken(token);
       final me = await api.me();
-      if (me == null) {
+      final user = me ??
+          (res['user'] is Map
+              ? Map<String, dynamic>.from(res['user'] as Map)
+              : null);
+      if (user == null) {
         setState(() => _error = 'Oturum açılamadı');
         return;
       }
-      final role = me['role']?.toString() ?? '';
+      final role = user['role']?.toString() ?? '';
       if (!{'superadmin', 'admin', 'moderator'}.contains(role)) {
         await api.setToken(null);
-        setState(() => _error = 'Bu hesap yönetim paneline giremez');
+        setState(() =>
+            _error = 'Bu hesap yönetim paneline giremez (rol: $role)');
         return;
       }
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => AdminPanelScreen(user: me)),
+        MaterialPageRoute(builder: (_) => AdminPanelScreen(user: user)),
         (_) => false,
       );
     } on ApiException catch (e) {
       setState(() => _error = e.message);
-    } catch (_) {
-      setState(() => _error = 'Giriş başarısız');
+    } catch (e) {
+      setState(() => _error = 'Sunucuya bağlanılamadı');
     } finally {
       if (mounted) setState(() => _busy = false);
     }

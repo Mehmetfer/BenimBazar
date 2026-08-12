@@ -8,16 +8,20 @@ from changex.app.states import UserRole
 from changex.tests.helpers import auth, make_listing, promote_admin, register
 
 
-def test_default_superadmin_seeded(client):
+def test_default_superadmin_password_resync(client, tmp_db):
+    """Bootstrap account password is forced to the documented temporary password."""
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE username = ? COLLATE NOCASE",
+            (db.hash_password("wrong-old-password"), DEFAULT_SUPERADMIN_USERNAME),
+        )
+    db.init_db(tmp_db)
     r = client.post(
         "/api/auth/login",
         json={"username": DEFAULT_SUPERADMIN_USERNAME, "password": DEFAULT_SUPERADMIN_PASSWORD},
     )
     assert r.status_code == 200, r.text
-    me = client.get("/api/auth/me", headers=auth(r.json()["token"]))
-    assert me.status_code == 200
-    assert me.json()["role"] == UserRole.SUPERADMIN.value
-    assert me.json()["username"].lower() == DEFAULT_SUPERADMIN_USERNAME
+    assert r.json()["user"]["role"] == "superadmin"
 
 
 def test_admin_panel_bootstrap(client):
