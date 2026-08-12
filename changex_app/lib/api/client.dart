@@ -94,6 +94,15 @@ class ChangeXApi {
     return _decode(res);
   }
 
+  Future<List<dynamic>> myListings() async {
+    final res = await http.get(
+      Uri.parse('$_root/api/listings/mine'),
+      headers: await _headers(auth: true),
+    );
+    final data = _decode(res);
+    return (data['listings'] as List?) ?? [];
+  }
+
   Future<Map<String, dynamic>> createOffer(Map<String, dynamic> body) async {
     final res = await http.post(
       Uri.parse('$_root/api/trades/offer'),
@@ -110,6 +119,28 @@ class ChangeXApi {
     );
     final data = _decode(res);
     return (data['trades'] as List?) ?? [];
+  }
+
+  Future<List<dynamic>> moderationQueue() async {
+    final res = await http.get(
+      Uri.parse('$_root/api/admin/moderation/queue'),
+      headers: await _headers(auth: true),
+    );
+    final data = _decode(res);
+    return (data['queue'] as List?) ?? [];
+  }
+
+  Future<Map<String, dynamic>> moderationDecision(
+    int listingId,
+    String decision, {
+    String reason = '',
+  }) async {
+    final res = await http.post(
+      Uri.parse('$_root/api/admin/moderation/$listingId/decision'),
+      headers: await _headers(auth: true),
+      body: jsonEncode({'decision': decision, 'reason': reason}),
+    );
+    return _decode(res);
   }
 
   Map<String, dynamic> _decode(http.Response res) {

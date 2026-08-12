@@ -7,6 +7,7 @@ import '../widgets/value_widgets.dart';
 import 'create_listing_screen.dart';
 import 'listing_detail_screen.dart';
 import 'login_screen.dart';
+import 'moderation_queue_screen.dart';
 import 'trades_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -181,6 +182,33 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                           ],
                         ),
+                        if (widget.user?['role'] == 'superadmin') ...[
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => ModerationQueueScreen(
+                                      user: widget.user!,
+                                    ),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.shield_outlined,
+                                  color: AppColors.gold, size: 18),
+                              label: Text(
+                                'MODERASYON',
+                                style: GoogleFonts.montserrat(
+                                  color: AppColors.gold,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                         const PlatformBanner(),
                         const SizedBox(height: 14),
                         const PillarsRow(),

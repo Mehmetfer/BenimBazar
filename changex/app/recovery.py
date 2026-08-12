@@ -61,7 +61,7 @@ def recover_stale_reservations(
             SET status = ?, version = version + 1, updated_at = ?
             WHERE id = ? AND status = ?
             """,
-            (ListingStatus.ACTIVE.value, now, lid, ListingStatus.RESERVED.value),
+            (ListingStatus.APPROVED.value, now, lid, ListingStatus.RESERVED.value),
         )
         db.audit(
             conn,

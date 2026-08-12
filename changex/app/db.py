@@ -115,6 +115,8 @@ def init_db(path: Path | None = None) -> None:
               password_hash TEXT NOT NULL,
               role TEXT NOT NULL DEFAULT 'user',
               change_score REAL NOT NULL DEFAULT 50.0,
+              user_risk_score REAL NOT NULL DEFAULT 0.0,
+              suspended INTEGER NOT NULL DEFAULT 0,
               created_at REAL NOT NULL
             );
 
@@ -140,10 +142,61 @@ def init_db(path: Path | None = None) -> None:
               min_mandal_units INTEGER NOT NULL DEFAULT 0,
               max_mandal_units INTEGER NOT NULL DEFAULT 0,
               photo_urls TEXT NOT NULL DEFAULT '[]',
-              status TEXT NOT NULL DEFAULT 'ACTIVE',
+              status TEXT NOT NULL DEFAULT 'PENDING_MODERATION',
               version INTEGER NOT NULL DEFAULT 1,
+              moderation_version INTEGER NOT NULL DEFAULT 1,
+              ai_result TEXT,
+              ai_confidence REAL,
+              ai_categories TEXT NOT NULL DEFAULT '[]',
+              ai_policy_version TEXT,
+              risk_level TEXT,
+              moderation_priority INTEGER NOT NULL DEFAULT 0,
+              moderation_reason TEXT NOT NULL DEFAULT '',
+              moderation_updated_at REAL,
+              approved_at REAL,
+              approved_by INTEGER,
               created_at REAL NOT NULL,
               updated_at REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS listing_photos (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              listing_id INTEGER NOT NULL REFERENCES trade_listings(id) ON DELETE CASCADE,
+              url TEXT NOT NULL,
+              moderation_status TEXT NOT NULL DEFAULT 'PENDING',
+              moderation_version INTEGER NOT NULL DEFAULT 1,
+              created_at REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS moderation_reviews (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              listing_id INTEGER NOT NULL REFERENCES trade_listings(id) ON DELETE CASCADE,
+              moderation_version INTEGER NOT NULL,
+              ai_result TEXT,
+              ai_confidence REAL,
+              ai_payload TEXT NOT NULL DEFAULT '{}',
+              risk_level TEXT,
+              priority INTEGER NOT NULL DEFAULT 0,
+              status TEXT NOT NULL,
+              policy_version TEXT,
+              created_at REAL NOT NULL,
+              updated_at REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS moderation_decisions (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              listing_id INTEGER NOT NULL REFERENCES trade_listings(id) ON DELETE CASCADE,
+              moderation_version INTEGER NOT NULL,
+              moderator_id INTEGER,
+              moderator_role TEXT,
+              previous_status TEXT,
+              new_status TEXT,
+              decision TEXT NOT NULL,
+              reason TEXT NOT NULL DEFAULT '',
+              ai_result TEXT,
+              ai_confidence REAL,
+              correlation_id TEXT,
+              created_at REAL NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS listing_items (
@@ -235,14 +288,91 @@ def _migrate(conn: sqlite3.Connection) -> None:
             "ALTER TABLE trade_listings ADD COLUMN max_mandal_units INTEGER NOT NULL DEFAULT 0"
         )
         conn.execute("UPDATE trade_listings SET max_mandal_units = max_value_mandal")
-    # Normalize lowercase statuses
+    # Trust & Safety V1 columns
     if cols:
+        for col, decl in [
+            ("moderation_version", "INTEGER NOT NULL DEFAULT 1"),
+            ("ai_result", "TEXT"),
+            ("ai_confidence", "REAL"),
+            ("ai_categories", "TEXT NOT NULL DEFAULT '[]'"),
+            ("ai_policy_version", "TEXT"),
+            ("risk_level", "TEXT"),
+            ("moderation_priority", "INTEGER NOT NULL DEFAULT 0"),
+            ("moderation_reason", "TEXT NOT NULL DEFAULT ''"),
+            ("moderation_updated_at", "REAL"),
+            ("approved_at", "REAL"),
+            ("approved_by", "INTEGER"),
+        ]:
+            if col not in cols:
+                try:
+                    conn.execute(f"ALTER TABLE trade_listings ADD COLUMN {col} {decl}")
+                except sqlite3.OperationalError:
+                    pass
+        # Pre-moderation era ACTIVE listings were already public → APPROVED
+        conn.execute(
+            "UPDATE trade_listings SET status = 'APPROVED', approved_at = COALESCE(approved_at, created_at) "
+            "WHERE upper(status) = 'ACTIVE'"
+        )
         conn.execute(
             "UPDATE trade_listings SET status = upper(status) WHERE status GLOB '[a-z]*'"
         )
-        conn.execute(
-            "UPDATE trade_listings SET status = 'ACTIVE' WHERE status IN ('active', 'ACTIVE') OR status = ''"
-        )
+
+    user_cols = _table_cols(conn, "users")
+    if user_cols:
+        if "user_risk_score" not in user_cols:
+            try:
+                conn.execute(
+                    "ALTER TABLE users ADD COLUMN user_risk_score REAL NOT NULL DEFAULT 0.0"
+                )
+            except sqlite3.OperationalError:
+                pass
+        if "suspended" not in user_cols:
+            try:
+                conn.execute("ALTER TABLE users ADD COLUMN suspended INTEGER NOT NULL DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass
+
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS listing_photos (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          listing_id INTEGER NOT NULL REFERENCES trade_listings(id) ON DELETE CASCADE,
+          url TEXT NOT NULL,
+          moderation_status TEXT NOT NULL DEFAULT 'PENDING',
+          moderation_version INTEGER NOT NULL DEFAULT 1,
+          created_at REAL NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS moderation_reviews (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          listing_id INTEGER NOT NULL REFERENCES trade_listings(id) ON DELETE CASCADE,
+          moderation_version INTEGER NOT NULL,
+          ai_result TEXT,
+          ai_confidence REAL,
+          ai_payload TEXT NOT NULL DEFAULT '{}',
+          risk_level TEXT,
+          priority INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL,
+          policy_version TEXT,
+          created_at REAL NOT NULL,
+          updated_at REAL NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS moderation_decisions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          listing_id INTEGER NOT NULL REFERENCES trade_listings(id) ON DELETE CASCADE,
+          moderation_version INTEGER NOT NULL,
+          moderator_id INTEGER,
+          moderator_role TEXT,
+          previous_status TEXT,
+          new_status TEXT,
+          decision TEXT NOT NULL,
+          reason TEXT NOT NULL DEFAULT '',
+          ai_result TEXT,
+          ai_confidence REAL,
+          correlation_id TEXT,
+          created_at REAL NOT NULL
+        );
+        """
+    )
 
     item_cols = _table_cols(conn, "listing_items")
     if item_cols and "value_mandal" in item_cols and "mandal_units" not in item_cols:

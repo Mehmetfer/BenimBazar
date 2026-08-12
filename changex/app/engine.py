@@ -12,6 +12,9 @@ from .states import (
     ListingStatus,
     TradeState,
     InvalidTransition,
+    OFFERABLE_LISTING,
+    RELEASE_TO_APPROVED,
+    normalize_listing_status,
     transition,
 )
 from .value import ChangeValue, ChangeValueError, value_gap
@@ -50,11 +53,11 @@ def _sum_listings(conn, listing_ids: list[int]) -> tuple[ChangeValue, list[dict]
         if not row:
             raise DomainError("LISTING_NOT_FOUND", f"Listing {lid} bulunamadı", 404)
         d = dict(row)
-        status = ListingStatus(str(d["status"]).upper())
-        if status != ListingStatus.ACTIVE:
+        status = normalize_listing_status(d["status"])
+        if status not in OFFERABLE_LISTING:
             raise DomainError(
-                "LISTING_NOT_OFFERABLE",
-                f"Listing {lid} ACTIVE değil ({status.value})",
+                "LISTING_NOT_APPROVED",
+                f"Listing {lid} onaylı değil ({status.value})",
                 409,
             )
         units = _listing_units(d)
@@ -236,7 +239,7 @@ def accept_offer(
             ).fetchone()
             if not row:
                 raise DomainError("LISTING_NOT_FOUND", f"Listing {lid} yok", 404)
-            if str(row["status"]).upper() != ListingStatus.ACTIVE.value:
+            if normalize_listing_status(row["status"]) not in OFFERABLE_LISTING:
                 raise DomainError(
                     "CONFLICT",
                     f"Listing {lid} müsait değil ({row['status']})",
@@ -246,13 +249,12 @@ def accept_offer(
                 """
                 UPDATE trade_listings
                 SET status = ?, version = version + 1, updated_at = ?
-                WHERE id = ? AND status = ? AND version = ?
+                WHERE id = ? AND status IN ('APPROVED', 'ACTIVE') AND version = ?
                 """,
                 (
                     ListingStatus.RESERVED.value,
                     time.time(),
                     lid,
-                    ListingStatus.ACTIVE.value,
                     row["version"],
                 ),
             )
@@ -428,7 +430,12 @@ def cancel_offer(
                     SET status = ?, version = version + 1, updated_at = ?
                     WHERE id = ? AND status = ?
                     """,
-                    (ListingStatus.ACTIVE.value, time.time(), int(lid), ListingStatus.RESERVED.value),
+                    (
+                        RELEASE_TO_APPROVED.value,
+                        time.time(),
+                        int(lid),
+                        ListingStatus.RESERVED.value,
+                    ),
                 )
                 db.audit(
                     conn,
@@ -549,7 +556,7 @@ def _transfer_listing(conn, listing_id: int, *, new_owner: int, correlation_id: 
     if not row:
         raise DomainError("LISTING_NOT_FOUND", f"Listing {listing_id} yok", 404)
     status = str(row["status"]).upper()
-    if status not in {ListingStatus.RESERVED.value, ListingStatus.ACTIVE.value}:
+    if status not in {ListingStatus.RESERVED.value, ListingStatus.APPROVED.value, ListingStatus.ACTIVE.value}:
         raise DomainError("CONFLICT", f"Listing {listing_id} transfer edilemez", 409)
     cur = conn.execute(
         """

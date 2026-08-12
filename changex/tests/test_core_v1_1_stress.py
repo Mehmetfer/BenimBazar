@@ -147,11 +147,11 @@ def test_multi_listing_shared_c_race(client):
     if accepted["id"] == offer1.json()["id"]:
         assert client.get(f"/api/listings/{a['id']}").json()["status"] == "RESERVED"
         assert client.get(f"/api/listings/{b['id']}").json()["status"] == "RESERVED"
-        assert client.get(f"/api/listings/{d['id']}").json()["status"] == "ACTIVE"
+        assert client.get(f"/api/listings/{d['id']}").json()["status"] == "APPROVED"
     else:
         assert client.get(f"/api/listings/{d['id']}").json()["status"] == "RESERVED"
-        assert client.get(f"/api/listings/{a['id']}").json()["status"] == "ACTIVE"
-        assert client.get(f"/api/listings/{b['id']}").json()["status"] == "ACTIVE"
+        assert client.get(f"/api/listings/{a['id']}").json()["status"] == "APPROVED"
+        assert client.get(f"/api/listings/{b['id']}").json()["status"] == "APPROVED"
 
 
 def test_db_failure_mid_accept_rolls_back(client, tmp_db):
@@ -182,7 +182,7 @@ def test_db_failure_mid_accept_rolls_back(client, tmp_db):
         assert trade["status"] == "OFFERED"
         for lid in (want["id"], give["id"]):
             row = conn.execute("SELECT status FROM trade_listings WHERE id = ?", (lid,)).fetchone()
-            assert row["status"] == "ACTIVE"
+            assert row["status"] == "APPROVED"
         # No accept audit committed
         accepts = conn.execute(
             "SELECT COUNT(*) c FROM audit_logs WHERE action = 'offer.accept' AND entity_id = ?",
@@ -204,7 +204,7 @@ def test_process_crash_orphan_reserved_recovered(client):
     r = client.post("/api/admin/recover", headers=auth(a["token"]))
     assert r.status_code == 200, r.text
     assert r.json()["released"] >= 1
-    assert client.get(f"/api/listings/{listing['id']}").json()["status"] == "ACTIVE"
+    assert client.get(f"/api/listings/{listing['id']}").json()["status"] == "APPROVED"
 
 
 def test_sqlite_busy_stats_under_contention(client):

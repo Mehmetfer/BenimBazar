@@ -47,7 +47,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       _error = null;
     });
     try {
-      await api.createListing({
+      final created = await api.createListing({
         'title': _title.text.trim(),
         'description': _desc.text.trim(),
         'category': _category,
@@ -68,6 +68,11 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         ],
       });
       if (!mounted) return;
+      final msg = created['user_message']?.toString() ??
+          'İçeriğiniz incelemeye gönderildi.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg)),
+      );
       Navigator.of(context).pop(true);
     } on ApiException catch (e) {
       setState(() => _error = e.message);

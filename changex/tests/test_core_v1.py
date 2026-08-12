@@ -51,18 +51,9 @@ def _auth(token: str) -> dict:
 
 
 def _listing(client, token: str, title: str, madalyon: int = 1, category: str = "Elektronik"):
-    r = client.post(
-        "/api/listings",
-        headers=_auth(token),
-        json={
-            "title": title,
-            "description": title,
-            "category": category,
-            "items": [{"name": title, "value": {"madalyon": madalyon, "dirhem": 0, "mandal": 0}}],
-        },
-    )
-    assert r.status_code == 200, r.text
-    return r.json()
+    from changex.tests.helpers import make_listing
+
+    return make_listing(client, token, title, madalyon=madalyon, category=category, approve=True)
 
 
 # ---------- Value tests ----------
@@ -207,10 +198,9 @@ def test_listing_create_ownership_update(client):
     a = _register(client, "owner1")
     b = _register(client, "other1")
     listing = _listing(client, a["token"], "Telefon", madalyon=8)
-    assert listing["status"] == "ACTIVE"
+    assert listing["status"] == "APPROVED"
     assert listing["owner_id"] == a["user"]["id"]
     assert listing["mandal_units"] == 8 * 64516
-    assert listing["version"] == 1
 
     # other cannot update
     r = client.patch(
@@ -220,14 +210,15 @@ def test_listing_create_ownership_update(client):
     )
     assert r.status_code == 403
 
+    # location-only is safe metadata (no remotion)
     r = client.patch(
         f"/api/listings/{listing['id']}",
         headers=_auth(a["token"]),
-        json={"title": "Telefon Pro"},
+        json={"location": "Kadıköy"},
     )
     assert r.status_code == 200
-    assert r.json()["title"] == "Telefon Pro"
-    assert r.json()["version"] == 2
+    assert r.json()["location"] == "Kadıköy"
+    assert r.json()["status"] == "APPROVED"
 
 
 def test_offer_gap_and_self_trade_blocked(client):
