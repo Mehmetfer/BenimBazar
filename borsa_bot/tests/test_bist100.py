@@ -104,3 +104,54 @@ def test_bist100_analysis_endpoint(monkeypatch):
     assert thy["price"] == 300.0
     assert thy["decision"] == "WATCH"
     assert "summary" in body
+
+
+def test_bist100_analysis_sorts_strong_buy_before_buy(monkeypatch):
+    from config.models import MarketRegime, RiskLevel, SignalAction, SymbolDecision
+    from dashboard import app as dash_app
+    from dashboard.app import app
+
+    def fake_scan(self, symbols=None):
+        return [
+            SymbolDecision(
+                symbol="GARAN",
+                name="Garanti",
+                sector="Bankacılık",
+                price=120.0,
+                trend="NEUTRAL",
+                buy_score=62.0,
+                sell_score=10.0,
+                ai_confidence=60.0,
+                risk=RiskLevel.LOW,
+                signal=SignalAction.BUY,
+                regime=MarketRegime.NEUTRAL,
+                stop_price=115.0,
+                target_price=125.0,
+                explanation="buy",
+                decision=SignalAction.BUY,
+            ),
+            SymbolDecision(
+                symbol="THYAO",
+                name="THY",
+                sector="Havacılık",
+                price=300.0,
+                trend="NEUTRAL",
+                buy_score=66.0,
+                sell_score=10.0,
+                ai_confidence=70.0,
+                risk=RiskLevel.LOW,
+                signal=SignalAction.STRONG_BUY,
+                regime=MarketRegime.NEUTRAL,
+                stop_price=290.0,
+                target_price=310.0,
+                explanation="strong",
+                decision=SignalAction.STRONG_BUY,
+            ),
+        ]
+
+    monkeypatch.setattr(dash_app.service, "scan", lambda symbols=None: fake_scan(None))
+    client = TestClient(app)
+    r = client.get("/api/bist100/analysis")
+    assert r.status_code == 200
+    syms = [c["symbol"] for c in r.json()["companies"] if c["symbol"] in {"THYAO", "GARAN"}]
+    assert syms.index("THYAO") < syms.index("GARAN")

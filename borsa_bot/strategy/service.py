@@ -874,20 +874,26 @@ class TradingService:
                 }
             rows.append(row)
 
-        sort_key = (sort or "score").lower()
+        sort_key = (sort or "decision").lower()
         if sort_key == "alpha":
             rows.sort(key=lambda r: str(r.get("symbol") or ""))
-        elif sort_key == "decision":
+        elif sort_key == "score":
+            rows.sort(key=lambda r: -float(r.get("final_score") or 0))
+        else:
+            # default: Güçlü AL → AL → … then skor (yüksek üstte)
             from dashboard.daily import SIGNAL_RANK
+
+            def _decision_rank(row: dict) -> int:
+                dec = str(row.get("final_decision") or row.get("decision") or "").upper()
+                return SIGNAL_RANK.get(dec, 50)
 
             rows.sort(
                 key=lambda r: (
-                    SIGNAL_RANK.get(str(r.get("decision") or "").upper(), 50),
+                    _decision_rank(r),
                     -float(r.get("final_score") or 0),
+                    str(r.get("symbol") or ""),
                 )
             )
-        else:
-            rows.sort(key=lambda r: -float(r.get("final_score") or 0))
 
         summary: dict[str, int] = {
             "STRONG_BUY": 0,
@@ -915,7 +921,8 @@ class TradingService:
             "count": len(rows),
             "analyzed": sum(1 for r in rows if r.get("price") is not None),
             "summary": summary,
-            "sort": sort_key,
+            "sort": sort_key if sort_key != "decision" else "decision_score",
+            "sort_label": "Güçlü AL → AL → skor",
             "data_source": source.to_dict(),
             "market_data_gate": gate.to_dict() if gate else {},
             "principle": "BIST 100 tam tarama · SIGNAL ≠ EMİR · PAPER ONLY",

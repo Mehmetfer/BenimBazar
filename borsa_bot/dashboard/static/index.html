@@ -869,7 +869,7 @@
     document.getElementById('bist100List').innerHTML = '<div class="empty">100 hisse analiz ediliyor… (30–60 sn sürebilir)</div>';
     document.getElementById('b100Summary').textContent = 'Tam evren taraması…';
     try{
-      const body = await (await fetch('/api/bist100/analysis?sort=score')).json();
+      const body = await (await fetch('/api/bist100/analysis?sort=decision')).json();
       bist100.companies = body.companies || [];
       bist100.total = body.total || body.count || 100;
       bist100.analyzed = body.analyzed || 0;
