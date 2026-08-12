@@ -1,0 +1,529 @@
+{
+  "generated_at": "2026-08-12T05:22:20.801116+00:00",
+  "loop_steps": [
+    "PLAN",
+    "IMPLEMENT",
+    "SELF-REVIEW",
+    "TEST",
+    "FAILURE ANALYSIS",
+    "PATCH",
+    "REGRESSION TEST",
+    "RE-RUN",
+    "COMPLETENESS SCAN",
+    "FINAL VALIDATION",
+    "REPORT"
+  ],
+  "loop_complete": true,
+  "self_review": {
+    "ok": true,
+    "files_reviewed": [
+      "autonomy/lessons.py",
+      "autonomy/self_review.py",
+      "autonomy/gates.py",
+      "crypto/service.py"
+    ],
+    "gates_run": [
+      "syntax",
+      "imports_ast",
+      "live_lock"
+    ],
+    "findings": [],
+    "error_count": 0,
+    "warn_count": 0
+  },
+  "gates": {
+    "ok": true,
+    "gates": [
+      {
+        "name": "G1_syntax_import",
+        "ok": true,
+        "detail": "ok"
+      },
+      {
+        "name": "G2_lint",
+        "ok": true,
+        "detail": "ast-parse ok (ruff not required)"
+      },
+      {
+        "name": "G3_typecheck",
+        "ok": true,
+        "detail": "mypy not installed — gate recorded as SKIP/soft-pass (honest: not fully typed-checked)"
+      },
+      {
+        "name": "G4_unit",
+        "ok": true,
+        "detail": "......................................                                   [100%]\n38 passed in 4.80s\n"
+      },
+      {
+        "name": "G5_integration",
+        "ok": true,
+        "detail": "............................................                             [100%]\n=============================== warnings summary ===============================\ntests/test_crypto_foundation.py::test_gate_live_signals_still_blocked\n  /workspace/borsa_bot/tests/test_paribu_live.py:267: PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html\n    @pytest.mark.integration\n\ntests/test_crypto_foundation.py::test_crypto_api_routes_exist\n  /workspace/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n44 passed, 2 warnings in 2.45s\n"
+      },
+      {
+        "name": "G6_regression",
+        "ok": true,
+        "detail": ".....                                                                    [100%]\n=============================== warnings summary ===============================\n../.venv/lib/python3.12/site-packages/fastapi/testclient.py:1\n  /workspace/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient as TestClient  # noqa\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n5 passed, 1 warning in 1.27s\n"
+      },
+      {
+        "name": "G7_smoke",
+        "ok": true,
+        "detail": "..........                                                               [100%]\n10 passed in 0.74s\n"
+      },
+      {
+        "name": "G8_self_review",
+        "ok": true,
+        "detail": "{'ok': True, 'files_reviewed': ['autonomy/levels.py', 'autonomy/self_review.py', 'autonomy/failure.py', 'autonomy/scorecard.py', 'autonomy/completeness.py', 'autonomy/loop.py', 'autonomy/gates.py', 'autonomy/lessons.py', 'autonomy/__init__.py', 'autonomy/runner.py', 'crypto/service.py', 'tests/test_master_v2.py'], 'gates_run': ['syntax', 'imports_ast', 'live_lock'], 'findings': [], 'error_count': 0, 'warn_count': 0}"
+      }
+    ]
+  },
+  "levels": [
+    {
+      "level": 1,
+      "name": "Basic task execution",
+      "status": "PASS",
+      "evidence": "pytest PASS: tests/test_level_gates.py::test_l1_app_imports_and_settings, tests/test_core.py…",
+      "criteria": [
+        "app imports",
+        "settings load",
+        "TradingService boots"
+      ]
+    },
+    {
+      "level": 2,
+      "name": "Test-and-fix",
+      "status": "PASS",
+      "evidence": "pytest PASS: tests/test_level_gates.py::test_l2_http_source_meta_accepts_datetime, tests/test_level_gates.py::test_l2_parse_ts_never_invents_now, tests/test_level_gates.py::test_l2_http_bars_fail_closed_no_stale_cache…",
+      "criteria": [
+        "HTTP MD fail-closed",
+        "parse_ts no invented now",
+        "failure protocol module"
+      ]
+    },
+    {
+      "level": 3,
+      "name": "Multi-module coordination",
+      "status": "PASS",
+      "evidence": "pytest PASS: tests/test_level_gates.py::test_l3_mtf_drops_incomplete_bucket_no_lookahead, tests/test_level_gates.py::test_l3_same_input_same_mtf, tests/test_data_source_isolation.py…",
+      "criteria": [
+        "MTF no lookahead",
+        "BIST/CRYPTO isolation"
+      ]
+    },
+    {
+      "level": 4,
+      "name": "Failure → diagnosis → recovery",
+      "status": "PASS",
+      "evidence": "pytest PASS: tests/test_level_gates.py::test_failure_matrix_safe, tests/test_level_gates.py::test_l4_confidence_not_calibrated_probability, tests/test_level_gates.py::test_l5_kill_switch_blocks…",
+      "criteria": [
+        "provider offline safe",
+        "kill switch blocks",
+        "confidence ≠ calibrated p"
+      ]
+    },
+    {
+      "level": 5,
+      "name": "Systematic gap detection",
+      "status": "PASS",
+      "evidence": "pytest PASS: tests/test_autonomy_protocol.py::test_self_review_catches_syntax, tests/test_autonomy_protocol.py::test_completeness_scan_symbol, tests/test_level_gates.py::test_l5_risk_empty_verdict_fail_closed…",
+      "criteria": [
+        "self-review engine",
+        "completeness scanner",
+        "risk empty fail-closed"
+      ]
+    },
+    {
+      "level": 6,
+      "name": "Persistent lesson / regression system",
+      "status": "PASS",
+      "evidence": "pytest PASS: tests/test_autonomy_protocol.py::test_lesson_store_roundtrip, tests/test_autonomy_protocol.py::test_lessons_seed_and_regression_list, tests/test_level_gates.py::test_l6_live_broker_locked…",
+      "criteria": [
+        "lesson store",
+        "regression gate list",
+        "LIVE locked"
+      ]
+    },
+    {
+      "level": 7,
+      "name": "Shadow/paper closed-loop verification",
+      "status": "PASS",
+      "evidence": "pytest PASS: tests/test_level7.py, tests/test_level_gates.py::test_l7_ai_before_entries_in_source_file…",
+      "criteria": [
+        "Level7 engine paper-only",
+        "AI before entries",
+        "no LIVE unlock"
+      ]
+    },
+    {
+      "level": 8,
+      "name": "All prior levels measurable + safe together",
+      "status": "PASS",
+      "evidence": "pytest PASS: tests/test_level_gates.py::test_l8_acceptance_no_auto_promote, tests/test_level8.py, tests/test_autonomy_protocol.py::test_level8_not_claimed_without_evidence…",
+      "criteria": [
+        "ContinuousLearningEngine acceptance chain",
+        "auto_promoted is False",
+        "full_level8_claimed is False unless all gates prove otherwise",
+        "protocol gates G1–G8"
+      ]
+    }
+  ],
+  "scorecard": {
+    "starting": 5.6,
+    "overall": 7.1,
+    "verdict": "OTONOMİ 8+'A ULAŞMADI",
+    "criteria": [
+      {
+        "id": 1,
+        "name": "Hata tespiti",
+        "score": 7.0,
+        "evidence": [
+          "self_review_ok=True",
+          "gates_ok=True",
+          "self_review catches syntax + LIVE unlock patterns"
+        ],
+        "limit": "Sessiz domain hataları hâlâ test coverage'a bağlı"
+      },
+      {
+        "id": 2,
+        "name": "Hata düzeltme",
+        "score": 7.0,
+        "evidence": [
+          "baseline_pass=313",
+          "baseline_fail=0",
+          "failure protocol module + gate retest loop"
+        ],
+        "limit": "Belirsiz ürün kararlarında insan gerekir"
+      },
+      {
+        "id": 3,
+        "name": "Eksik yüzey tespiti",
+        "score": 7.0,
+        "evidence": [
+          "completeness.scan_symbol",
+          "scan_changed_exports",
+          "L5=True"
+        ],
+        "limit": "AST/text scan; dynamic dispatch kaçabilir"
+      },
+      {
+        "id": 4,
+        "name": "Gerçek test çalıştırma",
+        "score": 8.5,
+        "evidence": [
+          "pytest baseline ~313 passed",
+          "gates run real pytest nodes"
+        ],
+        "limit": "Bazı integration'lar environment bağımlı"
+      },
+      {
+        "id": 5,
+        "name": "Root-cause / retry",
+        "score": 7.0,
+        "evidence": [
+          "failure protocol steps tested",
+          "L2=True L4=True"
+        ],
+        "limit": "Otomatik hipotez üretimi yok — disiplin kod + test"
+      },
+      {
+        "id": 6,
+        "name": "Kalıcı öğrenme",
+        "score": 7.0,
+        "evidence": [
+          "lesson_count=5",
+          "lesson→regression CI gate",
+          "L6=True"
+        ],
+        "limit": "Self-modifying prod YOK (bilinçli); lesson=data+test"
+      },
+      {
+        "id": 7,
+        "name": "Görev parçalama",
+        "score": 7.0,
+        "evidence": [
+          "LOOP_STEPS enforced",
+          "gates G1–G8"
+        ],
+        "limit": "Kapsam şişmesi hâlâ mümkün"
+      },
+      {
+        "id": 8,
+        "name": "Level 1→8 ilerleme",
+        "score": 8.0,
+        "evidence": [
+          "passed=[1, 2, 3, 4, 5, 6, 7, 8]",
+          "failed=[]",
+          "L8 = acceptance tests, not folder presence"
+        ],
+        "limit": "Trading self-evolution LIVE kapalı; L8 research/paper kabul"
+      },
+      {
+        "id": 9,
+        "name": "Mimari refactor",
+        "score": 6.0,
+        "evidence": [
+          "autonomy package additive; crypto fail-closed chart fix"
+        ],
+        "limit": "Büyük kırılımlı refactor kanıtı bu turda sınırlı"
+      },
+      {
+        "id": 10,
+        "name": "İnsan olmadan uçtan uca",
+        "score": 6.5,
+        "evidence": [
+          "live_locked=True",
+          "protocol runner produces report without human mid-gate"
+        ],
+        "limit": "Muğlak hedef / LIVE onay hâlâ insan"
+      }
+    ],
+    "level_results": [
+      {
+        "level": 1,
+        "name": "Basic task execution",
+        "status": "PASS",
+        "evidence": "pytest PASS: tests/test_level_gates.py::test_l1_app_imports_and_settings, tests/test_core.py…",
+        "criteria": [
+          "app imports",
+          "settings load",
+          "TradingService boots"
+        ]
+      },
+      {
+        "level": 2,
+        "name": "Test-and-fix",
+        "status": "PASS",
+        "evidence": "pytest PASS: tests/test_level_gates.py::test_l2_http_source_meta_accepts_datetime, tests/test_level_gates.py::test_l2_parse_ts_never_invents_now, tests/test_level_gates.py::test_l2_http_bars_fail_closed_no_stale_cache…",
+        "criteria": [
+          "HTTP MD fail-closed",
+          "parse_ts no invented now",
+          "failure protocol module"
+        ]
+      },
+      {
+        "level": 3,
+        "name": "Multi-module coordination",
+        "status": "PASS",
+        "evidence": "pytest PASS: tests/test_level_gates.py::test_l3_mtf_drops_incomplete_bucket_no_lookahead, tests/test_level_gates.py::test_l3_same_input_same_mtf, tests/test_data_source_isolation.py…",
+        "criteria": [
+          "MTF no lookahead",
+          "BIST/CRYPTO isolation"
+        ]
+      },
+      {
+        "level": 4,
+        "name": "Failure → diagnosis → recovery",
+        "status": "PASS",
+        "evidence": "pytest PASS: tests/test_level_gates.py::test_failure_matrix_safe, tests/test_level_gates.py::test_l4_confidence_not_calibrated_probability, tests/test_level_gates.py::test_l5_kill_switch_blocks…",
+        "criteria": [
+          "provider offline safe",
+          "kill switch blocks",
+          "confidence ≠ calibrated p"
+        ]
+      },
+      {
+        "level": 5,
+        "name": "Systematic gap detection",
+        "status": "PASS",
+        "evidence": "pytest PASS: tests/test_autonomy_protocol.py::test_self_review_catches_syntax, tests/test_autonomy_protocol.py::test_completeness_scan_symbol, tests/test_level_gates.py::test_l5_risk_empty_verdict_fail_closed…",
+        "criteria": [
+          "self-review engine",
+          "completeness scanner",
+          "risk empty fail-closed"
+        ]
+      },
+      {
+        "level": 6,
+        "name": "Persistent lesson / regression system",
+        "status": "PASS",
+        "evidence": "pytest PASS: tests/test_autonomy_protocol.py::test_lesson_store_roundtrip, tests/test_autonomy_protocol.py::test_lessons_seed_and_regression_list, tests/test_level_gates.py::test_l6_live_broker_locked…",
+        "criteria": [
+          "lesson store",
+          "regression gate list",
+          "LIVE locked"
+        ]
+      },
+      {
+        "level": 7,
+        "name": "Shadow/paper closed-loop verification",
+        "status": "PASS",
+        "evidence": "pytest PASS: tests/test_level7.py, tests/test_level_gates.py::test_l7_ai_before_entries_in_source_file…",
+        "criteria": [
+          "Level7 engine paper-only",
+          "AI before entries",
+          "no LIVE unlock"
+        ]
+      },
+      {
+        "level": 8,
+        "name": "All prior levels measurable + safe together",
+        "status": "PASS",
+        "evidence": "pytest PASS: tests/test_level_gates.py::test_l8_acceptance_no_auto_promote, tests/test_level8.py, tests/test_autonomy_protocol.py::test_level8_not_claimed_without_evidence…",
+        "criteria": [
+          "ContinuousLearningEngine acceptance chain",
+          "auto_promoted is False",
+          "full_level8_claimed is False unless all gates prove otherwise",
+          "protocol gates G1–G8"
+        ]
+      }
+    ],
+    "notes": [
+      "overall=7.1 (need >=8.0 with L1–L8 PASS)",
+      "levels_passed=[1, 2, 3, 4, 5, 6, 7, 8]",
+      "Claim withheld without full level PASS set"
+    ]
+  },
+  "lessons": [
+    {
+      "id": "crypto-unknown-symbol-fail-closed",
+      "title": "Crypto detail/chart raised 500 on unknown venue symbol",
+      "error_class": "RuntimeError",
+      "root_cause": "OKX has no BTC_TL; get_bars raised; chart fallback also raised → API 500.",
+      "fix_summary": "chart() catches both get_bars_tf and get_bars; returns empty chart with note.",
+      "regression_test": "tests/test_crypto_ui.py::test_crypto_detail_and_chart_api",
+      "architectural_decision": "NO_MARKET_DATA must fail closed to empty payload, never uncaught 500 on detail UI.",
+      "created_at": "2026-08-12T05:22:19.137001+00:00",
+      "prevents": [
+        "NO_MARKET_DATA uncaught in /api/crypto/detail"
+      ],
+      "live_trading_impact": "NONE — lessons never unlock LIVE broker"
+    },
+    {
+      "id": "env-pollution-crypto-enabled",
+      "title": "Local .env CRYPTO_ENABLED=true breaks default-off tests",
+      "error_class": "AssertionError",
+      "root_cause": "Runtime enablement was written into .env; settings load at import; tests expected default false.",
+      "fix_summary": "Keep .env default CRYPTO_ENABLED=false; enable via process env at server start only.",
+      "regression_test": "tests/test_crypto_foundation.py::test_default_crypto_disabled",
+      "architectural_decision": "Dev toggles for demos must not mutate committed defaults or permanent .env test assumptions.",
+      "created_at": "2026-08-12T05:22:19.136999+00:00",
+      "prevents": [
+        "crypto_enabled True while tests expect False"
+      ],
+      "live_trading_impact": "NONE — lessons never unlock LIVE broker"
+    },
+    {
+      "id": "governor-halt-is-valid",
+      "title": "Governor TRADING_HALT treated as test failure",
+      "error_class": "AssertionError",
+      "root_cause": "Paper ledger weekly loss tripped halt; test required NORMAL only.",
+      "fix_summary": "Accept NORMAL|CAUTION|REDUCED_RISK|TRADING_HALT as valid governor states.",
+      "regression_test": "tests/test_master_v2.py::test_engine_status_exposes_level_and_governor",
+      "architectural_decision": "Fail-closed governor states are success for safety tests.",
+      "created_at": "2026-08-12T05:22:19.137003+00:00",
+      "prevents": [
+        "assert state == NORMAL while halt is correct"
+      ],
+      "live_trading_impact": "NONE — lessons never unlock LIVE broker"
+    },
+    {
+      "id": "live-broker-never-auto-unlock",
+      "title": "LIVE broker must stay locked under autonomy protocol",
+      "error_class": "SafetyViolation",
+      "root_cause": "Autonomy improvements must not flip LIVE_BROKER_ENABLED or bypass RiskEngine.",
+      "fix_summary": "Hard assert live_broker_enabled is False in autonomy acceptance.",
+      "regression_test": "tests/test_autonomy_protocol.py::test_live_broker_remains_locked",
+      "architectural_decision": "research → test → paper → shadow only; LIVE requires human.",
+      "created_at": "2026-08-12T05:22:19.137005+00:00",
+      "prevents": [
+        "LIVE_BROKER_ENABLED auto true",
+        "broker safety bypass"
+      ],
+      "live_trading_impact": "NONE — lessons never unlock LIVE broker"
+    },
+    {
+      "id": "stamp-kwargs-drift",
+      "title": "stamp_quote_defaults / stamp_bar_defaults kind= kwargs drift",
+      "error_class": "TypeError",
+      "root_cause": "Caller passed kind= but stamp_* signatures only accept provider/origin (http_live had the same stale call). Crypto public providers copied the bug.",
+      "fix_summary": "Remove kind=; set data_source_kind on the model before stamp.",
+      "regression_test": "tests/test_crypto_public_md.py::test_okx_provider_live_smoke",
+      "architectural_decision": "Contract helpers must stay the single source of stamp kwargs; callers match signatures.",
+      "created_at": "2026-08-12T05:22:19.136993+00:00",
+      "prevents": [
+        "unexpected keyword argument 'kind'",
+        "quote stamp TypeError"
+      ],
+      "live_trading_impact": "NONE — lessons never unlock LIVE broker"
+    }
+  ],
+  "completeness_samples": [
+    {
+      "symbol": "create_crypto_provider",
+      "definition_files": [
+        "crypto/providers/factory.py"
+      ],
+      "call_sites": [
+        "autonomy/runner.py",
+        "crypto/__init__.py",
+        "crypto/providers/__init__.py",
+        "crypto/providers/factory.py",
+        "crypto/service.py"
+      ],
+      "test_files": [
+        "tests/test_autonomy_protocol.py",
+        "tests/test_crypto_foundation.py",
+        "tests/test_crypto_paribu_md.py",
+        "tests/test_crypto_public_md.py",
+        "tests/test_paribu_live.py"
+      ],
+      "config_mentions": [],
+      "gaps": [],
+      "ok": true
+    },
+    {
+      "symbol": "stamp_quote_defaults",
+      "definition_files": [
+        "data/contract.py"
+      ],
+      "call_sites": [
+        "autonomy/lessons.py",
+        "autonomy/runner.py",
+        "crypto/providers/paribu.py",
+        "crypto/providers/public_exchanges.py",
+        "data/contract.py",
+        "data/http_live.py",
+        "data/providers.py"
+      ],
+      "test_files": [],
+      "config_mentions": [],
+      "gaps": [
+        "no test file mentions this symbol"
+      ],
+      "ok": true
+    },
+    {
+      "symbol": "ContinuousLearningEngine",
+      "definition_files": [
+        "level8/engine.py"
+      ],
+      "call_sites": [
+        "autonomy/levels.py",
+        "autonomy/runner.py",
+        "decision/engine.py",
+        "level8/__init__.py",
+        "level8/engine.py"
+      ],
+      "test_files": [
+        "tests/test_autonomy_protocol.py",
+        "tests/test_level8.py",
+        "tests/test_level_gates.py"
+      ],
+      "config_mentions": [],
+      "gaps": [],
+      "ok": true
+    }
+  ],
+  "bist_crypto_isolation": {
+    "ok": true,
+    "smells": [],
+    "note": "advisory isolation scan — not a hard fail"
+  },
+  "safety": {
+    "live_broker_enabled": false,
+    "live_confirmed": false,
+    "mode": "PAPER"
+  },
+  "verdict": "OTONOMİ 8+'A ULAŞMADI",
+  "starting": 5.6,
+  "overall": 7.1
+}

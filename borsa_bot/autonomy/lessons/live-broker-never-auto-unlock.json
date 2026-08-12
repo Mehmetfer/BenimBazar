@@ -1,0 +1,15 @@
+{
+  "id": "live-broker-never-auto-unlock",
+  "title": "LIVE broker must stay locked under autonomy protocol",
+  "error_class": "SafetyViolation",
+  "root_cause": "Autonomy improvements must not flip LIVE_BROKER_ENABLED or bypass RiskEngine.",
+  "fix_summary": "Hard assert live_broker_enabled is False in autonomy acceptance.",
+  "regression_test": "tests/test_autonomy_protocol.py::test_live_broker_remains_locked",
+  "architectural_decision": "research → test → paper → shadow only; LIVE requires human.",
+  "created_at": "2026-08-12T05:23:33.022068+00:00",
+  "prevents": [
+    "LIVE_BROKER_ENABLED auto true",
+    "broker safety bypass"
+  ],
+  "live_trading_impact": "NONE — lessons never unlock LIVE broker"
+}

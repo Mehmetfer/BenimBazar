@@ -1,0 +1,14 @@
+{
+  "id": "governor-halt-is-valid",
+  "title": "Governor TRADING_HALT treated as test failure",
+  "error_class": "AssertionError",
+  "root_cause": "Paper ledger weekly loss tripped halt; test required NORMAL only.",
+  "fix_summary": "Accept NORMAL|CAUTION|REDUCED_RISK|TRADING_HALT as valid governor states.",
+  "regression_test": "tests/test_master_v2.py::test_engine_status_exposes_level_and_governor",
+  "architectural_decision": "Fail-closed governor states are success for safety tests.",
+  "created_at": "2026-08-12T05:23:33.022066+00:00",
+  "prevents": [
+    "assert state == NORMAL while halt is correct"
+  ],
+  "live_trading_impact": "NONE — lessons never unlock LIVE broker"
+}

@@ -517,11 +517,25 @@ class CryptoFoundationService:
             tf = "15m"
         if not is_live_crypto_provider(self.provider):
             return bars_to_chart([], symbol=sym, timeframe=tf)
+        bars: list = []
+        note = ""
         try:
             bars = self.provider.get_bars_tf(sym, tf, lookback=lookback)
-        except Exception:  # noqa: BLE001
-            bars = self.provider.get_bars(sym, lookback=lookback) if tf == "15m" else []
-        return bars_to_chart(bars, symbol=sym, timeframe=tf)
+        except Exception as exc:  # noqa: BLE001
+            if tf == "15m":
+                try:
+                    bars = self.provider.get_bars(sym, lookback=lookback)
+                except Exception as exc2:  # noqa: BLE001
+                    note = f"NO_MARKET_DATA:{exc2}"
+                    bars = []
+            else:
+                note = f"NO_MARKET_DATA:{exc}"
+                bars = []
+        out = bars_to_chart(bars, symbol=sym, timeframe=tf)
+        if note:
+            out["ok"] = False
+            out["note"] = note
+        return out
 
     def backfill(self, symbol: str, timeframe: str = "15m") -> dict[str, Any]:
         if not is_live_crypto_provider(self.provider):
@@ -544,8 +558,9 @@ class CryptoFoundationService:
                     "enabled": bool(settings.crypto_enabled),
                     "default": False,
                     "path": "/api/crypto/dashboard",
-                    "ready": bool(settings.crypto_enabled and settings.paribu_enabled),
+                    "ready": bool(settings.crypto_enabled),
                     "signals": bool(settings.crypto_signals_enabled),
+                    "provider": settings.crypto_provider,
                 },
             ],
             "active_default": MarketType.BIST.value,
