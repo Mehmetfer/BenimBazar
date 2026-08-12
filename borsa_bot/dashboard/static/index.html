@@ -127,6 +127,8 @@
     .fav-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
     .fav-head h2{margin:0}
     .fav-wallet-pill{font-size:.75rem;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(0,0,0,.2)}
+    .fav-search{margin-bottom:4px}
+    .fav-search-head{grid-column:1/-1;font-size:.78rem;font-weight:700;color:var(--mute);margin:2px 0 4px}
     .watch-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
     @media(max-width:420px){.watch-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     .watch-tile{border-radius:10px;padding:8px 8px 10px;cursor:pointer;border:1px solid rgba(255,255,255,.06);min-height:118px;display:flex;flex-direction:column;justify-content:space-between}
@@ -435,7 +437,12 @@
       <h2>★ Takip Listem</h2>
       <div class="fav-wallet-pill" id="favWalletPill">Cüzdan: —</div>
     </div>
-    <p class="why">Kutuya dokun → detay · AL/SAT paper cüzdan · gerçek para değil</p>
+    <div class="search fav-search">
+      <input id="favq" placeholder="Hisse ara (THYAO, AGROT…)" autocomplete="off" />
+      <button type="button" id="favSearchBtn">Ara</button>
+    </div>
+    <div id="favSearchMeta" class="meta" style="margin:6px 0 8px;display:none"></div>
+    <div class="watch-grid" id="favSearchResults" style="display:none;margin-bottom:12px"></div>
     <div class="watch-grid" id="favHome"></div>
   </div>
 
@@ -978,8 +985,14 @@
           favBtn.classList.toggle('on', active);
           favBtn.textContent = active ? '★' : '☆';
           if(stockDetailCtx) stockDetailCtx.is_favorite = active;
-          // Force refresh so removed symbols leave the grid
-          loadFavorites({silent: false});
+          // Force refresh so new favorites append at end (created_at ASC)
+          loadFavorites({silent: false, force: true});
+          // Keep search result stars in sync
+          const hit = favSearchCache.find(f=>(f.symbol||f.ticker)===sym);
+          if(hit) hit.is_favorite = active;
+          if((document.getElementById('favq')?.value||'').trim().length >= 2){
+            runFavSearch();
+          }
         }catch(_e){
           alert('Favori güncellenemedi');
         }
@@ -1054,6 +1067,7 @@
 
   async function loadFavorites(opts){
     const silent = !!(opts && opts.silent);
+    const force = !!(opts && opts.force);
     const el = document.getElementById('favHome');
     if(!el) return;
     if(favLoadInFlight) return;
@@ -1077,14 +1091,16 @@
       });
       watchlistCache = {index: body.index || null, quotes: favs};
       // Don't rebuild DOM while stock detail / order sheet is open (avoids flicker)
+      // unless force (e.g. just favorited from search/detail)
       const overlayOpen = !document.getElementById('stockDetailOverlay')?.classList.contains('hidden')
         || !document.getElementById('orderSheetOverlay')?.classList.contains('hidden');
-      if(overlayOpen && hasTiles){
+      if(overlayOpen && hasTiles && !force){
         favLoadInFlight = false;
         return;
       }
       if(!favs.length && !body.index){
-        if(!hasTiles) el.innerHTML = '<div class="empty" style="grid-column:1/-1">Takip listesi boş — ★ ile hisse ekleyin</div>';
+        if(!hasTiles) el.innerHTML = '<div class="empty" style="grid-column:1/-1">Takip listesi boş — ara ★ ile ekleyin</div>';
+        else if(force) el.innerHTML = '<div class="empty" style="grid-column:1/-1">Takip listesi boş — ara ★ ile ekleyin</div>';
         return;
       }
       let html = '';
@@ -1109,6 +1125,53 @@
       if(!hasTiles) el.innerHTML = '<div class="empty" style="grid-column:1/-1">Takip listesi yüklenemedi</div>';
     }finally{
       favLoadInFlight = false;
+    }
+  }
+
+  let favSearchCache = [];
+  async function runFavSearch(){
+    const input = document.getElementById('favq');
+    const box = document.getElementById('favSearchResults');
+    const meta = document.getElementById('favSearchMeta');
+    if(!input || !box || !meta) return;
+    const q = (input.value||'').trim();
+    if(q.length < 2){
+      box.style.display = 'none';
+      box.innerHTML = '';
+      meta.style.display = 'none';
+      meta.textContent = '';
+      favSearchCache = [];
+      return;
+    }
+    meta.style.display = 'block';
+    meta.textContent = 'Aranıyor…';
+    box.style.display = 'grid';
+    try{
+      const body = await (await fetch('/api/bist/search?q='+encodeURIComponent(q)+'&limit=12')).json();
+      const rows = body.results || [];
+      favSearchCache = rows;
+      if(!rows.length){
+        box.innerHTML = '<div class="empty" style="grid-column:1/-1">Sonuç yok</div>';
+        meta.textContent = body.note || 'Sonuç bulunamadı';
+        return;
+      }
+      meta.textContent = body.note || `${rows.length} sonuç · ★ ile takip listesinin sonuna eklenir`;
+      box.innerHTML =
+        '<div class="fav-search-head">Arama sonuçları</div>' +
+        rows.map(r => watchTileHtml({
+          ...r,
+          is_favorite: !!r.is_favorite,
+        }, {outside: !r.xu100})).join('');
+      box.querySelectorAll('[data-watch]').forEach(tile=>{
+        tile.onclick = ()=>{
+          const sym = tile.dataset.watch;
+          const item = favSearchCache.find(f=>(f.symbol||f.ticker)===sym);
+          if(item) openStockDetail({...item, ticker: sym, symbol: sym});
+        };
+      });
+    }catch(_e){
+      meta.textContent = 'Arama başarısız';
+      box.innerHTML = '<div class="empty" style="grid-column:1/-1">Arama hatası</div>';
     }
   }
 
@@ -1991,7 +2054,6 @@
         bist100.selected = thy || bist100.companies[0];
       }
       renderBist100List();
-      if(bist100.selected) renderTradingView(bist100.selected);
       document.getElementById('b100Summary').textContent = 'Sinyal analizi arka planda yükleniyor…';
       fetch('/api/bist100/analysis?sort=decision').then(async res=>{
         if(!res.ok) return;
@@ -2458,6 +2520,12 @@
   document.getElementById('b100SearchBtn').onclick=()=>renderBist100List();
   document.getElementById('b100q').oninput=()=>renderBist100List();
   document.getElementById('b100Sector').onchange=()=>renderBist100List();
+  const favSearchBtn = document.getElementById('favSearchBtn');
+  if(favSearchBtn) favSearchBtn.onclick = ()=> runFavSearch();
+  const favq = document.getElementById('favq');
+  if(favq){
+    favq.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); runFavSearch(); }});
+  }
   document.getElementById('orderCloseBtn').onclick=closeOrderSheet;
   document.getElementById('orderSheetOverlay').onclick=(e)=>{ if(e.target.id==='orderSheetOverlay') closeOrderSheet(); };
   document.getElementById('orderQtyInput').oninput=calcOrderTotal;

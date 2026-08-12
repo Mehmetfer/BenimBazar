@@ -288,8 +288,17 @@ def bist_search(q: str = "", limit: int = 20) -> dict:
         try:
             quote = service.provider.get_quote(inst.symbol)
             row["price"] = round(float(quote.price), 4)
+            if getattr(quote, "bid", None):
+                row["bid"] = round(float(quote.bid), 4)
+            if getattr(quote, "ask", None):
+                row["ask"] = round(float(quote.ask), 4)
+            if getattr(quote, "change_pct", None) is not None:
+                row["change_pct"] = round(float(quote.change_pct), 2)
+            if hasattr(quote, "ts") and quote.ts is not None:
+                row["quote_ts"] = quote.ts.isoformat() if hasattr(quote.ts, "isoformat") else str(quote.ts)
         except Exception:  # noqa: BLE001
             pass
+        row["is_favorite"] = service.favorites.is_favorite(inst.symbol, market_type="BIST")
         results.append(row)
     outside = [r for r in results if not r["xu100"]]
     return {
