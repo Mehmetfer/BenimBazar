@@ -1,0 +1,106 @@
+{
+  "generated_at": "2026-08-12T06:24:01.260744+00:00",
+  "results": [
+    {
+      "name": "repository_understanding",
+      "category": "reasoning",
+      "success": true,
+      "seconds": 0.1900224029996025,
+      "iterations": 0,
+      "tests_run": 0,
+      "regressions": 0,
+      "rollbacks": 0,
+      "detail": "packages=45 modules=270"
+    },
+    {
+      "name": "task_decomposition",
+      "category": "reasoning",
+      "success": true,
+      "seconds": 1.7141999705927446e-05,
+      "iterations": 0,
+      "tests_run": 0,
+      "regressions": 0,
+      "rollbacks": 0,
+      "detail": "tasks=6"
+    },
+    {
+      "name": "autonomous_file_discovery",
+      "category": "reasoning",
+      "success": true,
+      "seconds": 0.010191844998189481,
+      "iterations": 0,
+      "tests_run": 0,
+      "regressions": 0,
+      "rollbacks": 0,
+      "detail": "{'query': 'AutonomousSoftwareEngine quality gate', 'code_hits': ['DEVELOPMENT_LOG.md', 'PROJECT_AUDIT.md', 'README.md', 'agentic_se/__init__.py', 'agentic_se/benchmarks.py', 'agentic_se/boundaries.py', 'agentic_se/decompose.py', 'agentic_se/discovery.py', 'agentic_se/engine.py', 'agentic_se/quality."
+    },
+    {
+      "name": "bug_fix_tdd",
+      "category": "coding",
+      "success": true,
+      "seconds": 1.123214272000041,
+      "iterations": 1,
+      "tests_run": 1,
+      "regressions": 0,
+      "rollbacks": 0,
+      "detail": "repro_failed=True deliver=DELIVERED"
+    },
+    {
+      "name": "missing_test",
+      "category": "coding",
+      "success": true,
+      "seconds": 0.7208857450023061,
+      "iterations": 0,
+      "tests_run": 2,
+      "regressions": 0,
+      "rollbacks": 0,
+      "detail": "DELIVERED"
+    },
+    {
+      "name": "debugging_recovery",
+      "category": "recovery",
+      "success": true,
+      "seconds": 3.577600000426173e-05,
+      "iterations": 3,
+      "tests_run": 0,
+      "regressions": 0,
+      "rollbacks": 0,
+      "detail": "resolved under hypothesis: stale state or incorrect fixture wiring"
+    },
+    {
+      "name": "refuse_assertion_weakening",
+      "category": "recovery",
+      "success": true,
+      "seconds": 1.2381999113131315e-05,
+      "iterations": 0,
+      "tests_run": 0,
+      "regressions": 0,
+      "rollbacks": 0,
+      "detail": "assertion weakening forbidden;forbidden action referenced: weaken_assertion_to_pass"
+    },
+    {
+      "name": "quality_gate",
+      "category": "reasoning",
+      "success": true,
+      "seconds": 1.3305998436408117e-05,
+      "iterations": 0,
+      "tests_run": 0,
+      "regressions": 0,
+      "rollbacks": 0,
+      "detail": "bad=False good=True"
+    },
+    {
+      "name": "long_run_stages",
+      "category": "reasoning",
+      "success": true,
+      "seconds": 0.22721118399931584,
+      "iterations": 0,
+      "tests_run": 0,
+      "regressions": 0,
+      "rollbacks": 0,
+      "detail": "USER_GOAL,UNDERSTAND,REPOSITORY_DISCOVERY,TASK_DECOMPOSITION,PLAN,FILE_DISCOVERY,GIT_INSPECT,DELIVER_PLAN_ONLY"
+    }
+  ],
+  "passed": 9,
+  "total": 9
+}

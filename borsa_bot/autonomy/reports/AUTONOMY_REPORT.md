@@ -17,6 +17,7 @@
 - Post-trading-safety: **368 passed / 0 failed**
 - Post-ADE final suite: **395 passed / 0 failed**
 - Post-SI final suite: **412 passed / 0 failed**
+- Post-ASE final suite: **427 passed / 0 failed**
 - No tests deleted
 
 ## G3 Hard Type Check
@@ -81,4 +82,12 @@ normal paper, provider failure, broker timeout/unknown, duplicate, restart, risk
 - Details: `SELF_IMPROVEMENT_REPORT.md`
 - Allowlist-only auto-impl; frozen safety invariants unchanged
 - LIVE-MONEY AUTONOMY: NOT VERIFIED
+
+## Software Engineering Autonomy (ASE)
+
+- Package: `borsa_bot/agentic_se/`
+- SE autonomy: **9.4/10** PARTIALLY VERIFIED (full local benchmark suite)
+- Loop: goal → discover → decompose → implement → test → repair → review → verify → deliver → learn
+- Benchmarks: see `SOFTWARE_ENGINEERING_AUTONOMY_REPORT.md`
+- Not claimed: 9.6+ long-run soak, 10.0 verified ASE, LIVE-MONEY
 

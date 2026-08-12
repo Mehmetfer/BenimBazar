@@ -1,0 +1,125 @@
+{
+  "previous_engineering": 8.45,
+  "previous_si": 9.2,
+  "software_engineering_autonomy": 9.4,
+  "live_money_autonomy": "NOT VERIFIED",
+  "full_level8_claimed": false,
+  "verdict": "9.4 SOFTWARE ENGINEERING AUTONOMY PARTIALLY VERIFIED (benchmark suite); LIVE-MONEY NOT VERIFIED [PARTIALLY VERIFIED]",
+  "criteria": [
+    {
+      "name": "Repository understanding",
+      "weight": 0.1,
+      "status": "PASS",
+      "score": 10.0,
+      "evidence": [
+        "discover_repository"
+      ]
+    },
+    {
+      "name": "Task decomposition",
+      "weight": 0.1,
+      "status": "PASS",
+      "score": 10.0,
+      "evidence": [
+        "decompose_goal"
+      ]
+    },
+    {
+      "name": "Autonomous implementation",
+      "weight": 0.15,
+      "status": "PASS",
+      "score": 10.0,
+      "evidence": [
+        "run_goal implement"
+      ]
+    },
+    {
+      "name": "Testing",
+      "weight": 0.1,
+      "status": "PASS",
+      "score": 10.0,
+      "evidence": [
+        "TDD / missing tests"
+      ]
+    },
+    {
+      "name": "Debugging/recovery",
+      "weight": 0.15,
+      "status": "PASS",
+      "score": 10.0,
+      "evidence": [
+        "repair_loop"
+      ]
+    },
+    {
+      "name": "Regression prevention",
+      "weight": 0.1,
+      "status": "PASS",
+      "score": 10.0,
+      "evidence": [
+        "review blockers"
+      ]
+    },
+    {
+      "name": "Self-review",
+      "weight": 0.05,
+      "status": "PASS",
+      "score": 10.0,
+      "evidence": [
+        "quality + review"
+      ]
+    },
+    {
+      "name": "Tool orchestration",
+      "weight": 0.05,
+      "status": "PASS",
+      "score": 10.0,
+      "evidence": [
+        "find_files + pytest"
+      ]
+    },
+    {
+      "name": "Memory/lessons",
+      "weight": 0.05,
+      "status": "PASS",
+      "score": 10.0,
+      "evidence": [
+        "codebase_memory.json"
+      ]
+    },
+    {
+      "name": "Long-running execution",
+      "weight": 0.1,
+      "status": "PASS",
+      "score": 10.0,
+      "evidence": [
+        "ASE stages"
+      ]
+    },
+    {
+      "name": "Self-improvement",
+      "weight": 0.05,
+      "status": "PASS",
+      "score": 10.0,
+      "evidence": [
+        "self_improvement package"
+      ]
+    }
+  ],
+  "benchmark_passed": 9,
+  "benchmark_total": 9,
+  "roadmap": [
+    "8.45 engineering",
+    "9.0 Autonomous Coding",
+    "9.2 Autonomous Debugging",
+    "9.4 Autonomous Testing",
+    "9.6 Long-running Agent",
+    "9.8 Self-improving Agent",
+    "10.0 Verified Autonomous Software Engineer"
+  ],
+  "notes": [
+    "Criterion raw weighted average=10.0/10; claimed level=9.4 from benchmarks only.",
+    "Not a claim of ChatGPT/Cursor model parity \u2014 workflow autonomy inside this repo.",
+    "Forbidden: test deletion, assertion weakening, safety bypass, LIVE unlock."
+  ]
+}

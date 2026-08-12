@@ -1,0 +1,164 @@
+{
+  "goal_id": "goal-250191eb",
+  "goal": "Map agentic_se package structure",
+  "status": "DELIVERED",
+  "stages": [
+    "USER_GOAL",
+    "UNDERSTAND",
+    "REPOSITORY_DISCOVERY",
+    "TASK_DECOMPOSITION",
+    "PLAN",
+    "FILE_DISCOVERY",
+    "GIT_INSPECT",
+    "DELIVER_PLAN_ONLY"
+  ],
+  "plan": {
+    "goal": "Map agentic_se package structure",
+    "requirements": [
+      "Satisfy goal: Map agentic_se package structure",
+      "Do not delete tests or weaken assertions to pass",
+      "Preserve trading domain invariants",
+      "Keep changes minimal, targeted, reversible"
+    ],
+    "affected_modules": [
+      "agentic_se/",
+      "agentic_se"
+    ],
+    "dependencies": [
+      "pytest",
+      "mypy (scoped)"
+    ],
+    "risks": [
+      "MODERATE \u2014 stay on allowlist; no safety bypass"
+    ],
+    "tasks": [
+      {
+        "id": "T1",
+        "title": "Repository discovery / memory refresh",
+        "kind": "discover",
+        "target_hints": [
+          "agentic_se/discovery.py"
+        ],
+        "done": false
+      },
+      {
+        "id": "T2",
+        "title": "Locate implementation + tests",
+        "kind": "discover",
+        "target_hints": [
+          "agentic_se/",
+          "agentic_se"
+        ],
+        "done": false
+      },
+      {
+        "id": "T3",
+        "title": "Implement minimal change",
+        "kind": "implement",
+        "target_hints": [
+          "agentic_se/",
+          "agentic_se"
+        ],
+        "done": false
+      },
+      {
+        "id": "T4",
+        "title": "Add/adjust tests (TDD if bugfix)",
+        "kind": "test",
+        "target_hints": [
+          "tests/"
+        ],
+        "done": false
+      },
+      {
+        "id": "T5",
+        "title": "Run tests + typecheck",
+        "kind": "verify",
+        "target_hints": [
+          "tests/"
+        ],
+        "done": false
+      },
+      {
+        "id": "T6",
+        "title": "Self-review + quality gate",
+        "kind": "review",
+        "target_hints": [],
+        "done": false
+      }
+    ],
+    "acceptance": [
+      "New/changed tests pass",
+      "No baseline regression on scoped suite",
+      "Quality gate checklist complete",
+      "No forbidden safety mutations"
+    ],
+    "unknown": []
+  },
+  "discovery": {
+    "query": "Map agentic_se package structure",
+    "code_hits": [
+      "DEVELOPMENT_LOG.md",
+      "PROJECT_AUDIT.md",
+      "agentic_se/__init__.py",
+      "agentic_se/benchmarks.py",
+      "agentic_se/boundaries.py",
+      "agentic_se/checkpoint.py",
+      "agentic_se/context.py",
+      "agentic_se/decompose.py",
+      "agentic_se/discovery.py",
+      "agentic_se/engine.py",
+      "agentic_se/review.py",
+      "agentic_se/run_benchmarks.py",
+      "agentic_se/scorecard.py",
+      "alerts/bridge.py",
+      "alerts/manager.py",
+      "autonomous/__init__.py",
+      "autonomous/reason_codes.py",
+      "decision/__init__.py",
+      "decision/context.py",
+      "decision/engine.py",
+      "decision/reason.py",
+      "engines/long_term.py",
+      "factors/engine.py",
+      "prediction/forecast.py",
+      "prediction/rating.py",
+      "prediction/service.py",
+      "self_improvement/audit.py",
+      "self_improvement/engine.py",
+      "self_improvement/scorecard.py",
+      "strategy/service.py",
+      "trade_plan/engine.py"
+    ],
+    "test_hits": [
+      "tests/test_agentic_se.py",
+      "tests/test_ase_clamp.py",
+      "tests/test_ase_playground.py",
+      "tests/test_ase_smoke.py",
+      "tests/test_core.py",
+      "tests/test_crypto_foundation.py",
+      "tests/test_prediction.py",
+      "tests/test_self_improvement.py",
+      "tests/test_trade_plan.py"
+    ],
+    "config_hits": [
+      "config/models.py",
+      "mypy.ini"
+    ],
+    "unknown": false
+  },
+  "repair": {},
+  "quality": {},
+  "review": {},
+  "git": {
+    "branch": "cursor/autonomous-software-engineer-fa5a",
+    "status": " M borsa_bot/autonomy/lessons/crypto-unknown-symbol-fail-closed.json\n M borsa_bot/autonomy/lessons/env-pollution-crypto-enabled.json\n M borsa_bot/autonomy/lessons/governor-halt-is-valid.json\n M borsa_bot/autonomy/lessons/live-broker-never-auto-unlock.json\n M borsa_bot/autonomy/lessons/required-provider-production-signals.json\n M borsa_bot/autonomy/lessons/si-att1.json\n M borsa_bot/autonomy/lessons/stamp-kwargs-drift.json\n M borsa_bot/autonomy/lessons/unreliable-crypto-signals.json\n M borsa_bot/mypy.ini\n M borsa_bot/self_improvement/data/backlog.json\n M borsa_bot/self_improvement/data/baseline.json\n?? borsa_bot/agentic_se/\n?? borsa_bot/autonomy/evidence/agentic_se/\n?? borsa_bot/autonomy/lessons/ase-ok-goal-305840a3.json\n?? borsa_bot/autonomy/lessons/ase-ok-goal-3a9f9365.json\n?? borsa_bot/autonomy/lessons/ase-ok-goal-a9b6fbdf.json\n?? borsa_bot/autonomy/lessons/ase-ok-goal-e2be5e1a.json\n?? borsa_bot/autonomy/lessons/si-iteration-6bf5da67.json\n?? borsa_bot/self_improvement/data/attempts/iteration-5f4f2587.json\n?? borsa_bot/self_improvement/data/attempts/iteration-6bf5da67.json\n?? borsa_bot/self_improvement/data/snapshots/iteration-5f4f2587/\n?? borsa_bot/tests/test_agentic_se.py\n?? borsa_bot/tests/test_ase_clamp.py\n?? borsa_bot/tests/test_ase_playground.py\n?? borsa_bot/tests/test_ase_smoke.py\n",
+    "diff_stat": " .../lessons/crypto-unknown-symbol-fail-closed.json |  2 +-\n .../lessons/env-pollution-crypto-enabled.json      |  2 +-\n .../autonomy/lessons/governor-halt-is-valid.json   |  2 +-\n .../lessons/live-broker-never-auto-unlock.json     |  2 +-\n .../required-provider-production-signals.json      |  2 +-\n borsa_bot/autonomy/lessons/si-att1.json            |  2 +-\n borsa_bot/autonomy/lessons/stamp-kwargs-drift.json |  2 +-\n .../lessons/unreliable-crypto-signals.json         |  2 +-\n borsa_bot/mypy.ini                                 |  1 +\n borsa_bot/self_improvement/data/backlog.json       | 85 +++++++++++++++++++++-\n borsa_bot/self_improvement/data/baseline.json      |  4 +-\n 11 files changed, 95 insertions(+), 11 deletions(-)\nwarning: in the working copy of 'borsa_bot/mypy.ini', CRLF will be replaced by LF the next time Git touches it\n",
+    "dirty": true
+  },
+  "waited_for_human": false,
+  "rollback": false,
+  "lessons": [],
+  "detail": "plan-only: no implement callback \u2014 UNKNOWN code change",
+  "created_at": "2026-08-12T06:23:57.824619+00:00"
+}
