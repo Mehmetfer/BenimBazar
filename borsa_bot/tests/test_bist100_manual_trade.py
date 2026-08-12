@@ -40,6 +40,8 @@ def test_manual_paper_buy_and_sell(monkeypatch):
 
         class FakeQuote:
             price = 300.0
+            bid = 299.7
+            ask = 300.3
             sector = "Havacılık"
             spread_pct = 0.1
 
@@ -103,6 +105,8 @@ def test_manual_paper_custom_quantity(monkeypatch):
 
         class FakeQuote:
             price = 100.0
+            bid = 99.9
+            ask = 100.1
             sector = "Bankacılık"
             spread_pct = 0.1
 
@@ -130,6 +134,42 @@ def test_manual_paper_custom_quantity(monkeypatch):
         buy = svc.execute_manual_paper("GARAN", "BUY", quantity=10, price=100.0)
         assert buy.get("ok") is True
         assert svc.ledger.get_position("GARAN").quantity == 10
+
+
+def test_manual_paper_sell_skips_scan(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmp:
+        svc = TradingService()
+        db = Path(tmp) / "paper.db"
+        svc.ledger = PortfolioLedger(db_path=db)
+        svc.broker.ledger = svc.ledger
+        svc.risk.ledger = svc.ledger
+        svc.ledger.apply_buy("THYAO", "Havacılık", 25, 50.0, "o1", 48.0, 55.0)
+
+        class FakeQuote:
+            price = 51.0
+            bid = 50.8
+            ask = 51.2
+            sector = "Havacılık"
+            spread_pct = 0.1
+
+        def boom_scan(self, symbols=None):
+            raise AssertionError("scan should not run for manual SELL with quantity")
+
+        monkeypatch.setattr(svc.provider, "get_quote", lambda _s: FakeQuote())
+        monkeypatch.setattr(svc.provider, "has_market_data", lambda: True)
+        monkeypatch.setattr(svc.provider, "is_fresh", lambda _age=60: True)
+        monkeypatch.setattr(
+            svc.provider,
+            "source_meta",
+            lambda _sec: type("M", (), {"freshness": type("F", (), {"value": "FRESH"})()})(),
+        )
+        monkeypatch.setattr(TradingService, "scan", boom_scan)
+        monkeypatch.setattr("strategy.service.gate_market_data_for_scan", lambda *a, **k: _gate_ok())
+
+        sell = svc.execute_manual_paper("THYAO", "SELL", quantity=25, price=50.8)
+        assert sell.get("ok") is True
+        assert sell.get("quantity") == 25
+        assert svc.ledger.get_position("THYAO") is None
 
 
 def test_ledger_topup():

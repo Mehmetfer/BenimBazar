@@ -498,6 +498,37 @@
   let stockDetailCtx = null;
   const QTY_PRESETS = [1, 100, 1000, 5000, 10000];
 
+  function sellQtyPresets(posQty){
+    const maxQ = Math.floor(Number(posQty)||0);
+    if(maxQ <= 0) return [];
+    const raw = [1, 10, 100, 1000, 5000, 10000, maxQ];
+    const seen = new Set();
+    const out = [];
+    for(const n of raw){
+      const q = Math.min(maxQ, Math.max(1, n));
+      if(seen.has(q)) continue;
+      seen.add(q);
+      out.push({label: q===maxQ && maxQ>1 ? 'Tümü' : String(q), qty: q});
+    }
+    return out;
+  }
+
+  function bindQtyPresetButtons(side, positionQty){
+    const qtyRow = document.getElementById('orderQtyBtns');
+    const presets = side==='SELL'
+      ? sellQtyPresets(positionQty)
+      : QTY_PRESETS.map(n=>({label:String(n), qty:n}));
+    qtyRow.innerHTML = presets.map(p=>`<button type="button" class="order-qty-btn" data-qty="${p.qty}">${p.label}</button>`).join('');
+    qtyRow.querySelectorAll('[data-qty]').forEach(b=>{
+      b.onclick = ()=>{
+        const maxQ = side==='SELL' ? Math.floor(positionQty||0) : Infinity;
+        const q = Math.min(maxQ, Number(b.dataset.qty||0));
+        document.getElementById('orderQtyInput').value = q>0 ? String(q) : '';
+        calcOrderTotal();
+      };
+    });
+  }
+
   async function ensureWallet(){
     if(!paperWallet){
       try{ paperWallet = await (await fetch('/api/paper/wallet')).json(); }catch(e){ paperWallet = null; }
@@ -569,11 +600,21 @@
     const maxEl = document.getElementById('orderMaxQty');
     if(orderCtx.side==='SELL'){
       capLbl.textContent = 'Satılabilir adet';
-      maxEl.textContent = String(Math.max(0, Math.floor(orderCtx.positionQty||0)));
+      const maxSell = Math.max(0, Math.floor(orderCtx.positionQty||0));
+      maxEl.textContent = String(maxSell);
+      maxEl.style.cursor = maxSell>0 ? 'pointer' : 'default';
+      maxEl.title = maxSell>0 ? 'Tıkla: tümünü seç' : '';
+      maxEl.onclick = maxSell>0 ? ()=>{
+        document.getElementById('orderQtyInput').value = String(maxSell);
+        calcOrderTotal();
+      } : null;
     } else {
       capLbl.textContent = 'Alınabilir adet';
       const maxBuy = price>0 ? Math.floor(cash/price) : 0;
       maxEl.textContent = String(Math.max(0, maxBuy));
+      maxEl.style.cursor = 'default';
+      maxEl.title = '';
+      maxEl.onclick = null;
     }
     calcOrderTotal();
   }
@@ -590,29 +631,33 @@
   }
 
   async function openOrderSheet(sym, side, meta){
-    await ensureWallet();
+    await reloadWallet();
+    const isSell = side==='SELL';
+    const pos = (paperWallet?.positions||[]).find(p=>p.symbol===sym);
+    const positionQty = isSell
+      ? Number(pos?.quantity ?? meta?.positionQty ?? 0)
+      : Number(meta?.positionQty||0);
     orderCtx = {
       symbol: sym,
-      side: side==='SELL' ? 'SELL' : 'BUY',
+      side: isSell ? 'SELL' : 'BUY',
       price: Number(meta?.price||0),
       name: meta?.name||sym,
-      positionQty: Number(meta?.positionQty||0),
+      positionQty,
     };
-    const isSell = orderCtx.side==='SELL';
     const sideEl = document.getElementById('orderSideLabel');
     sideEl.textContent = isSell ? 'SAT' : 'AL';
     sideEl.className = 'order-side ' + (isSell ? 'sell' : 'buy');
     document.getElementById('orderSymLabel').textContent = sym;
-    document.getElementById('orderPriceInput').value = orderCtx.price ? Number(orderCtx.price).toFixed(2) : '';
-    document.getElementById('orderQtyInput').value = isSell && orderCtx.positionQty ? String(Math.floor(orderCtx.positionQty)) : '';
+    const px = orderCtx.price;
+    const ba = bidAsk(px);
+    const defaultPrice = isSell ? (ba.bid||px) : (ba.ask||px);
+    document.getElementById('orderPriceInput').value = defaultPrice ? Number(defaultPrice).toFixed(2) : '';
+    const maxSell = Math.floor(positionQty||0);
+    document.getElementById('orderQtyInput').value = isSell && maxSell>0 ? String(maxSell) : '';
     const submit = document.getElementById('orderSubmitBtn');
     submit.textContent = isSell ? 'SAT emri gönder →' : 'AL emri gönder →';
     submit.classList.toggle('sell', isSell);
-    const qtyRow = document.getElementById('orderQtyBtns');
-    qtyRow.innerHTML = QTY_PRESETS.map(n=>`<button type="button" class="order-qty-btn" data-qty="${n}">${n}</button>`).join('');
-    qtyRow.querySelectorAll('[data-qty]').forEach(b=>{
-      b.onclick = ()=>{ document.getElementById('orderQtyInput').value = b.dataset.qty; calcOrderTotal(); };
-    });
+    bindQtyPresetButtons(orderCtx.side, positionQty);
     refreshOrderLimits();
     document.getElementById('orderSheetOverlay').classList.remove('hidden');
     document.getElementById('orderSheetOverlay').setAttribute('aria-hidden','false');
@@ -621,31 +666,46 @@
   async function submitOrderSheet(){
     const sym = orderCtx.symbol;
     const side = orderCtx.side;
-    const qty = Number(document.getElementById('orderQtyInput').value||0);
+    let qty = Number(document.getElementById('orderQtyInput').value||0);
     const price = Number(document.getElementById('orderPriceInput').value||0);
     if(!sym || qty<=0 || price<=0){ alert('Adet ve fiyat girin'); return; }
+    if(side==='SELL'){
+      const maxSell = Math.floor(orderCtx.positionQty||0);
+      if(maxSell<=0){ alert('Portföyde satılacak lot yok'); return; }
+      if(qty>maxSell){
+        qty = maxSell;
+        document.getElementById('orderQtyInput').value = String(maxSell);
+      }
+    }
     const btn = document.getElementById('orderSubmitBtn');
     btn.disabled = true;
     try{
-      const r = await (await fetch('/api/paper/trade',{
+      const res = await fetch('/api/paper/trade',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({symbol:sym, side, quantity:qty, price})
-      })).json();
+      });
+      let r = {};
+      try{ r = await res.json(); }catch(e){ r = {}; }
+      if(!res.ok){
+        const msg = (typeof r.detail==='string'?r.detail:(Array.isArray(r.detail)?r.detail.map(x=>x.msg||x).join(', '):'')) || r.message || `HTTP ${res.status}`;
+        alert(msg||'Emir başarısız');
+        return;
+      }
       if(r.ok){
         paperWallet = r.wallet || paperWallet;
         updateFavWalletPill();
         closeOrderSheet();
         closeStockDetail();
-        if(document.getElementById('panel-fav').classList.contains('on')) loadFavorites();
-        if(document.getElementById('panel-mkt').classList.contains('on')) loadBist100();
-        if(document.getElementById('panel-port').classList.contains('on')) loadPortfolio();
+        if(document.getElementById('panel-fav')?.classList.contains('on')) loadFavorites();
+        if(document.getElementById('panel-mkt')?.classList.contains('on')) loadBist100();
+        if(document.getElementById('panel-port')?.classList.contains('on')) loadPortfolio();
         alert(`${side==='BUY'?'AL':'SAT'} başarılı · ${qty} lot @ ${money(price)}`);
       } else {
         alert(r.message||'Emir başarısız');
       }
     }catch(e){
-      alert('Emir hatası');
+      alert(e.message||'Emir hatası — bağlantıyı kontrol edin');
     }finally{
       btn.disabled = false;
     }
@@ -1084,6 +1144,7 @@
         <button class="more" id="walletFollowBtn" type="button">Öneriden Al</button>
         <button class="more" id="walletRefreshBtn" type="button">Yenile</button>
       </div>
+      ${w.auto_follow ? '<div class="meta" style="color:var(--warn);margin:8px 0">⚠ Otomatik öneriden al/sat AÇIK — bot kendi başına işlem yapabilir. Manuel kontrol için .env dosyasında BIST_PAPER_AUTO_FOLLOW=false yapın.</div>' : '<div class="meta" style="margin:8px 0">Manuel paper işlem · otomatik al/sat kapalı · gecikmeli fiyat simülasyonu</div>'}
       <div class="port-table-wrap">
         <table class="port-table">
           <thead>
@@ -1597,7 +1658,7 @@
     });
     renderHome();
     bindCards();
-    loadPortfolio();
+    if(document.getElementById('panel-port')?.classList.contains('on')) loadPortfolio();
     try {
       dash = await (await fetch('/api/dashboard')).json();
       const sh = (dash.health||{}).system_health||{};

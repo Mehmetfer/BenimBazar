@@ -1402,9 +1402,56 @@ class TradingService:
         if not ok:
             return {"ok": False, "message": f"safety halt: {reason}"}
 
-        decisions = {d.symbol: d for d in self.scan()}
-        d = decisions.get(symbol)
-        fill_price = float(price) if price is not None and float(price) > 0 else float(quote.price)
+        if price is not None and float(price) > 0:
+            fill_price = float(price)
+        elif side_u == "SELL":
+            fill_price = float(quote.bid) if float(getattr(quote, "bid", 0) or 0) > 0 else float(quote.price)
+        else:
+            fill_price = float(quote.ask) if float(getattr(quote, "ask", 0) or 0) > 0 else float(quote.price)
+
+        if side_u == "SELL":
+            pos = self.ledger.get_position(symbol)
+            if not pos:
+                return {"ok": False, "message": "Portföyde pozisyon yok"}
+            sell_qty = int(quantity) if quantity is not None else int(pos.quantity)
+            if sell_qty <= 0:
+                return {"ok": False, "message": "Adet 0'dan büyük olmalı"}
+            if sell_qty > int(pos.quantity):
+                return {"ok": False, "message": f"En fazla {int(pos.quantity)} lot satılabilir"}
+            rd = self.risk.evaluate_exit(symbol, SignalAction.SELL)
+            if not rd.allowed:
+                return {"ok": False, "message": rd.reason}
+            order = OrderRequest(
+                symbol=symbol,
+                side="SELL",
+                quantity=float(sell_qty),
+                price=fill_price,
+                reason="manual_ui_sell",
+                client_order_id=f"MANUAL-UI-SELL:{symbol}:{utc_now().strftime('%Y%m%d%H%M%S')}",
+            )
+            result = self.broker.submit(order, quote.sector)
+            emit_order_lifecycle(
+                self.alerts,
+                symbol=symbol,
+                side="SELL",
+                result=result,
+                strategy="MANUAL_UI",
+                price=fill_price,
+            )
+            return {
+                "ok": result.ok,
+                "side": "SELL",
+                "symbol": symbol,
+                "quantity": sell_qty,
+                "price": fill_price,
+                "result": asdict(result),
+                "wallet": self.paper_wallet(),
+            }
+
+        d = None
+        if quantity is None:
+            decisions = {x.symbol: x for x in self.scan()}
+            d = decisions.get(symbol)
 
         if side_u == "BUY":
             custom_qty = int(quantity) if quantity is not None else None
@@ -1478,43 +1525,7 @@ class TradingService:
                 "wallet": self.paper_wallet(),
             }
 
-        pos = self.ledger.get_position(symbol)
-        if not pos:
-            return {"ok": False, "message": "Portföyde pozisyon yok"}
-        sell_qty = int(quantity) if quantity is not None else int(pos.quantity)
-        if sell_qty <= 0:
-            return {"ok": False, "message": "Adet 0'dan büyük olmalı"}
-        if sell_qty > int(pos.quantity):
-            return {"ok": False, "message": f"En fazla {int(pos.quantity)} lot satılabilir"}
-        rd = self.risk.evaluate_exit(symbol, SignalAction.SELL)
-        if not rd.allowed:
-            return {"ok": False, "message": rd.reason}
-        order = OrderRequest(
-            symbol=symbol,
-            side="SELL",
-            quantity=float(sell_qty),
-            price=fill_price,
-            reason="manual_ui_sell",
-            client_order_id=f"MANUAL-UI-SELL:{symbol}:{utc_now().strftime('%Y%m%d%H%M%S')}",
-        )
-        result = self.broker.submit(order, quote.sector)
-        emit_order_lifecycle(
-            self.alerts,
-            symbol=symbol,
-            side="SELL",
-            result=result,
-            strategy="MANUAL_UI",
-            price=fill_price,
-        )
-        return {
-            "ok": result.ok,
-            "side": "SELL",
-            "symbol": symbol,
-            "quantity": sell_qty,
-            "price": fill_price,
-            "result": asdict(result),
-            "wallet": self.paper_wallet(),
-        }
+        return {"ok": False, "message": "side BUY veya SELL olmalı"}
 
     def monitor_exits(self) -> list[dict]:
         """Check stop/target vs marks; on hit execute paper sell then emit EXECUTION alerts."""
