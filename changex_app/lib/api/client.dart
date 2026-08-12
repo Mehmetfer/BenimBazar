@@ -95,6 +95,27 @@ class ChangeXApi {
     return _decode(res);
   }
 
+  Future<Map<String, dynamic>> getListing(int id) async {
+    final res = await http.get(
+      Uri.parse('$_root/api/listings/$id'),
+      headers: await _headers(auth: true),
+    );
+    return _decode(res);
+  }
+
+  Future<Map<String, dynamic>> updateListing(
+    int id,
+    Map<String, dynamic> body,
+  ) async {
+    final res = await http.patch(
+      Uri.parse('$_root/api/listings/$id'),
+      headers: await _headers(auth: true),
+      body: jsonEncode(body),
+    );
+    return _decode(res);
+  }
+
+  /// Upload listing photo. Returns portable `/uploads/...` path (not absolute).
   Future<String> uploadImage({
     required List<int> bytes,
     required String filename,
@@ -117,13 +138,23 @@ class ChangeXApi {
     final streamed = await req.send();
     final res = await http.Response.fromStream(streamed);
     final data = _decode(res);
-    final url = data['absolute_url']?.toString() ?? data['url']?.toString();
-    if (url == null || url.isEmpty) {
+    // Prefer relative /uploads path so storage survives tunnel/host changes
+    var url = data['url']?.toString() ?? '';
+    if (url.isEmpty) {
+      final abs = data['absolute_url']?.toString() ?? '';
+      if (abs.contains('/uploads/')) {
+        url = '/uploads/${abs.split('/uploads/').last}';
+      }
+    }
+    if (url.isEmpty) {
       throw ApiException('Görsel yüklenemedi');
     }
-    // Normalize relative /uploads paths against API origin
-    if (url.startsWith('/')) {
-      return '$_root$url';
+    if (!url.startsWith('/')) {
+      if (url.contains('/uploads/')) {
+        url = '/uploads/${url.split('/uploads/').last}';
+      } else {
+        throw ApiException('Geçersiz görsel URL');
+      }
     }
     return url;
   }

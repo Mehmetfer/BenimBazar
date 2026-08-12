@@ -1,13 +1,11 @@
-import 'dart:typed_data';
-
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../api/client.dart';
 import '../theme/app_theme.dart';
+import '../utils/photo_pick.dart';
 import '../widgets/value_widgets.dart';
+import 'listing_detail_screen.dart';
 
 /// Instagram / Letgo tarzı takas ilanı oluşturma — fotoğraf önce.
 class CreateListingScreen extends StatefulWidget {
@@ -31,7 +29,6 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   final _dirhem = TextEditingController(text: '0');
   final _mandal = TextEditingController(text: '0');
   final _page = PageController();
-  final _cameraPicker = ImagePicker();
 
   String _category = 'Elektronik';
   String _condition = 'good';
@@ -39,7 +36,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   String? _error;
   String? _status;
   int _photoIndex = 0;
-  final List<_PickedPhoto> _photos = [];
+  final List<PickedPhoto> _photos = [];
 
   @override
   void dispose() {
@@ -59,40 +56,29 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
 
   Future<void> _pickFromGallery() async {
     try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.image,
-        allowMultiple: true,
-        withData: true, // web için zorunlu
-      );
-      if (result == null || result.files.isEmpty) return;
-      var added = 0;
-      for (final f in result.files) {
-        if (_photos.length >= 9) break;
-        final bytes = f.bytes;
-        if (bytes == null || bytes.isEmpty) continue;
-        final name = (f.name).toLowerCase();
-        var ctype = 'image/jpeg';
-        if (name.endsWith('.png')) ctype = 'image/png';
-        if (name.endsWith('.webp')) ctype = 'image/webp';
-        if (name.endsWith('.gif')) ctype = 'image/gif';
-        _photos.add(
-          _PickedPhoto(
-            bytes: Uint8List.fromList(bytes),
-            filename: f.name.isEmpty ? 'photo.jpg' : f.name,
-            contentType: ctype,
+      final room = 9 - _photos.length;
+      if (room <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('En fazla 9 fotoğraf')),
+        );
+        return;
+      }
+      final picked = await pickListingPhotos(maxCount: room);
+      if (!mounted) return;
+      if (picked.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Görsel seçilmedi veya okunamadı — tekrar deneyin'),
           ),
         );
-        added++;
+        return;
       }
-      if (!mounted) return;
-      setState(() {});
-      if (added == 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Görsel okunamadı — tekrar deneyin')),
-        );
-      } else if (_photos.isNotEmpty) {
-        _page.jumpToPage(_photos.length - 1);
-        setState(() => _photoIndex = _photos.length - 1);
+      setState(() {
+        _photos.addAll(picked);
+        _photoIndex = _photos.length - 1;
+      });
+      if (_page.hasClients) {
+        _page.jumpToPage(_photoIndex);
       }
     } catch (e) {
       if (!mounted) return;
@@ -103,38 +89,25 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   }
 
   Future<void> _pickFromCamera() async {
-    try {
-      final shot = await _cameraPicker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 85,
-        maxWidth: 2000,
+    if (_photos.length >= 9) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('En fazla 9 fotoğraf')),
       );
-      if (shot == null) return;
-      if (_photos.length >= 9) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('En fazla 9 fotoğraf')),
-        );
-        return;
-      }
-      final bytes = await shot.readAsBytes();
-      if (bytes.isEmpty) return;
-      setState(() {
-        _photos.add(
-          _PickedPhoto(
-            bytes: bytes,
-            filename: shot.name.isEmpty ? 'camera.jpg' : shot.name,
-            contentType: 'image/jpeg',
-          ),
-        );
-      });
-    } catch (e) {
-      // Web'de kamera yoksa galeriye düş
-      if (!mounted) return;
+      return;
+    }
+    final shot = await pickListingCamera();
+    if (!mounted) return;
+    if (shot == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Kamera kullanılamadı — galeriden seçin')),
       );
       await _pickFromGallery();
+      return;
     }
+    setState(() {
+      _photos.add(shot);
+      _photoIndex = _photos.length - 1;
+    });
   }
 
   Future<void> _submit() async {
@@ -201,7 +174,15 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       final msg = created['user_message']?.toString() ??
           'İlanınız onay kutusuna gönderildi.';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-      Navigator.of(context).pop(true);
+      // Show listing with photos immediately (owner view) — proof photos stuck
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => ListingDetailScreen(
+            listing: created,
+            user: widget.user,
+          ),
+        ),
+      );
     } on ApiException catch (e) {
       setState(() {
         _error = e.message;
@@ -231,7 +212,6 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       ),
       body: ListView(
         children: [
-          // —— Instagram/Letgo tarzı fotoğraf düzlemi ——
           SizedBox(
             height: heroH,
             width: double.infinity,
@@ -325,7 +305,6 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
               ],
             ),
           ),
-          // Aksiyon şeridi
           Container(
             color: Colors.black,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -529,9 +508,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                   child: FilledButton(
                     onPressed: _busy ? null : _submit,
                     child: Text(
-                      _busy
-                          ? 'Gönderiliyor…'
-                          : 'Fotoğraflı ilanı onaya gönder',
+                      _busy ? 'Gönderiliyor…' : 'Fotoğraflı ilanı onaya gönder',
                     ),
                   ),
                 ),
@@ -542,16 +519,4 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       ),
     );
   }
-}
-
-class _PickedPhoto {
-  _PickedPhoto({
-    required this.bytes,
-    required this.filename,
-    required this.contentType,
-  });
-
-  final Uint8List bytes;
-  final String filename;
-  final String contentType;
 }

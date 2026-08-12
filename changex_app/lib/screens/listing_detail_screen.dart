@@ -5,6 +5,7 @@ import '../api/client.dart';
 import '../theme/app_theme.dart';
 import '../widgets/listing_media.dart';
 import '../widgets/value_widgets.dart';
+import 'edit_listing_screen.dart';
 import 'login_screen.dart';
 
 class ListingDetailScreen extends StatefulWidget {
@@ -151,6 +152,42 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       fontSize: 12,
                     ),
                   ),
+                  if (widget.user != null &&
+                      (owner['username'] == widget.user!['username'] ||
+                          widget.user!['role'] == 'admin' ||
+                          widget.user!['role'] == 'superadmin')) ...[
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final ok = await Navigator.of(context).push<bool>(
+                          MaterialPageRoute(
+                            builder: (_) => EditListingScreen(
+                              user: widget.user!,
+                              listing: widget.listing,
+                            ),
+                          ),
+                        );
+                        if (ok == true && context.mounted) {
+                          try {
+                            final fresh = await api.getListing(
+                              widget.listing['id'] as int,
+                            );
+                            if (!context.mounted) return;
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(
+                                builder: (_) => ListingDetailScreen(
+                                  listing: fresh,
+                                  user: widget.user,
+                                ),
+                              ),
+                            );
+                          } catch (_) {}
+                        }
+                      },
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Düzenle / Fotoğraf ekle'),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   ValueChip(value: value),
                   if (ribbon != ListingTradeRibbon.none) ...[

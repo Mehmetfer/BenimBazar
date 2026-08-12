@@ -9,6 +9,7 @@ import 'admin_panel_screen.dart';
 import 'create_listing_screen.dart';
 import 'listing_detail_screen.dart';
 import 'login_screen.dart';
+import 'my_listings_screen.dart';
 import 'trades_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -372,20 +373,44 @@ class _HomeScreenState extends State<HomeScreen> {
           ? SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.gold,
-                    side: const BorderSide(color: AppColors.gold),
-                  ),
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => TradesScreen(user: widget.user!),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.gold,
+                          side: const BorderSide(color: AppColors.gold),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => MyListingsScreen(user: widget.user!),
+                            ),
+                          ).then((_) => _load());
+                        },
+                        icon: const Icon(Icons.photo_library_outlined),
+                        label: const Text('İlanlarım'),
                       ),
-                    );
-                  },
-                  icon: const Icon(Icons.account_tree_outlined),
-                  label: const Text('Takaslarım / Zincir'),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.ink,
+                          side: const BorderSide(color: AppColors.line),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => TradesScreen(user: widget.user!),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.account_tree_outlined),
+                        label: const Text('Takaslarım'),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             )

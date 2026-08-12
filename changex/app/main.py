@@ -780,7 +780,10 @@ def update_listing(
             subcategory = (
                 body.subcategory.strip() if body.subcategory is not None else row["subcategory"]
             )
-            photos = body.photo_urls if body.photo_urls is not None else db.loads(row["photo_urls"], [])
+            if body.photo_urls is not None:
+                photos = _normalize_photo_urls(list(body.photo_urls or []))
+            else:
+                photos = db.loads(row["photo_urls"], [])
             accept_cats = (
                 body.accept_categories
                 if body.accept_categories is not None
