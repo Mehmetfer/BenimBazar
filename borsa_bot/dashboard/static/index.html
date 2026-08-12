@@ -628,6 +628,11 @@
   let tvWidget = null;
   let dsLoadTimer = null;
   let dsLoadPct = 0;
+  let favLoadInFlight = false;
+  let dailyLoadInFlight = false;
+  let scanPendingRetries = 0;
+  let watchlistCache = {index: null, quotes: []};
+  const MAX_SCAN_PENDING_RETRIES = 2;
   const DS_LOAD_STEPS = [
     {pct: 10, label: 'Veri kaynağı kontrol ediliyor…'},
     {pct: 24, label: 'Sağlayıcıya bağlanılıyor…'},
@@ -939,12 +944,20 @@
     </div>`;
   }
 
-  async function loadFavorites(){
+  async function loadFavorites(opts){
+    const silent = !!(opts && opts.silent);
     const el = document.getElementById('favHome');
-    el.innerHTML = '<div class="empty" style="grid-column:1/-1">Yükleniyor…</div>';
-    await ensureWallet();
-    updateFavWalletPill();
+    if(!el) return;
+    if(favLoadInFlight) return;
+    favLoadInFlight = true;
+    const hasTiles = !!el.querySelector('.watch-tile');
+    // Never wipe the grid on background refresh — only first empty load shows spinner
+    if(!silent && !hasTiles){
+      el.innerHTML = '<div class="empty" style="grid-column:1/-1">Yükleniyor…</div>';
+    }
     try{
+      if(!silent || !paperWallet) await ensureWallet();
+      updateFavWalletPill();
       const body = await (await fetch('/api/watchlist/quotes')).json();
       const favs = body.quotes || [];
       const held = new Set((paperWallet?.positions||[]).map(p=>p.symbol));
@@ -954,8 +967,16 @@
         f.position_qty = pos ? pos.quantity : 0;
         f.is_favorite = true;
       });
+      watchlistCache = {index: body.index || null, quotes: favs};
+      // Don't rebuild DOM while stock detail / order sheet is open (avoids flicker)
+      const overlayOpen = !document.getElementById('stockDetailOverlay')?.classList.contains('hidden')
+        || !document.getElementById('orderSheetOverlay')?.classList.contains('hidden');
+      if(overlayOpen && hasTiles){
+        favLoadInFlight = false;
+        return;
+      }
       if(!favs.length && !body.index){
-        el.innerHTML = '<div class="empty" style="grid-column:1/-1">Takip listesi boş — ★ ile hisse ekleyin</div>';
+        if(!hasTiles) el.innerHTML = '<div class="empty" style="grid-column:1/-1">Takip listesi boş — ★ ile hisse ekleyin</div>';
         return;
       }
       let html = '';
@@ -967,16 +988,19 @@
       el.querySelectorAll('[data-watch]').forEach(tile=>{
         tile.onclick = ()=>{
           const sym = tile.dataset.watch;
-          if(sym === 'XU100' && body.index){
-            openStockDetail({...body.index, symbol:'XU100', ticker:'XU100'});
+          if(sym === 'XU100' && (body.index || watchlistCache.index)){
+            openStockDetail({...(body.index||watchlistCache.index), symbol:'XU100', ticker:'XU100'});
             return;
           }
-          const item = favs.find(f=>(f.symbol||f.ticker)===sym);
+          const item = favs.find(f=>(f.symbol||f.ticker)===sym)
+            || (watchlistCache.quotes||[]).find(f=>(f.symbol||f.ticker)===sym);
           if(item) openStockDetail(item);
         };
       });
     }catch(e){
-      el.innerHTML = '<div class="empty" style="grid-column:1/-1">Takip listesi yüklenemedi</div>';
+      if(!hasTiles) el.innerHTML = '<div class="empty" style="grid-column:1/-1">Takip listesi yüklenemedi</div>';
+    }finally{
+      favLoadInFlight = false;
     }
   }
 
@@ -1245,8 +1269,9 @@
     document.getElementById(id).classList.add('on');
     if(name!=='detail') lastPanel = name;
     if(name==='port') loadPortfolio();
-    if(name==='fav') loadFavorites();
-    if(name==='set') load({quick:true});
+    if(name==='fav') loadFavorites({silent: !!document.getElementById('favHome')?.querySelector('.watch-tile')});
+    if(name==='mkt') loadBist100();
+    if(name==='set') load({quick:true, quiet:true});
   }
 
   function pnlClass(n){
@@ -1459,6 +1484,9 @@
   }
 
   function beginDataSourceLoading(opts){
+    const quiet = !!(opts && opts.quiet);
+    // Quiet refresh: don't flash the loading banner over an already-working page
+    if(quiet && daily) return;
     const quick = !!(opts && opts.quick);
     if(dsLoadTimer) clearInterval(dsLoadTimer);
     dsLoadPct = 0;
@@ -1898,7 +1926,10 @@
 
   async function load(opts){
     const quick = !!(opts && opts.quick);
-    beginDataSourceLoading({quick});
+    const quiet = !!(opts && (opts.quiet || opts.quick));
+    if(dailyLoadInFlight) return;
+    dailyLoadInFlight = true;
+    beginDataSourceLoading({quick, quiet});
     let data = null;
     try{
       const ctrl = new AbortController();
@@ -1908,12 +1939,14 @@
       data = await res.json();
     }catch(e){
       endDataSourceLoading(()=>{
+        if(quiet && daily) return; // keep last good banner
         const banner = document.getElementById('integrityBanner');
         if(banner){
           banner.className = 'banner bad';
           banner.innerHTML = '<div class="banner-status">⚠ Veri kaynağı yüklenemedi / zaman aşımı — yenileyin</div>';
         }
       });
+      dailyLoadInFlight = false;
       return;
     }
     daily = data.daily||{};
@@ -1927,19 +1960,23 @@
     endDataSourceLoading(()=>{
       renderIntegrity(data.data_source||daily.integrity||{}, health, extra);
     });
-    renderHome();
-    bindCards();
-    if(data.scan_pending){
+    if(document.getElementById('panel-home')?.classList.contains('on')){
+      renderHome();
+      bindCards();
+    }
+    if(data.scan_pending && scanPendingRetries < MAX_SCAN_PENDING_RETRIES){
+      scanPendingRetries += 1;
       const banner = document.getElementById('integrityBanner');
-      if(banner){
+      if(banner && !quiet){
         banner.className = 'banner warn';
-        banner.innerHTML = '<div class="banner-status">⏳ Tarama arka planda (Yahoo DELAYED) — otomatik yenileniyor…</div>';
+        banner.innerHTML = '<div class="banner-status">⏳ Tarama arka planda — bir kez daha kontrol edilecek…</div>';
       }
-      setTimeout(()=>load({quick:true}), 8000);
+      setTimeout(()=>load({quick:true, quiet:true}), 20000);
+    } else {
+      scanPendingRetries = 0;
     }
     if(document.getElementById('panel-port')?.classList.contains('on')) loadPortfolio();
-    if(document.getElementById('panel-fav')?.classList.contains('on')) loadFavorites();
-    // Heavy /api/dashboard (~9s+) only when Settings is open — keeps Ekranım fast over tunnel
+    // Do NOT reload favorites from here — separate quiet poll owns Ekranım
     if(document.getElementById('panel-set')?.classList.contains('on')){
       try {
         const ctrl = new AbortController();
@@ -1963,6 +2000,7 @@
         bindCards();
       } catch(e) {}
     }
+    dailyLoadInFlight = false;
   }
 
   async function loadAutonomy(){
@@ -2126,15 +2164,22 @@
   document.getElementById('sdCloseBtn').onclick=closeStockDetail;
   document.getElementById('stockDetailOverlay').onclick=(e)=>{ if(e.target.id==='stockDetailOverlay') closeStockDetail(); };
   setMarket('BIST');
-  load();
   loadFavorites();
-  loadBist100();
+  load({quiet:true});
+  // Quiet background refresh only — never wipe Ekranım with loading spinners
   setInterval(()=>{
-    if(activeMarket==='BIST'){
-      load({quick:true});
-      if(document.getElementById('panel-fav')?.classList.contains('on')) loadFavorites();
-    } else loadCrypto();
-  }, 15000);
+    if(activeMarket!=='BIST'){
+      loadCrypto();
+      return;
+    }
+    if(document.getElementById('panel-fav')?.classList.contains('on')){
+      loadFavorites({silent:true});
+    } else if(document.getElementById('panel-home')?.classList.contains('on')){
+      load({quick:true, quiet:true});
+    } else if(document.getElementById('panel-mkt')?.classList.contains('on')){
+      // light: only quotes path already used by loadBist100 when user opens tab
+    }
+  }, 45000);
 })();
 </script>
 </body>
