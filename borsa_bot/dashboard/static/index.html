@@ -1246,6 +1246,7 @@
     if(name!=='detail') lastPanel = name;
     if(name==='port') loadPortfolio();
     if(name==='fav') loadFavorites();
+    if(name==='set') load({quick:true});
   }
 
   function pnlClass(n){
@@ -1938,24 +1939,30 @@
     }
     if(document.getElementById('panel-port')?.classList.contains('on')) loadPortfolio();
     if(document.getElementById('panel-fav')?.classList.contains('on')) loadFavorites();
-    try {
-      dash = await (await fetch('/api/dashboard')).json();
-      const sh = (dash.health||{}).system_health||{};
-      document.getElementById('sysHealth').innerHTML = `
-        <div class="why"><b>SYSTEM HEALTH</b></div>
-        <div class="grid" style="margin-top:8px">
-          <div class="k"><span>Market Data</span><b>${sh.market_data||'—'}</b></div>
-          <div class="k"><span>Broker</span><b>${sh.broker||'—'}</b></div>
-          <div class="k"><span>AI</span><b>${sh.ai||'—'}</b></div>
-          <div class="k"><span>Notifications</span><b>${sh.notifications||'—'}</b></div>
-        </div>
-        <div class="meta" style="margin-top:8px">Last update: ${sh.last_update_ago||'—'} · LIVE READY: HAYIR</div>
-        <div class="meta">${(dash.health||{}).philosophy||''}</div>`;
-      const rep = await (await fetch('/api/predictions/report')).json();
-      document.getElementById('aiPerf').innerHTML = `Grade: ${rep.grade||'—'} · Geçmiş doğruluk: %${rep.historical_accuracy_pct??'—'} · Brier: ${rep.brier_score??'—'} · n=${rep.sample_size||0}<br>${rep.principle||''}`;
-      await loadAutonomy();
-      bindCards();
-    } catch(e) {}
+    // Heavy /api/dashboard (~9s+) only when Settings is open — keeps Ekranım fast over tunnel
+    if(document.getElementById('panel-set')?.classList.contains('on')){
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(()=>ctrl.abort(), 8000);
+        dash = await (await fetch('/api/dashboard', { signal: ctrl.signal })).json();
+        clearTimeout(timer);
+        const sh = (dash.health||{}).system_health||{};
+        document.getElementById('sysHealth').innerHTML = `
+          <div class="why"><b>SYSTEM HEALTH</b></div>
+          <div class="grid" style="margin-top:8px">
+            <div class="k"><span>Market Data</span><b>${sh.market_data||'—'}</b></div>
+            <div class="k"><span>Broker</span><b>${sh.broker||'—'}</b></div>
+            <div class="k"><span>AI</span><b>${sh.ai||'—'}</b></div>
+            <div class="k"><span>Notifications</span><b>${sh.notifications||'—'}</b></div>
+          </div>
+          <div class="meta" style="margin-top:8px">Last update: ${sh.last_update_ago||'—'} · LIVE READY: HAYIR</div>
+          <div class="meta">${(dash.health||{}).philosophy||''}</div>`;
+        const rep = await (await fetch('/api/predictions/report')).json();
+        document.getElementById('aiPerf').innerHTML = `Grade: ${rep.grade||'—'} · Geçmiş doğruluk: %${rep.historical_accuracy_pct??'—'} · Brier: ${rep.brier_score??'—'} · n=${rep.sample_size||0}<br>${rep.principle||''}`;
+        await loadAutonomy();
+        bindCards();
+      } catch(e) {}
+    }
   }
 
   async function loadAutonomy(){
