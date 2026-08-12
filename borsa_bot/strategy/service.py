@@ -114,6 +114,12 @@ class TradingService:
         self._favorite_deeper_cache: dict[str, dict] = {}
         self._prediction_cards: dict[str, dict] = {}
         self._market_gate = None
+        self._scan_cache: list[SymbolDecision] | None = None
+        self._scan_cache_ts: float = 0.0
+
+    def _invalidate_scan_cache(self) -> None:
+        self._scan_cache = None
+        self._scan_cache_ts = 0.0
 
     def multi_horizon(self) -> dict:
         self.multi.equity = self.ledger.equity()
@@ -225,8 +231,24 @@ class TradingService:
 
     def tick(self) -> None:
         self.provider.tick()
+        self._invalidate_scan_cache()
 
     def scan(self, symbols: list[str] | None = None) -> list[SymbolDecision]:
+        import time
+
+        cache_ttl = max(30.0, float(settings.data_freshness_sec) * 2)
+        now = time.time()
+        if (
+            symbols is None
+            and self._scan_cache is not None
+            and (now - self._scan_cache_ts) < cache_ttl
+        ):
+            return list(self._scan_cache)
+        if symbols is not None and self._scan_cache is not None and (now - self._scan_cache_ts) < cache_ttl:
+            want = {s.upper() for s in symbols}
+            filtered = [d for d in self._scan_cache if d.symbol in want]
+            if filtered:
+                return filtered
         # DATA NOT VERIFIED → NO SIGNAL (does not change decide_matrix math)
         gate = gate_market_data_for_scan(
             self.provider,
@@ -802,7 +824,107 @@ class TradingService:
                 check_favorite_price_alerts(self.alerts, self.favorites, marks, plans)
             except Exception:  # noqa: BLE001 — alerts never break scan
                 pass
+        if symbols is None:
+            self._scan_cache = list(decisions)
+            self._scan_cache_ts = time.time()
         return decisions
+
+    def bist100_analysis(
+        self,
+        *,
+        q: str | None = None,
+        sector: str | None = None,
+        sort: str = "score",
+    ) -> dict:
+        """Full BIST 100 scan merged with catalog metadata — one row per company."""
+        from dashboard.daily import _label_tr
+        from universe.bist100 import catalog_payload, filter_companies
+
+        meta = catalog_payload(q=q, sector=sector)
+        companies = filter_companies(q=q, sector=sector)
+        tickers = {c.ticker for c in companies}
+        decisions = {d.symbol: d for d in self.scan()}
+        gate = self._market_gate
+        source = self.provider.source_meta(settings.data_freshness_sec)
+
+        rows: list[dict] = []
+        for c in companies:
+            d = decisions.get(c.ticker)
+            if d is not None:
+                row = self._serialize(d)
+                row["tradingview_symbol"] = c.tradingview_symbol
+                row["decision_label"] = _label_tr(
+                    str(row.get("final_decision") or row.get("decision") or "")
+                )
+                row["final_score"] = float((row.get("scores") or {}).get("final") or row.get("buy_score") or 0)
+            else:
+                row = {
+                    "symbol": c.ticker,
+                    "name": c.name,
+                    "sector": c.sector,
+                    "tradingview_symbol": c.tradingview_symbol,
+                    "price": None,
+                    "change_pct": None,
+                    "decision": "NO_DATA",
+                    "decision_label": "VERİ YOK",
+                    "final_score": 0.0,
+                    "ai_confidence": None,
+                    "scanner_class": "NO_TRADE",
+                    "note": "Tarama kapsamı dışında veya veri yok",
+                }
+            rows.append(row)
+
+        sort_key = (sort or "score").lower()
+        if sort_key == "alpha":
+            rows.sort(key=lambda r: str(r.get("symbol") or ""))
+        elif sort_key == "decision":
+            from dashboard.daily import SIGNAL_RANK
+
+            rows.sort(
+                key=lambda r: (
+                    SIGNAL_RANK.get(str(r.get("decision") or "").upper(), 50),
+                    -float(r.get("final_score") or 0),
+                )
+            )
+        else:
+            rows.sort(key=lambda r: -float(r.get("final_score") or 0))
+
+        summary: dict[str, int] = {
+            "STRONG_BUY": 0,
+            "BUY": 0,
+            "WATCH": 0,
+            "WAIT": 0,
+            "SELL": 0,
+            "NO_TRADE": 0,
+            "NO_DATA": 0,
+        }
+        for r in rows:
+            dec = str(r.get("decision") or "NO_DATA").upper()
+            if dec in {"AL"}:
+                summary["BUY"] += 1
+            elif dec in summary:
+                summary[dec] += 1
+            elif dec in {"BEKLE", "HOLD"}:
+                summary["WAIT"] += 1
+            else:
+                summary["NO_TRADE"] += 1
+
+        return {
+            **meta,
+            "companies": rows,
+            "count": len(rows),
+            "analyzed": sum(1 for r in rows if r.get("price") is not None),
+            "summary": summary,
+            "sort": sort_key,
+            "data_source": source.to_dict(),
+            "market_data_gate": gate.to_dict() if gate else {},
+            "principle": "BIST 100 tam tarama · SIGNAL ≠ EMİR · PAPER ONLY",
+            "note": (
+                f"{summary['STRONG_BUY']} Güçlü AL · {summary['BUY']} AL · "
+                f"{summary['WATCH']} İzle · {summary['WAIT']} Bekle · "
+                f"kaynak: {source.display_name}"
+            ),
+        }
 
     def dashboard(self) -> dict:
         decisions = self.scan()

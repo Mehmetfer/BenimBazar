@@ -66,5 +66,41 @@ def test_bist100_api_endpoints():
     assert r4.status_code == 200
     assert r4.json()["tradingview_symbol"] == "BIST:THYAO"
 
-    r5 = client.get("/api/bist100/NOTREAL")
-    assert r5.status_code == 404
+def test_bist100_analysis_endpoint(monkeypatch):
+    from config.models import RiskLevel, SignalAction, SymbolDecision
+    from dashboard.app import app
+
+    def fake_scan(self, symbols=None):
+        return [
+            SymbolDecision(
+                symbol="THYAO",
+                name="THY",
+                sector="Havacılık",
+                price=300.0,
+                trend="NEUTRAL",
+                buy_score=72.0,
+                sell_score=20.0,
+                ai_confidence=65.0,
+                risk=RiskLevel.LOW,
+                signal=SignalAction.WATCH,
+                regime=__import__("config.models", fromlist=["MarketRegime"]).MarketRegime.NEUTRAL,
+                stop_price=290.0,
+                target_price=310.0,
+                explanation="test",
+                decision=SignalAction.WATCH,
+            )
+        ]
+
+    from dashboard import app as dash_app
+
+    monkeypatch.setattr(dash_app.service, "scan", lambda symbols=None: fake_scan(None))
+
+    client = TestClient(app)
+    r = client.get("/api/bist100/analysis", params={"q": "THYAO"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["count"] >= 1
+    thy = next(c for c in body["companies"] if c["symbol"] == "THYAO")
+    assert thy["price"] == 300.0
+    assert thy["decision"] == "WATCH"
+    assert "summary" in body

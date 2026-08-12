@@ -139,6 +139,21 @@ def markets() -> dict:
     return crypto_service.markets_catalog()
 
 
+@app.get("/api/bist100/analysis")
+def bist100_analysis(
+    q: str | None = None,
+    sector: str | None = None,
+    sort: str = "score",
+) -> dict:
+    """BIST 100 full-universe scan — price + signal per company."""
+    try:
+        return service.bist100_analysis(q=q, sector=sector, sort=sort)
+    except FileNotFoundError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(500, str(exc)) from exc
+
+
 @app.get("/api/bist100")
 def bist100_list(q: str | None = None, sector: str | None = None) -> dict:
     """Filterable BIST 100 company catalog (metadata). Prices via TradingView."""

@@ -91,6 +91,17 @@
     .bist100-item .t{font-weight:800;font-size:1.05rem}
     .bist100-item .n{color:var(--mute);font-size:.78rem;margin-top:2px;line-height:1.3}
     .bist100-item .sec{flex:0 0 auto;font-size:.72rem;font-weight:700;color:var(--buy2);padding:6px 8px;border-radius:999px;border:1px solid rgba(46,207,138,.25)}
+    .bist100-item .b100-right{text-align:right;flex:0 0 auto;min-width:88px}
+    .bist100-item .b100-price{font-weight:800;font-size:.95rem}
+    .bist100-item .b100-chg{font-size:.72rem;margin-top:2px}
+    .bist100-item .b100-score{font-size:.7rem;color:var(--mute);margin-top:2px}
+    .b100-sig{font-size:.68rem;font-weight:800;padding:4px 8px;border-radius:999px;display:inline-block;margin-bottom:4px}
+    .b100-sig.STRONG_BUY{background:rgba(46,207,138,.2);color:var(--buy2)}
+    .b100-sig.BUY,.b100-sig.AL{background:rgba(46,207,138,.12);color:var(--buy)}
+    .b100-sig.WATCH,.b100-sig.WAIT,.b100-sig.BEKLE,.b100-sig.HOLD{background:rgba(255,193,7,.12);color:#e6b800}
+    .b100-sig.SELL,.b100-sig.SAT,.b100-sig.STRONG_SELL{background:rgba(255,90,90,.12);color:#ff6b6b}
+    .b100-sig.NO_TRADE,.b100-sig.NO_DATA{background:rgba(143,163,150,.12);color:var(--mute)}
+    .b100-summary{font-size:.78rem;color:var(--mute);margin:6px 0 10px;line-height:1.4}
     .tv-wrap{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;min-height:480px}
     .tv-head{padding:12px 14px;border-bottom:1px solid var(--line)}
     .tv-head .sym{font-size:1.2rem;font-weight:800}
@@ -149,7 +160,7 @@
 
   <div class="panel" id="panel-mkt">
     <h2>BIST 100 Şirketleri</h2>
-    <p class="why">XU100 · Kod / isim / sektör filtre · TradingView canlı grafik (BIST:TICKER)</p>
+    <p class="why">XU100 · Tam evren tarama · fiyat + öneri · TradingView grafik</p>
     <div class="bist100-toolbar">
       <div class="search">
         <input id="b100q" placeholder="Kod veya şirket ara (THYAO, Garanti…)" autocomplete="off" />
@@ -159,6 +170,7 @@
         <option value="">Tüm sektörler</option>
       </select>
       <div class="sysline" id="b100Meta">Yükleniyor…</div>
+      <div class="b100-summary" id="b100Summary">Tam evren taraması başlıyor…</div>
     </div>
     <div class="bist100-layout">
       <div class="bist100-list-wrap" id="bist100List"></div>
@@ -297,7 +309,7 @@
   let daily = null, dash = null, filter = 'ALL', showAll = false, lastPanel = 'home';
   let activeMarket = 'BIST';
   let cryptoDash = null, cFilter = 'ALL', lastCryptoPanel = 'home', cryptoTf = '15m';
-  let bist100 = {companies: [], sectors: [], selected: null};
+  let bist100 = {companies: [], sectors: [], selected: null, summary: {}, note: ''};
   let tvWidget = null;
   const money = n => Number(n||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
   const pct = n => (n==null||n===undefined) ? '—' : `${n>=0?'+':''}${Number(n).toFixed(2)}%`;
@@ -762,8 +774,9 @@
       tvWidget = null;
       return;
     }
-    const tvSymbol = company.tradingview_symbol || ('BIST:' + company.ticker);
-    title.textContent = company.ticker;
+    const tvSymbol = company.tradingview_symbol || ('BIST:' + (company.ticker || company.symbol));
+    const sym = company.ticker || company.symbol;
+    title.textContent = sym;
     meta.textContent = `${company.name} · ${company.sector} · ${tvSymbol}`;
     container.innerHTML = '';
     if(typeof TradingView === 'undefined' || !TradingView.widget){
@@ -798,30 +811,52 @@
     let rows = bist100.companies || [];
     if(sector) rows = rows.filter(c => c.sector === sector);
     if(q){
-      rows = rows.filter(c =>
-        (c.ticker||'').toLocaleLowerCase('tr-TR').includes(q) ||
-        (c.name||'').toLocaleLowerCase('tr-TR').includes(q) ||
-        (c.sector||'').toLocaleLowerCase('tr-TR').includes(q)
-      );
+      rows = rows.filter(c => {
+        const sym = (c.ticker||c.symbol||'').toLocaleLowerCase('tr-TR');
+        return sym.includes(q) ||
+          (c.name||'').toLocaleLowerCase('tr-TR').includes(q) ||
+          (c.sector||'').toLocaleLowerCase('tr-TR').includes(q);
+      });
     }
     document.getElementById('b100Meta').textContent =
-      `${rows.length} / ${bist100.total||100} şirket · XU100 · Kaynak: bist100_companies.json`;
+      `${rows.length} / ${bist100.total||100} şirket · ${bist100.analyzed||0} analiz · XU100`;
+    const sumEl = document.getElementById('b100Summary');
+    if(sumEl){
+      const s = bist100.summary||{};
+      sumEl.textContent = bist100.note || (
+        `Güçlü AL ${s.STRONG_BUY||0} · AL ${s.BUY||0} · İzle ${s.WATCH||0} · Bekle ${s.WAIT||0} · Sat ${(s.SELL||0)}`
+      );
+    }
     const list = document.getElementById('bist100List');
     if(!rows.length){
       list.innerHTML = '<div class="empty">Sonuç yok</div>';
       return;
     }
-    list.innerHTML = rows.map(c => `
-      <button type="button" class="bist100-item ${(bist100.selected&&bist100.selected.ticker===c.ticker)?'on':''}" data-b100="${c.ticker}">
-        <div>
-          <div class="t">${c.ticker}</div>
-          <div class="n">${c.name}</div>
+    list.innerHTML = rows.map(c => {
+      const sym = c.ticker || c.symbol;
+      const dec = c.decision||'NO_DATA';
+      const priceTxt = c.price!=null ? money(c.price)+' TL' : '—';
+      const chg = c.change_pct!=null ? pct(c.change_pct) : '';
+      const chgCls = (c.change_pct||0)>=0?'up':'down';
+      const score = c.final_score!=null ? c.final_score : (c.scores&&c.scores.final)!=null ? c.scores.final : c.buy_score;
+      return `
+      <button type="button" class="bist100-item ${(bist100.selected&&(bist100.selected.ticker||bist100.selected.symbol)===sym)?'on':''}" data-b100="${sym}">
+        <div style="min-width:0;flex:1">
+          <div class="t">${sym}${c.is_favorite?' ★':''}</div>
+          <div class="n">${c.name||c.company_name||''}</div>
+          <span class="sec">${c.sector}</span>
         </div>
-        <span class="sec">${c.sector}</span>
-      </button>`).join('');
+        <div class="b100-right">
+          <span class="b100-sig ${dec}">${c.decision_label||dec}</span>
+          <div class="b100-price">${priceTxt}</div>
+          ${chg?`<div class="b100-chg ${chgCls}">${chg}</div>`:''}
+          <div class="b100-score">Skor ${score!=null?Number(score).toFixed(0):'—'}</div>
+        </div>
+      </button>`;
+    }).join('');
     list.querySelectorAll('[data-b100]').forEach(btn=>{
       btn.onclick = ()=>{
-        const company = (bist100.companies||[]).find(x => x.ticker === btn.dataset.b100);
+        const company = (bist100.companies||[]).find(x => (x.ticker||x.symbol) === btn.dataset.b100);
         if(!company) return;
         bist100.selected = company;
         renderBist100List();
@@ -831,24 +866,33 @@
   }
 
   async function loadBist100(){
+    document.getElementById('bist100List').innerHTML = '<div class="empty">100 hisse analiz ediliyor… (30–60 sn sürebilir)</div>';
+    document.getElementById('b100Summary').textContent = 'Tam evren taraması…';
     try{
-      const body = await (await fetch('/api/bist100')).json();
+      const body = await (await fetch('/api/bist100/analysis?sort=score')).json();
       bist100.companies = body.companies || [];
       bist100.total = body.total || body.count || 100;
-      bist100.sectors = body.sectors || [];
+      bist100.analyzed = body.analyzed || 0;
+      bist100.sectors = body.sectors || bist100.sectors || [];
+      bist100.summary = body.summary || {};
+      bist100.note = body.note || '';
       const sel = document.getElementById('b100Sector');
-      const current = sel.value;
-      sel.innerHTML = '<option value="">Tüm sektörler</option>' +
-        bist100.sectors.map(s => `<option value="${s}">${s}</option>`).join('');
-      if(current && bist100.sectors.includes(current)) sel.value = current;
+      if((body.sectors||[]).length && sel.options.length <= 1){
+        const current = sel.value;
+        sel.innerHTML = '<option value="">Tüm sektörler</option>' +
+          (body.sectors||[]).map(s => `<option value="${s}">${s}</option>`).join('');
+        if(current && body.sectors.includes(current)) sel.value = current;
+      }
       if(!bist100.selected && bist100.companies.length){
-        bist100.selected = bist100.companies.find(c => c.ticker === 'THYAO') || bist100.companies[0];
+        const thy = bist100.companies.find(c => c.ticker === 'THYAO' || c.symbol === 'THYAO');
+        bist100.selected = thy || bist100.companies[0];
       }
       renderBist100List();
       if(bist100.selected) renderTradingView(bist100.selected);
     }catch(e){
-      document.getElementById('b100Meta').textContent = 'BIST 100 listesi yüklenemedi';
-      document.getElementById('bist100List').innerHTML = '<div class="empty">API hatası</div>';
+      document.getElementById('b100Meta').textContent = 'BIST 100 analizi yüklenemedi';
+      document.getElementById('b100Summary').textContent = '';
+      document.getElementById('bist100List').innerHTML = '<div class="empty">API hatası — yenileyin</div>';
     }
   }
 
