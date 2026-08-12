@@ -5,6 +5,7 @@ import '../api/client.dart';
 import '../theme/app_theme.dart';
 import '../widgets/listing_media.dart';
 import '../widgets/value_widgets.dart';
+import 'admin_login_screen.dart';
 import 'admin_panel_screen.dart';
 import 'create_listing_screen.dart';
 import 'listing_detail_screen.dart';
@@ -208,6 +209,30 @@ class _HomeScreenState extends State<HomeScreen> {
                                   color: AppColors.gold,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 1,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ] else ...[
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const AdminLoginScreen(),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.admin_panel_settings_outlined,
+                                  color: AppColors.muted, size: 18),
+                              label: Text(
+                                'Yönetim girişi',
+                                style: GoogleFonts.montserrat(
+                                  color: AppColors.muted,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
                                 ),
                               ),
                             ),

@@ -5,6 +5,7 @@ import '../api/client.dart';
 import '../theme/app_theme.dart';
 import '../widgets/value_widgets.dart';
 import 'admin_login_screen.dart';
+import 'admin_panel_screen.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 
@@ -31,24 +32,31 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _boot() async {
+    // Do not auto-navigate away — splash is the gateway to Giriş + Yönetim.
+    // Auto-skip only when a session already exists.
     Map<String, dynamic>? user;
     try {
-      user = await api.me().timeout(const Duration(milliseconds: 800), onTimeout: () => null);
+      user = await api.me().timeout(const Duration(milliseconds: 1200), onTimeout: () => null);
     } catch (_) {
       user = null;
     }
-    await Future<void>.delayed(const Duration(milliseconds: 900));
     if (!mounted || _navigated) return;
-    _navigated = true;
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder<void>(
-        transitionDuration: const Duration(milliseconds: 450),
-        pageBuilder: (_, anim, __) => FadeTransition(
-          opacity: anim,
-          child: HomeScreen(user: user),
+    if (user != null) {
+      _navigated = true;
+      final role = user['role']?.toString() ?? '';
+      final isStaff = {'superadmin', 'admin', 'moderator'}.contains(role);
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder<void>(
+          transitionDuration: const Duration(milliseconds: 450),
+          pageBuilder: (_, anim, __) => FadeTransition(
+            opacity: anim,
+            child: isStaff
+                ? AdminPanelScreen(user: user!)
+                : HomeScreen(user: user),
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   @override

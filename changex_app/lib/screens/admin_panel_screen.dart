@@ -47,11 +47,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
       widget.user['role'] == 'admin' || widget.user['role'] == 'superadmin';
   bool get _canAssignRoles => widget.user['role'] == 'superadmin';
 
-  Future<void> _refreshAll() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  Future<void> _refreshAll({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final panel = await api.adminPanel();
       final queue = await api.moderationQueue();
@@ -67,6 +69,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         _myTasks = tasks;
         _staff = staff;
         _loading = false;
+        _error = null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -84,7 +87,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         decision,
         reason: reason.isEmpty ? 'panel' : reason,
       );
-      await _refreshAll();
+      await _refreshAll(silent: true);
       if (!mounted) return;
       final labels = {
         'APPROVE': 'Onaylandı',
@@ -98,6 +101,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('İşlem başarısız: $e')),
+      );
     }
   }
 
@@ -197,12 +205,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         ],
         bottom: TabBar(
           controller: _tabs,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           indicatorColor: AppColors.gold,
           labelColor: AppColors.gold,
           unselectedLabelColor: AppColors.muted,
           labelStyle: GoogleFonts.montserrat(
             fontWeight: FontWeight.w800,
-            fontSize: 11,
+            fontSize: 12,
           ),
           tabs: [
             Tab(text: 'ONAY ($pending)'),
@@ -415,22 +425,22 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                   _ActionChip(
                     label: 'ONAYLA',
                     color: AppColors.gold,
-                    onTap: () => _decide(t['listing_id'] as int, 'APPROVE'),
+                    onTap: () => _decide(_asInt(t['listing_id']), 'APPROVE'),
                   ),
                   _ActionChip(
                     label: 'REDDET',
                     color: AppColors.danger,
-                    onTap: () => _decide(t['listing_id'] as int, 'REJECT'),
+                    onTap: () => _decide(_asInt(t['listing_id']), 'REJECT'),
                   ),
                   _ActionChip(
                     label: 'DÜZENLET',
                     color: AppColors.blue,
-                    onTap: () => _decide(t['listing_id'] as int, 'REQUEST_EDIT'),
+                    onTap: () => _decide(_asInt(t['listing_id']), 'REQUEST_EDIT'),
                   ),
                   _ActionChip(
                     label: 'SİL',
                     color: AppColors.muted,
-                    onTap: () => _decide(t['listing_id'] as int, 'DELETE'),
+                    onTap: () => _decide(_asInt(t['listing_id']), 'DELETE'),
                   ),
                 ],
               ),
@@ -621,22 +631,22 @@ class _QueueCard extends StatelessWidget {
                     _ActionChip(
                       label: 'ONAYLA',
                       color: AppColors.gold,
-                      onTap: () => onDecide(item['id'] as int, 'APPROVE'),
+                      onTap: () => onDecide(_asInt(item['id']), 'APPROVE'),
                     ),
                     _ActionChip(
                       label: 'REDDET',
                       color: AppColors.danger,
-                      onTap: () => onDecide(item['id'] as int, 'REJECT'),
+                      onTap: () => onDecide(_asInt(item['id']), 'REJECT'),
                     ),
                     _ActionChip(
                       label: 'DÜZENLET',
                       color: AppColors.blue,
-                      onTap: () => onDecide(item['id'] as int, 'REQUEST_EDIT'),
+                      onTap: () => onDecide(_asInt(item['id']), 'REQUEST_EDIT'),
                     ),
                     _ActionChip(
                       label: 'SİL',
                       color: AppColors.muted,
-                      onTap: () => onDecide(item['id'] as int, 'DELETE'),
+                      onTap: () => onDecide(_asInt(item['id']), 'DELETE'),
                     ),
                   ],
                 ),
@@ -659,7 +669,10 @@ class _QueueCard extends StatelessWidget {
                         _ActionChip(
                           label: '${raw['username']} (${raw['role']})',
                           color: AppColors.line,
-                          onTap: () => onAssign(item['id'] as int, raw['id'] as int),
+                          onTap: () => onAssign(
+                            _asInt(item['id']),
+                            _asInt(raw['id']),
+                          ),
                         ),
                     ],
                   ),
@@ -671,6 +684,12 @@ class _QueueCard extends StatelessWidget {
       ),
     );
   }
+}
+
+int _asInt(dynamic v) {
+  if (v is int) return v;
+  if (v is num) return v.toInt();
+  return int.parse(v.toString());
 }
 
 class _ActionChip extends StatelessWidget {

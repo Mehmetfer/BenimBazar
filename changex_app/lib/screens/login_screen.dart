@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../api/client.dart';
 import '../theme/app_theme.dart';
 import '../widgets/value_widgets.dart';
+import 'admin_login_screen.dart';
 import 'admin_panel_screen.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
@@ -155,15 +156,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     TextButton(
                       onPressed: () {
-                        Navigator.of(context).pushAndRemoveUntil(
+                        Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => const HomeScreen(user: null),
+                            builder: (_) => const AdminLoginScreen(),
                           ),
-                          (_) => false,
                         );
                       },
                       child: Text(
-                        'Ziyaretçi olarak gez',
+                        'Yönetim paneli girişi',
                         style: GoogleFonts.montserrat(color: AppColors.muted),
                       ),
                     ),
