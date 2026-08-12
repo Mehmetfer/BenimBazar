@@ -71,6 +71,11 @@ class SafeExecutionPipeline:
             paper = PaperBroker(ledger)
         self.paper = paper
         self.router = router or ExecutionRouter(paper=self.paper, live=LiveBrokerDisabled())
+        # Prefer factory-resolved adapter when caller did not inject a router
+        if router is None:
+            from execution.live_factory import resolve_live_adapter
+
+            self.router = ExecutionRouter(paper=self.paper, live=resolve_live_adapter())
         self.mode = mode
         self.kill = kill or KillSwitch(active=bool(getattr(settings, "kill_switch", False)), reason="settings", source="configuration")
         if getattr(settings, "kill_switch", False) and not self.kill.active:

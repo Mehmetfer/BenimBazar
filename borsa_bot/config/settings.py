@@ -135,6 +135,13 @@ class Settings:
     live_broker_enabled: bool = _b("LIVE_BROKER_ENABLED", False)
     live_confirmation_required: bool = _b("LIVE_CONFIRMATION_REQUIRED", True)
     live_confirmed: bool = _b("LIVE_CONFIRMED", False)  # explicit human confirmation
+    # Live foundation (infra only — no money until adapter implemented + unlocked)
+    live_broker_adapter: str = os.getenv("LIVE_BROKER_ADAPTER", "disabled").strip().lower()
+    live_dry_run: bool = _b("LIVE_DRY_RUN", True)  # keep true until micro-live acceptance
+    live_broker_base_url: str = os.getenv("LIVE_BROKER_BASE_URL", "")
+    live_broker_api_key: str = os.getenv("LIVE_BROKER_API_KEY", "")
+    live_broker_api_secret: str = os.getenv("LIVE_BROKER_API_SECRET", "")
+    live_broker_account_id: str = os.getenv("LIVE_BROKER_ACCOUNT_ID", "")
     # Paper FSM
     paper_partial_fill_pct: float = _f("PAPER_PARTIAL_FILL_PCT", 1.0)
     paper_cancel_race_fill_pct: float = _f("PAPER_CANCEL_RACE_FILL_PCT", 0.0)

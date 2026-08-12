@@ -101,3 +101,11 @@ class ExecutionRouter:
             return self.live.submit(order, sector)
         # PAPER
         return self.paper.submit(order, sector)
+
+
+def build_execution_router(paper: PaperBroker) -> ExecutionRouter:
+    """Factory helper — live side always resolved via live_factory (default disabled)."""
+    from execution.live_factory import resolve_live_adapter
+
+    return ExecutionRouter(paper=paper, live=resolve_live_adapter())
+

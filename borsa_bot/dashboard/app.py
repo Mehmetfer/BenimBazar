@@ -1398,6 +1398,7 @@ def live_confirm(body: LiveConfirmBody, authorization: str | None = Header(defau
             "ok": False,
             "live": "DISABLED",
             "message": "LIVE_BROKER_ENABLED=false — confirmation recorded logically but LIVE remains locked in this process (set env + restart with real adapter).",
+            "readiness": _live_readiness_payload(),
         }
     # Frozen settings — cannot mutate; document requirement
     return {
@@ -1405,6 +1406,55 @@ def live_confirm(body: LiveConfirmBody, authorization: str | None = Header(defau
         "message": "Admin confirmation accepted. Set LIVE_CONFIRMED=true in environment to persist. LIVE still requires real broker adapter.",
         "live_broker_enabled": bool(settings.live_broker_enabled),
         "live_confirmed_env": bool(getattr(settings, "live_confirmed", False)),
+        "readiness": _live_readiness_payload(),
+    }
+
+
+def _live_readiness_payload() -> dict:
+    from execution.live_factory import live_adapter_status
+    from trading_safety.live_readiness import evaluate_live_money_readiness
+
+    md_ok = None
+    try:
+        md_ok = bool(service.provider.has_market_data())
+    except Exception:  # noqa: BLE001
+        md_ok = False
+    report = evaluate_live_money_readiness(market_data_ok=md_ok)
+    out = report.to_dict()
+    out["adapter"] = live_adapter_status()
+    out["flags"] = {
+        "MODE": settings.mode,
+        "EXECUTION_MODE": settings.execution_mode,
+        "LIVE_BROKER_ENABLED": bool(settings.live_broker_enabled),
+        "LIVE_CONFIRMED": bool(settings.live_confirmed),
+        "LIVE_CONFIRMATION_REQUIRED": bool(settings.live_confirmation_required),
+        "LIVE_BROKER_ADAPTER": getattr(settings, "live_broker_adapter", "disabled"),
+        "LIVE_DRY_RUN": bool(getattr(settings, "live_dry_run", True)),
+        "AUTH_ENABLED": bool(settings.auth_enabled),
+        "KILL_SWITCH": bool(settings.kill_switch),
+    }
+    return out
+
+
+@app.get("/api/live/readiness")
+def live_readiness() -> dict:
+    """Live-money checklist — foundation only; never auto-unlocks."""
+    return {"ok": True, **_live_readiness_payload()}
+
+
+@app.get("/api/live/status")
+def live_status() -> dict:
+    """Compact live lock status for UI / ops."""
+    payload = _live_readiness_payload()
+    return {
+        "ok": True,
+        "live_trading": False,
+        "ready": bool(payload.get("ready")),
+        "verdict": payload.get("verdict"),
+        "live_money_readiness": payload.get("live_money_readiness"),
+        "adapter": payload.get("adapter"),
+        "flags": payload.get("flags"),
+        "message": "Canlı para altyapısı hazır · emir yolu kilitli · ileride manuel açılır",
     }
 
 

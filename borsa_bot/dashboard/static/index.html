@@ -305,6 +305,11 @@
   <div class="panel" id="panel-set">
     <h2>⚙ Sistem</h2>
     <div class="card" id="sysHealth" style="cursor:default"></div>
+    <div class="card" style="cursor:default" id="liveMoneyCard">
+      <div class="why"><b>CANLI PARA ALTYAPISI</b> · varsayılan KİLİTLİ</div>
+      <div id="liveMoneyBody" class="meta" style="margin-top:8px">Yükleniyor…</div>
+      <div class="meta" style="margin-top:6px">İleride açılır · şimdi sadece paper · LIVE READY: HAYIR</div>
+    </div>
     <div class="card" style="cursor:default" id="autonomyCard">
       <div class="why"><b>AUTONOMY</b> — SIGNAL ≠ ORDER · LIVE broker kilitli</div>
       <div class="filters" id="autonomyModes" style="margin-top:8px">
@@ -1732,6 +1737,20 @@
   }
 
   async function loadAutonomy(){
+    try{
+      const live = await (await fetch('/api/live/status')).json();
+      const el = document.getElementById('liveMoneyBody');
+      if(el){
+        const f = live.flags||{};
+        el.innerHTML =
+          `<b>${live.verdict||'FOUNDATION_ONLY'}</b> · readiness ${live.live_money_readiness||'NOT VERIFIED'}<br>`+
+          `Adapter: ${(live.adapter&&live.adapter.adapter_name)||'LiveBrokerDisabled'} · enabled=${f.LIVE_BROKER_ENABLED} · confirmed=${f.LIVE_CONFIRMED}<br>`+
+          `DRY_RUN=${f.LIVE_DRY_RUN} · AUTH=${f.AUTH_ENABLED} · ${live.message||''}`;
+      }
+    }catch(_e){
+      const el = document.getElementById('liveMoneyBody');
+      if(el) el.textContent = 'Live status API yok — paper only';
+    }
     try{
       const st = await (await fetch('/api/autonomy/status')).json();
       const mode = st.user_trading_mode||'PAPER';
