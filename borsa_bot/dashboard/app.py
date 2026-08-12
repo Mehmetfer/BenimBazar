@@ -91,6 +91,10 @@ class PaperTradeBody(BaseModel):
     price: float | None = None
 
 
+class PaperTopupBody(BaseModel):
+    amount: float = 100_000.0
+
+
 class NotificationSettingsBody(BaseModel):
     sms_on: bool | None = None
     push_on: bool | None = None
@@ -374,18 +378,22 @@ def paper_trade(body: PaperTradeBody, authorization: str | None = Header(default
 
 
 @app.post("/api/paper/wallet/topup")
-def paper_wallet_topup(amount: float = 100_000) -> dict:
+def paper_wallet_topup(body: PaperTopupBody | None = None) -> dict:
     """Add paper cash (default +100.000 TL) without resetting positions."""
+    amount = float(body.amount if body is not None else 100_000.0)
+    if amount <= 0:
+        raise HTTPException(400, "amount must be positive")
     try:
         cash = service.ledger.topup(amount)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    wallet = service.paper_wallet()
     return {
         "ok": True,
-        "added": round(float(amount), 2),
+        "added": round(amount, 2),
         "cash": round(cash, 2),
-        "message": f"+{amount:,.0f} TL eklendi",
-        "wallet": service.paper_wallet(),
+        "message": f"+{amount:,.0f} TL nakde eklendi · bakiye {cash:,.2f} TL",
+        "wallet": wallet,
     }
 
 

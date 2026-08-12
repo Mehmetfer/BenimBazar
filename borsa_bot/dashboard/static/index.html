@@ -517,12 +517,40 @@
     el.textContent = cash!=null ? `Nakit ${money(cash)} TL` : 'Cüzdan: —';
   }
 
-  async function walletTopup(){
-    const r = await (await fetch('/api/paper/wallet/topup',{method:'POST'})).json();
-    paperWallet = r.wallet || paperWallet;
+  async function reloadWallet(){
+    try{
+      paperWallet = await (await fetch('/api/paper/wallet')).json();
+    }catch(e){
+      paperWallet = null;
+    }
     updateFavWalletPill();
     refreshOrderLimits();
-    if(document.getElementById('panel-port').classList.contains('on')) loadPortfolio();
+    return paperWallet;
+  }
+
+  async function walletTopup(){
+    const res = await fetch('/api/paper/wallet/topup', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({amount: 100000}),
+    });
+    let r = {};
+    try{
+      r = await res.json();
+    }catch(e){
+      throw new Error('Topup yanıtı okunamadı — sunucuyu yeniden başlatın');
+    }
+    if(!res.ok || r.ok === false){
+      const msg = (r.detail && (typeof r.detail==='string'?r.detail:JSON.stringify(r.detail))) || r.message || `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    if(r.wallet) paperWallet = r.wallet;
+    else if(r.cash != null){
+      paperWallet = paperWallet || {};
+      paperWallet.cash = r.cash;
+    }
+    await reloadWallet();
+    if(document.getElementById('panel-port')?.classList.contains('on')) await loadPortfolio();
     return r;
   }
 
@@ -1092,9 +1120,10 @@
         topupBtn.disabled = true;
         try{
           const r = await walletTopup();
-          el.innerHTML = renderPortfolio(paperWallet);
-          alert(r.message||'+100.000 TL eklendi');
-          loadPortfolio();
+          await loadPortfolio();
+          alert(r.message||`+100.000 TL eklendi · nakit ${fmtNum(paperWallet?.cash)} ₺`);
+        }catch(e){
+          alert(e.message||'Topup başarısız');
         }finally{ topupBtn.disabled = false; }
       };
       if(initBtn) initBtn.onclick = async ()=>{
@@ -1726,8 +1755,12 @@
   document.getElementById('orderPriceInput').oninput=refreshOrderLimits;
   document.getElementById('orderSubmitBtn').onclick=submitOrderSheet;
   document.getElementById('orderTopupBtn').onclick=async()=>{
-    const r = await walletTopup();
-    alert(r.message||'+100.000 TL eklendi');
+    try{
+      const r = await walletTopup();
+      alert(r.message||`+100.000 TL · nakit ${fmtNum(paperWallet?.cash)} ₺`);
+    }catch(e){
+      alert(e.message||'Topup başarısız');
+    }
   };
   document.getElementById('sdCloseBtn').onclick=closeStockDetail;
   document.getElementById('stockDetailOverlay').onclick=(e)=>{ if(e.target.id==='stockDetailOverlay') closeStockDetail(); };

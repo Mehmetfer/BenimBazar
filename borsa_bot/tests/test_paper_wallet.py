@@ -63,6 +63,24 @@ def test_paper_wallet_init_api():
   assert body["user_trading_mode"] == "AUTO"
 
 
+def test_paper_wallet_topup_api():
+  from dashboard.app import app
+
+  client = TestClient(app)
+  client.post("/api/paper/wallet/init")
+  before = client.get("/api/paper/wallet").json()["cash"]
+  r = client.post(
+    "/api/paper/wallet/topup",
+    json={"amount": 100_000},
+  )
+  assert r.status_code == 200
+  body = r.json()
+  assert body["ok"] is True
+  assert body["added"] == 100_000
+  assert body["cash"] == before + 100_000
+  assert body["wallet"]["cash"] == before + 100_000
+
+
 def test_follow_recommendations_buys_strong_buy(monkeypatch):
   from strategy.service import TradingService
 

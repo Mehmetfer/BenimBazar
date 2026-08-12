@@ -346,9 +346,22 @@ class PortfolioLedger:
 
     def topup(self, amount: float) -> float:
         """Add paper cash without closing positions."""
+        from datetime import date
+
         amt = float(amount)
         if amt <= 0:
             raise ValueError("topup amount must be positive")
         with self._connect() as conn:
-            conn.execute("UPDATE account SET cash=cash+? WHERE id=1", (amt,))
-            return float(conn.execute("SELECT cash FROM account WHERE id=1").fetchone()["cash"])
+            row = conn.execute("SELECT cash FROM account WHERE id=1").fetchone()
+            if row is None:
+                today = date.today().isoformat()
+                starting = float(settings.starting_cash)
+                conn.execute(
+                    "INSERT INTO account(id,cash,starting_cash,day_start_equity,day_key) VALUES(1,?,?,?,?)",
+                    (amt, starting, amt, today),
+                )
+            else:
+                conn.execute("UPDATE account SET cash=cash+? WHERE id=1", (amt,))
+            conn.commit()
+            new_cash = float(conn.execute("SELECT cash FROM account WHERE id=1").fetchone()["cash"])
+        return new_cash
