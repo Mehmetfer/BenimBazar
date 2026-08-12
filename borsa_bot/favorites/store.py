@@ -169,14 +169,13 @@ class FavoritesStore:
                     pass
 
     def ensure_default_watchlist(self, market_type: str = "BIST") -> list[FavoriteRecord]:
-        """Merge İnfoyatırım-style default symbols into BIST watchlist."""
+        """Seed İnfoyatırım-style defaults only when BIST watchlist is empty."""
         mt = _norm_market(market_type)
-        if mt != "BIST":
-            return self.list_favorites(market_type=mt)
-        existing = {f.symbol for f in self.list_favorites(market_type=mt)}
+        existing = self.list_favorites(market_type=mt)
+        if mt != "BIST" or existing:
+            return existing
         for i, sym in enumerate(DEFAULT_WATCHLIST_BIST):
-            if sym not in existing:
-                self.add(sym, priority=100 - i, market_type="BIST")
+            self.add(sym, priority=100 - i, market_type="BIST")
         return self.list_favorites(market_type=mt)
 
     def list_favorites(self, active_only: bool = True, market_type: str | None = None) -> list[FavoriteRecord]:

@@ -948,6 +948,8 @@ class TradingService:
 
     def watchlist_quotes(self) -> dict:
         """Fast Takip Listem board — XU100 + favorites, Son/Alış/Satış/%G."""
+        from universe.bist100 import get_company
+
         self.favorites.ensure_default_watchlist(market_type="BIST")
         try:
             self.tick()
@@ -955,7 +957,16 @@ class TradingService:
             pass
         source = self.provider.source_meta(settings.data_freshness_sec)
 
-        def _row(sym: str, name: str = "", *, is_favorite: bool = False) -> dict:
+        def _name_for(sym: str) -> tuple[str, str]:
+            c = get_company(sym)
+            if c:
+                return c.name, c.sector
+            if sym == "XU100":
+                return "BIST 100", "Endeks"
+            return sym, ""
+
+        def _row(sym: str, *, is_favorite: bool = False) -> dict:
+            name, sector = _name_for(sym)
             try:
                 q = self.provider.get_quote(sym)
                 chg = float(getattr(q, "change_pct", 0) or 0)
@@ -963,7 +974,8 @@ class TradingService:
                 return {
                     "symbol": sym,
                     "ticker": sym,
-                    "name": name or sym,
+                    "name": name,
+                    "sector": sector,
                     "price": round(float(q.price), 4),
                     "bid": round(float(q.bid), 4) if q.bid else None,
                     "ask": round(float(q.ask), 4) if q.ask else None,
@@ -977,7 +989,8 @@ class TradingService:
                 return {
                     "symbol": sym,
                     "ticker": sym,
-                    "name": name or sym,
+                    "name": name,
+                    "sector": sector,
                     "price": None,
                     "bid": None,
                     "ask": None,
@@ -987,13 +1000,13 @@ class TradingService:
                     "decision_label": "VERİ YOK",
                 }
 
-        index = _row("XU100", "BIST 100")
+        index = _row("XU100")
         quotes = []
         for fav in self.favorites.list_favorites(market_type="BIST"):
             sym = fav.symbol.upper()
             if sym == "XU100":
                 continue
-            quotes.append(_row(sym, sym, is_favorite=True))
+            quotes.append(_row(sym, is_favorite=True))
         return {
             "ok": True,
             "index": index,

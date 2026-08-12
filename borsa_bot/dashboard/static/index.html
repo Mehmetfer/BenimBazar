@@ -154,6 +154,11 @@
     .stock-overlay.hidden,.order-overlay.hidden{display:none}
     .stock-panel{width:100%;max-width:520px;margin:0 auto;background:#0f1613;border-radius:18px 18px 0 0;max-height:92dvh;overflow:auto;padding:12px 12px 24px;border-top:1px solid var(--line)}
     .stock-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+    .stock-sym-row{display:flex;align-items:center;gap:8px}
+    .stock-sym{font-size:1.35rem;font-weight:800;letter-spacing:.02em}
+    .stock-name{font-size:.85rem;color:var(--mute);margin:2px 0 8px}
+    .stock-fav{font-size:1.4rem;line-height:1;padding:4px 8px;border:0;background:transparent;cursor:pointer;color:var(--mute)}
+    .stock-fav.on{color:#f0c14b}
     .stock-price{font-size:2rem;font-weight:800;line-height:1}
     .stock-chg{font-size:.9rem;font-weight:700;margin-top:4px}
     .stock-actions{display:flex;gap:8px}
@@ -573,6 +578,11 @@
     <div class="stock-panel">
       <div class="stock-top">
         <div>
+          <div class="stock-sym-row">
+            <div class="stock-sym" id="sdSym">—</div>
+            <button type="button" class="star stock-fav" id="sdFavBtn" title="Favori">☆</button>
+          </div>
+          <div class="stock-name" id="sdName"></div>
           <div class="stock-price" id="sdPrice">—</div>
           <div class="stock-chg" id="sdChg">—</div>
           <div class="meta" id="sdMeta">—</div>
@@ -816,7 +826,7 @@
     sideEl.className = 'order-side ' + (isSell ? 'sell' : 'buy');
     document.getElementById('orderSymLabel').textContent = sym;
     const px = orderCtx.price;
-    const ba = bidAsk(px, item);
+    const ba = bidAsk(px, meta);
     const defaultPrice = isSell ? (ba.bid||px) : (ba.ask||px);
     document.getElementById('orderPriceInput').value = defaultPrice ? Number(defaultPrice).toFixed(2) : '';
     const maxSell = Math.floor(positionQty||0);
@@ -880,25 +890,64 @@
 
   function openStockDetail(item){
     stockDetailCtx = item;
-    const sym = item.symbol || item.ticker;
+    const sym = String(item.symbol || item.ticker || '').toUpperCase();
+    const name = item.name || item.company_name || '';
     const px = Number(item.price||0);
     const ba = bidAsk(px, item);
     const chg = Number(item.change_pct||0);
-    document.getElementById('sdPrice').textContent = px ? money(px) : '—';
+    const isFav = item.is_favorite !== false && sym !== 'XU100';
+    document.getElementById('sdSym').textContent = sym || '—';
+    document.getElementById('sdName').textContent = name && name !== sym ? name : (sym === 'XU100' ? 'BIST 100 Endeksi' : '');
+    document.getElementById('sdPrice').textContent = px ? money(px)+' TL' : '—';
     const chgEl = document.getElementById('sdChg');
     chgEl.textContent = px ? `${chg>=0?'+':''}${chg.toFixed(2)}%` : '—';
     chgEl.className = 'stock-chg ' + (chg>=0?'up':'down');
-    document.getElementById('sdMeta').textContent = `${item.name||''} · ${item.decision_label||item.decision||'—'}`;
+    document.getElementById('sdMeta').textContent =
+      [item.sector, item.decision_label||item.decision].filter(Boolean).join(' · ') || 'Paper işlem · gerçek para değil';
+    const favBtn = document.getElementById('sdFavBtn');
+    if(sym === 'XU100'){
+      favBtn.style.display = 'none';
+    } else {
+      favBtn.style.display = '';
+      favBtn.classList.toggle('on', !!isFav);
+      favBtn.textContent = isFav ? '★' : '☆';
+      favBtn.onclick = async (e)=>{
+        e.stopPropagation();
+        try{
+          const r = await (await fetch('/api/favorites/'+encodeURIComponent(sym)+'/toggle',{method:'POST'})).json();
+          const active = !!r.is_favorite;
+          favBtn.classList.toggle('on', active);
+          favBtn.textContent = active ? '★' : '☆';
+          if(stockDetailCtx) stockDetailCtx.is_favorite = active;
+          // Force refresh so removed symbols leave the grid
+          loadFavorites({silent: false});
+        }catch(_e){
+          alert('Favori güncellenemedi');
+        }
+      };
+    }
     const pos = (paperWallet?.positions||[]).find(p=>p.symbol===sym);
     const posQty = pos ? pos.quantity : (item.position_qty||0);
     document.getElementById('sdStats').innerHTML = `
+      <div class="stock-stat"><span>Kod</span><b>${sym||'—'}</b></div>
       <div class="stock-stat"><span>Alış</span><b>${px?money(ba.bid):'—'}</b></div>
       <div class="stock-stat"><span>Satış</span><b>${px?money(ba.ask):'—'}</b></div>
       <div class="stock-stat"><span>Ö. Kapanış</span><b>${item.prev_close!=null?money(item.prev_close):'—'}</b></div>
       <div class="stock-stat"><span>Portföy</span><b>${posQty?posQty+' lot':'—'}</b></div>
       <div class="stock-stat"><span>Skor</span><b>${item.final_score!=null?Number(item.final_score).toFixed(0):(item.buy_score??'—')}</b></div>`;
-    document.getElementById('sdBuyBtn').onclick = ()=> openOrderSheet(sym,'BUY',{price:px,name:item.name,positionQty:posQty});
-    document.getElementById('sdSellBtn').onclick = ()=> openOrderSheet(sym,'SELL',{price:px,name:item.name,positionQty:posQty});
+    const buyBtn = document.getElementById('sdBuyBtn');
+    const sellBtn = document.getElementById('sdSellBtn');
+    if(sym === 'XU100' || !px){
+      buyBtn.disabled = true;
+      sellBtn.disabled = true;
+      buyBtn.onclick = null;
+      sellBtn.onclick = null;
+    } else {
+      buyBtn.disabled = false;
+      sellBtn.disabled = false;
+      buyBtn.onclick = ()=> openOrderSheet(sym,'BUY',{price:px,name,positionQty:posQty,bid:item.bid,ask:item.ask});
+      sellBtn.onclick = ()=> openOrderSheet(sym,'SELL',{price:px,name,positionQty:posQty,bid:item.bid,ask:item.ask});
+    }
     document.getElementById('stockDetailOverlay').classList.remove('hidden');
     document.getElementById('stockDetailOverlay').setAttribute('aria-hidden','false');
   }
