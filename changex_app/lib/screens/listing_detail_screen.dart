@@ -49,11 +49,14 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       _result = null;
     });
     try {
-      final res = await api.createOffer({
-        'listing_id': widget.listing['id'],
-        'offer_items': [
+      // 1) Create proposer's listing from form (server stores canonical mandal_units)
+      final offeredListing = await api.createListing({
+        'title': _offerName.text.trim().isEmpty ? 'Teklif ürünü' : _offerName.text.trim(),
+        'description': 'CHANGE X takas teklifi ürünü',
+        'category': widget.listing['category'] ?? 'Diğer',
+        'items': [
           {
-            'name': _offerName.text.trim(),
+            'name': _offerName.text.trim().isEmpty ? 'Teklif ürünü' : _offerName.text.trim(),
             'value': {
               'madalyon': int.tryParse(_madalyon.text) ?? 0,
               'dirhem': int.tryParse(_dirhem.text) ?? 0,
@@ -62,17 +65,24 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           }
         ],
       });
-      final match = res['match'] as Map<String, dynamic>?;
+      // 2) Offer by listing ids — backend recalculates values, ignores client totals
+      final res = await api.createOffer({
+        'requested_listing_ids': [widget.listing['id']],
+        'offered_listing_ids': [offeredListing['id']],
+        'idempotency_key':
+            'offer-${widget.listing['id']}-${offeredListing['id']}-${DateTime.now().millisecondsSinceEpoch}',
+      });
+      final gap = res['value_gap'] as Map<String, dynamic>?;
+      final exact = res['exact_match'] == true;
       setState(() {
-        if (match != null && match['exact_match'] == true) {
-          _result = 'Tam eşleşme! Durum: ${res['state']}';
-        } else if (match != null) {
-          final gap = match['gap'] as Map<String, dynamic>;
+        if (exact) {
+          _result = 'Tam eşleşme! Durum: ${res['status'] ?? res['state']}';
+        } else if (gap != null) {
           _result =
-              'Fark: ${gap['madalyon']} Madalyon · ${gap['dirhem']} Dirhem · ${gap['mandal']} Mandal\n'
+              '${res['value_gap_display'] ?? gap['display']}\n'
               'Fark gerçek para ile kapatılamaz. Ürün ekleyin veya yeni teklif verin.';
         } else {
-          _result = 'Teklif gönderildi · ${res['state']}';
+          _result = 'Teklif gönderildi · ${res['status'] ?? res['state']}';
         }
       });
     } on ApiException catch (e) {
@@ -136,11 +146,29 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              Expanded(child: TextField(controller: _madalyon, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Madalyon'))),
+              Expanded(
+                child: TextField(
+                  controller: _madalyon,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Madalyon'),
+                ),
+              ),
               const SizedBox(width: 8),
-              Expanded(child: TextField(controller: _dirhem, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Dirhem'))),
+              Expanded(
+                child: TextField(
+                  controller: _dirhem,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Dirhem'),
+                ),
+              ),
               const SizedBox(width: 8),
-              Expanded(child: TextField(controller: _mandal, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Mandal'))),
+              Expanded(
+                child: TextField(
+                  controller: _mandal,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Mandal'),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),

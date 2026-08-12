@@ -123,7 +123,14 @@ class ChangeXApi {
       body = {'detail': res.body};
     }
     if (res.statusCode >= 400) {
-      throw ApiException(body['detail']?.toString() ?? 'İstek başarısız (${res.statusCode})');
+      final detail = body['detail'];
+      String message;
+      if (detail is Map) {
+        message = detail['message']?.toString() ?? detail.toString();
+      } else {
+        message = detail?.toString() ?? 'İstek başarısız (${res.statusCode})';
+      }
+      throw ApiException(message);
     }
     return body;
   }

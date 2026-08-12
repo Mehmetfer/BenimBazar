@@ -27,7 +27,11 @@ class _HomeScreenState extends State<HomeScreen> {
   int _balanceMandal = 0;
 
   static const categories = [
-    'Lobi',
+    'TÜM TAKASLAR',
+    'POPÜLER',
+    'YENİ',
+    'YAKININDA',
+    'HIZLI TAKAS',
     'Elektronik',
     'Spor',
     'Ev',
@@ -39,7 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _category = 'Lobi';
+    _category = 'TÜM TAKASLAR';
     _load();
   }
 
@@ -57,7 +61,14 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final list = await api.listings(
         q: _search.text.trim(),
-        category: _category == null || _category == 'Lobi' ? null : _category,
+        category: _category == null ||
+                _category == 'TÜM TAKASLAR' ||
+                _category == 'POPÜLER' ||
+                _category == 'YENİ' ||
+                _category == 'YAKININDA' ||
+                _category == 'HIZLI TAKAS'
+            ? null
+            : _category,
       );
       var bal = 0;
       for (final raw in list) {
@@ -195,7 +206,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 const SizedBox(width: 8),
                             itemBuilder: (context, i) {
                               final c = categories[i];
-                              final selected = (_category ?? 'Lobi') == c;
+                              final selected = (_category ?? 'TÜM TAKASLAR') == c;
                               return ChoiceChip(
                                 label: Text(c),
                                 selected: selected,

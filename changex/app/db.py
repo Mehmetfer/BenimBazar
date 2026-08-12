@@ -1,3 +1,5 @@
+"""CHANGE X SQLite persistence + schema migrations."""
+
 from __future__ import annotations
 
 import hashlib
@@ -5,26 +7,55 @@ import json
 import secrets
 import sqlite3
 import time
+import uuid
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 DB_PATH = DATA_DIR / "changex.db"
 
 
-def _connect() -> sqlite3.Connection:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+def _connect(path: Path | None = None) -> sqlite3.Connection:
+    db_path = path or DB_PATH
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path), timeout=30, isolation_level=None)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
     return conn
 
 
-def init_db() -> None:
-    with _connect() as conn:
+@contextmanager
+def connect(path: Path | None = None) -> Iterator[sqlite3.Connection]:
+    conn = _connect(path)
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+@contextmanager
+def immediate_tx(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        yield conn
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+
+
+def init_db(path: Path | None = None) -> None:
+    with connect(path) as conn:
         conn.executescript(
             """
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+              id TEXT PRIMARY KEY,
+              applied_at REAL NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS users (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               username TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -50,35 +81,43 @@ def init_db() -> None:
               subcategory TEXT NOT NULL DEFAULT '',
               condition TEXT NOT NULL DEFAULT 'good',
               location TEXT NOT NULL DEFAULT '',
-              value_mandal INTEGER NOT NULL,
+              mandal_units INTEGER NOT NULL,
               accept_categories TEXT NOT NULL DEFAULT '[]',
               wanted_items TEXT NOT NULL DEFAULT '',
-              min_value_mandal INTEGER NOT NULL DEFAULT 0,
-              max_value_mandal INTEGER NOT NULL DEFAULT 0,
+              min_mandal_units INTEGER NOT NULL DEFAULT 0,
+              max_mandal_units INTEGER NOT NULL DEFAULT 0,
               photo_urls TEXT NOT NULL DEFAULT '[]',
-              status TEXT NOT NULL DEFAULT 'active',
-              created_at REAL NOT NULL
+              status TEXT NOT NULL DEFAULT 'ACTIVE',
+              version INTEGER NOT NULL DEFAULT 1,
+              created_at REAL NOT NULL,
+              updated_at REAL NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS listing_items (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               listing_id INTEGER NOT NULL REFERENCES trade_listings(id) ON DELETE CASCADE,
               name TEXT NOT NULL,
-              value_mandal INTEGER NOT NULL
+              mandal_units INTEGER NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS trades (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              listing_id INTEGER NOT NULL REFERENCES trade_listings(id),
-              initiator_id INTEGER NOT NULL REFERENCES users(id),
-              counterparty_id INTEGER NOT NULL REFERENCES users(id),
-              state TEXT NOT NULL,
-              a_value_mandal INTEGER NOT NULL,
-              b_value_mandal INTEGER NOT NULL,
-              gap_mandal INTEGER NOT NULL,
+              proposer_id INTEGER NOT NULL REFERENCES users(id),
+              receiver_id INTEGER NOT NULL REFERENCES users(id),
+              offered_listing_ids TEXT NOT NULL,
+              requested_listing_ids TEXT NOT NULL,
+              calculated_offered_mandal_units INTEGER NOT NULL,
+              calculated_requested_mandal_units INTEGER NOT NULL,
+              value_gap_mandal_units INTEGER NOT NULL,
+              status TEXT NOT NULL,
+              version INTEGER NOT NULL DEFAULT 1,
               idempotency_key TEXT UNIQUE,
               created_at REAL NOT NULL,
-              updated_at REAL NOT NULL
+              updated_at REAL NOT NULL,
+              expires_at REAL,
+              accepted_at REAL,
+              cancelled_at REAL,
+              completed_at REAL
             );
 
             CREATE TABLE IF NOT EXISTS trade_events (
@@ -88,6 +127,17 @@ def init_db() -> None:
               from_state TEXT,
               to_state TEXT NOT NULL,
               note TEXT NOT NULL DEFAULT '',
+              correlation_id TEXT,
+              created_at REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS idempotency_keys (
+              key TEXT PRIMARY KEY,
+              user_id INTEGER NOT NULL,
+              action TEXT NOT NULL,
+              entity_type TEXT NOT NULL,
+              entity_id INTEGER NOT NULL,
+              response_json TEXT NOT NULL,
               created_at REAL NOT NULL
             );
 
@@ -95,11 +145,106 @@ def init_db() -> None:
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               actor_id INTEGER,
               action TEXT NOT NULL,
+              entity TEXT,
+              entity_id INTEGER,
               detail TEXT NOT NULL DEFAULT '',
+              correlation_id TEXT,
               created_at REAL NOT NULL
             );
             """
         )
+        _migrate(conn)
+
+
+def _table_cols(conn: sqlite3.Connection, table: str) -> set[str]:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return {r["name"] for r in rows}
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Idempotent migrations from v0 schema (value_mandal / initiator_id)."""
+    cols = _table_cols(conn, "trade_listings")
+    if cols and "value_mandal" in cols and "mandal_units" not in cols:
+        conn.execute("ALTER TABLE trade_listings ADD COLUMN mandal_units INTEGER NOT NULL DEFAULT 0")
+        conn.execute("UPDATE trade_listings SET mandal_units = value_mandal")
+    if cols and "version" not in cols:
+        conn.execute("ALTER TABLE trade_listings ADD COLUMN version INTEGER NOT NULL DEFAULT 1")
+    if cols and "updated_at" not in cols:
+        conn.execute("ALTER TABLE trade_listings ADD COLUMN updated_at REAL NOT NULL DEFAULT 0")
+        conn.execute("UPDATE trade_listings SET updated_at = created_at WHERE updated_at = 0")
+    if cols and "min_mandal_units" not in cols and "min_value_mandal" in cols:
+        conn.execute(
+            "ALTER TABLE trade_listings ADD COLUMN min_mandal_units INTEGER NOT NULL DEFAULT 0"
+        )
+        conn.execute("UPDATE trade_listings SET min_mandal_units = min_value_mandal")
+    if cols and "max_mandal_units" not in cols and "max_value_mandal" in cols:
+        conn.execute(
+            "ALTER TABLE trade_listings ADD COLUMN max_mandal_units INTEGER NOT NULL DEFAULT 0"
+        )
+        conn.execute("UPDATE trade_listings SET max_mandal_units = max_value_mandal")
+    # Normalize lowercase statuses
+    if cols:
+        conn.execute(
+            "UPDATE trade_listings SET status = upper(status) WHERE status GLOB '[a-z]*'"
+        )
+        conn.execute(
+            "UPDATE trade_listings SET status = 'ACTIVE' WHERE status IN ('active', 'ACTIVE') OR status = ''"
+        )
+
+    item_cols = _table_cols(conn, "listing_items")
+    if item_cols and "value_mandal" in item_cols and "mandal_units" not in item_cols:
+        conn.execute("ALTER TABLE listing_items ADD COLUMN mandal_units INTEGER NOT NULL DEFAULT 0")
+        conn.execute("UPDATE listing_items SET mandal_units = value_mandal")
+
+    trade_cols = _table_cols(conn, "trades")
+    if trade_cols and "initiator_id" in trade_cols and "proposer_id" not in trade_cols:
+        # Legacy table — leave old rows; new code uses new columns when present.
+        for col, decl in [
+            ("proposer_id", "INTEGER"),
+            ("receiver_id", "INTEGER"),
+            ("offered_listing_ids", "TEXT"),
+            ("requested_listing_ids", "TEXT"),
+            ("calculated_offered_mandal_units", "INTEGER NOT NULL DEFAULT 0"),
+            ("calculated_requested_mandal_units", "INTEGER NOT NULL DEFAULT 0"),
+            ("value_gap_mandal_units", "INTEGER NOT NULL DEFAULT 0"),
+            ("status", "TEXT"),
+            ("version", "INTEGER NOT NULL DEFAULT 1"),
+            ("expires_at", "REAL"),
+            ("accepted_at", "REAL"),
+            ("cancelled_at", "REAL"),
+            ("completed_at", "REAL"),
+        ]:
+            if col not in trade_cols:
+                try:
+                    conn.execute(f"ALTER TABLE trades ADD COLUMN {col} {decl}")
+                except sqlite3.OperationalError:
+                    pass
+        # Best-effort backfill
+        try:
+            conn.execute(
+                """
+                UPDATE trades SET
+                  proposer_id = COALESCE(proposer_id, initiator_id),
+                  receiver_id = COALESCE(receiver_id, counterparty_id),
+                  status = COALESCE(status, state),
+                  calculated_offered_mandal_units = COALESCE(calculated_offered_mandal_units, b_value_mandal, 0),
+                  calculated_requested_mandal_units = COALESCE(calculated_requested_mandal_units, a_value_mandal, 0),
+                  value_gap_mandal_units = COALESCE(value_gap_mandal_units, gap_mandal, 0),
+                  requested_listing_ids = COALESCE(requested_listing_ids, json_array(listing_id)),
+                  offered_listing_ids = COALESCE(offered_listing_ids, '[]')
+                """
+            )
+        except sqlite3.OperationalError:
+            pass
+
+    audit_cols = _table_cols(conn, "audit_logs")
+    if audit_cols:
+        if "entity" not in audit_cols:
+            conn.execute("ALTER TABLE audit_logs ADD COLUMN entity TEXT")
+        if "entity_id" not in audit_cols:
+            conn.execute("ALTER TABLE audit_logs ADD COLUMN entity_id INTEGER")
+        if "correlation_id" not in audit_cols:
+            conn.execute("ALTER TABLE audit_logs ADD COLUMN correlation_id TEXT")
 
 
 def hash_password(password: str, salt: str | None = None) -> str:
@@ -117,10 +262,30 @@ def verify_password(password: str, stored: str) -> bool:
     return secrets.compare_digest(check, digest)
 
 
-def audit(conn: sqlite3.Connection, actor_id: int | None, action: str, detail: str = "") -> None:
+def audit(
+    conn: sqlite3.Connection,
+    *,
+    actor_id: int | None,
+    action: str,
+    entity: str | None = None,
+    entity_id: int | None = None,
+    detail: str = "",
+    correlation_id: str | None = None,
+) -> None:
     conn.execute(
-        "INSERT INTO audit_logs(actor_id, action, detail, created_at) VALUES (?,?,?,?)",
-        (actor_id, action, detail, time.time()),
+        """
+        INSERT INTO audit_logs(actor_id, action, entity, entity_id, detail, correlation_id, created_at)
+        VALUES (?,?,?,?,?,?,?)
+        """,
+        (
+            actor_id,
+            action,
+            entity,
+            entity_id,
+            detail,
+            correlation_id or str(uuid.uuid4()),
+            time.time(),
+        ),
     )
 
 
@@ -132,3 +297,9 @@ def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
 
 def dumps(obj: Any) -> str:
     return json.dumps(obj, ensure_ascii=False)
+
+
+def loads(raw: str | None, default: Any = None) -> Any:
+    if not raw:
+        return default
+    return json.loads(raw)
