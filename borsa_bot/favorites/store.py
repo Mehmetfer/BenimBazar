@@ -186,7 +186,8 @@ class FavoritesStore:
             args.append(_norm_market(market_type))
         if active_only:
             q += " AND active=1"
-        q += " ORDER BY priority DESC, symbol ASC"
+        # Chronological: oldest first, newest added last (not alphabetical)
+        q += " ORDER BY created_at ASC, symbol ASC"
         with self._conn() as c:
             rows = c.execute(q, args).fetchall()
         return [self._row_to_fav(r) for r in rows]
@@ -234,10 +235,12 @@ class FavoritesStore:
         now = utc_now().isoformat()
         with self._conn() as c:
             if reactivate:
+                # Re-append to end of list by refreshing created_at
                 c.execute(
-                    "UPDATE favorites SET active=1, updated_at=?, notes=COALESCE(NULLIF(?, ''), notes) "
+                    "UPDATE favorites SET active=1, updated_at=?, created_at=?, "
+                    "notes=COALESCE(NULLIF(?, ''), notes) "
                     "WHERE user_id=? AND market_type=? AND symbol=?",
-                    (now, notes, self.user_id, mt, symbol),
+                    (now, now, notes, self.user_id, mt, symbol),
                 )
             else:
                 fid = uuid.uuid4().hex
@@ -247,7 +250,7 @@ class FavoritesStore:
                         strategy_preference, notification_preferences, active, created_at, updated_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                     ON CONFLICT(user_id, market_type, symbol) DO UPDATE SET
-                        active=1, updated_at=excluded.updated_at,
+                        active=1, updated_at=excluded.updated_at, created_at=excluded.created_at,
                         notes=CASE WHEN excluded.notes!='' THEN excluded.notes ELSE favorites.notes END
                     """,
                     (

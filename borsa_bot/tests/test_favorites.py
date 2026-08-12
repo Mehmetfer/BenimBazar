@@ -19,6 +19,20 @@ def test_favorite_toggle_independent_of_portfolio():
     assert store.is_favorite("THYAO") is False
 
 
+def test_favorites_ordered_by_add_time_newest_last():
+    tmp = Path(tempfile.mkdtemp()) / "forder.db"
+    store = FavoritesStore(tmp)
+    store.add("ZZZZ")
+    store.add("AAAA")
+    store.add("MMMM")
+    syms = [f.symbol for f in store.list_favorites()]
+    assert syms == ["ZZZZ", "AAAA", "MMMM"]
+    store.toggle("AAAA")  # remove
+    store.toggle("AAAA")  # re-add → goes to end
+    syms2 = [f.symbol for f in store.list_favorites()]
+    assert syms2 == ["ZZZZ", "MMMM", "AAAA"]
+
+
 def test_priority_score_not_simple_average_and_no_auto_buy():
     low = compute_priority_score(
         is_favorite=True,
