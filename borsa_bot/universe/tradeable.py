@@ -78,6 +78,36 @@ def list_tradeable_symbols() -> list[str]:
     return [i.symbol for i in list_tradeable()]
 
 
+def get_instrument(symbol: str) -> TradeableInstrument | None:
+    key = (symbol or "").strip().upper()
+    for item in list_tradeable(active_only=False, tradable_only=False):
+        if item.symbol == key:
+            return item
+    return None
+
+
+def search_tradeable(q: str, *, limit: int = 25) -> list[TradeableInstrument]:
+    """Case/diacritic-insensitive search across full BIST catalog (not only XU100)."""
+    import unicodedata
+
+    def _fold(text: str) -> str:
+        norm = unicodedata.normalize("NFKD", text or "")
+        return "".join(ch for ch in norm if not unicodedata.combining(ch)).casefold()
+
+    needle = _fold((q or "").strip())
+    if not needle:
+        return []
+    lim = max(1, min(50, int(limit)))
+    hits: list[TradeableInstrument] = []
+    for item in list_tradeable():
+        blob = _fold(f"{item.symbol} {item.name} {item.sector}")
+        if needle in blob:
+            hits.append(item)
+            if len(hits) >= lim:
+                break
+    return hits
+
+
 def universe_stats() -> dict[str, Any]:
     items = list_tradeable(active_only=False, tradable_only=False)
     active = [i for i in items if i.status == "ACTIVE" and i.tradable]

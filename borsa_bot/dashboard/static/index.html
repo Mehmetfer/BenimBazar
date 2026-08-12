@@ -57,8 +57,8 @@
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
     .k{background:rgba(0,0,0,.18);border-radius:12px;padding:8px 10px}
     .k span{display:block;color:var(--mute);font-size:.68rem;margin-bottom:2px}
-    .k b{font-size:.92rem}
-    .fc{margin-top:8px;font-size:.78rem;color:var(--mute);line-height:1.45}
+    .k b{font-size:.92rem;overflow-wrap:anywhere;word-break:break-word}
+    .fc{margin-top:8px;font-size:.78rem;color:var(--mute);line-height:1.45;overflow-wrap:anywhere;word-break:break-word;max-width:100%}
     .empty{padding:18px;text-align:center;color:var(--mute);font-size:.9rem;line-height:1.4}
     .more{width:100%;min-height:44px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--ink);font-weight:700;margin:4px 0 12px}
     .nav{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(5,1fr);gap:0;background:rgba(14,21,18,.94);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom));z-index:20}
@@ -113,6 +113,8 @@
     .b100-sig.BUY,.b100-sig.AL{background:rgba(46,207,138,.12);color:var(--buy)}
     .b100-sig.WATCH,.b100-sig.WAIT,.b100-sig.BEKLE,.b100-sig.HOLD{background:rgba(255,193,7,.12);color:#e6b800}
     .b100-sig.SELL,.b100-sig.SAT,.b100-sig.STRONG_SELL{background:rgba(255,90,90,.12);color:#ff6b6b}
+    .b100-outside-head{margin:14px 0 8px;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);font-weight:800}
+    .bist100-item.outside{border-style:dashed;border-color:rgba(91,141,239,.35)}
     .wallet-hero{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
   @media(min-width:520px){.wallet-hero{grid-template-columns:repeat(4,1fr)}}
     .wallet-stat{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:12px}
@@ -268,10 +270,10 @@
 
   <div class="panel" id="panel-mkt">
     <h2>BIST 100 Şirketleri</h2>
-    <p class="why">XU100 · Tam evren tarama · fiyat + öneri · TradingView grafik</p>
+    <p class="why">XU100 · Tam evren tarama · fiyat + öneri · TradingView grafik · arama BIST100 dışı hisseleri de bulur (ör. AGROT)</p>
     <div class="bist100-toolbar">
       <div class="search">
-        <input id="b100q" placeholder="Kod veya şirket ara (THYAO, Garanti…)" autocomplete="off" />
+        <input id="b100q" placeholder="Kod veya şirket ara (THYAO, AGROT…)" autocomplete="off" />
         <button type="button" id="b100SearchBtn">Ara</button>
       </div>
       <select id="b100Sector" aria-label="Sektör filtresi">
@@ -459,7 +461,7 @@
   let daily = null, dash = null, filter = 'ALL', showAll = false, lastPanel = 'home';
   let activeMarket = 'BIST';
   let cryptoDash = null, cFilter = 'ALL', lastCryptoPanel = 'home', cryptoTf = '15m';
-  let bist100 = {companies: [], sectors: [], selected: null, summary: {}, note: ''};
+  let bist100 = {companies: [], sectors: [], selected: null, summary: {}, note: '', extra: []};
   let paperWallet = null;
   let tvWidget = null;
   let dsLoadTimer = null;
@@ -1517,7 +1519,8 @@
   }
 
   async function b100Trade(sym, side){
-    const co = (bist100.companies||[]).find(x=>(x.ticker||x.symbol)===sym) || {symbol:sym, ticker:sym};
+    const all = [...(bist100.companies||[]), ...(bist100.extra||[])];
+    const co = all.find(x=>(x.ticker||x.symbol)===sym) || {symbol:sym, ticker:sym};
     await ensureWallet();
     const pos = (paperWallet?.positions||[]).find(p=>p.symbol===sym);
     openOrderSheet(sym, side, {
@@ -1527,65 +1530,42 @@
     });
   }
 
-  function renderBist100List(){
-    const q = (document.getElementById('b100q').value||'').trim().toLocaleLowerCase('tr-TR');
-    const sector = document.getElementById('b100Sector').value||'';
-    let rows = bist100.companies || [];
-    if(sector) rows = rows.filter(c => c.sector === sector);
-    if(q){
-      rows = rows.filter(c => {
-        const sym = (c.ticker||c.symbol||'').toLocaleLowerCase('tr-TR');
-        return sym.includes(q) ||
-          (c.name||'').toLocaleLowerCase('tr-TR').includes(q) ||
-          (c.sector||'').toLocaleLowerCase('tr-TR').includes(q);
-      });
-    }
-    rows = sortBist100Rows(rows);
-    document.getElementById('b100Meta').textContent =
-      `${rows.length} / ${bist100.total||100} şirket · ${bist100.analyzed||0} analiz · XU100`;
-    const sumEl = document.getElementById('b100Summary');
-    if(sumEl){
-      const s = bist100.summary||{};
-      sumEl.textContent = bist100.note || (
-        `Güçlü AL ${s.STRONG_BUY||0} · AL ${s.BUY||0} · İzle ${s.WATCH||0} · Bekle ${s.WAIT||0} · Sat ${(s.SELL||0)}`
-      );
-    }
-    const list = document.getElementById('bist100List');
-    if(!rows.length){
-      list.innerHTML = '<div class="empty">Sonuç yok</div>';
-      return;
-    }
-    list.innerHTML = rows.map(c => {
-      const sym = c.ticker || c.symbol;
-      const dec = c.decision||'NO_DATA';
-      const priceTxt = c.price!=null ? money(c.price)+' TL' : '—';
-      const chg = c.change_pct!=null ? pct(c.change_pct) : '';
-      const chgCls = (c.change_pct||0)>=0?'up':'down';
-      const score = c.final_score!=null ? c.final_score : (c.scores&&c.scores.final)!=null ? c.scores.final : c.buy_score;
-      const inPort = !!(c.in_portfolio || (c.position_qty||0) > 0);
-      const canBuy = c.price!=null;
-      return `
-      <div class="bist100-item ${(bist100.selected&&(bist100.selected.ticker||bist100.selected.symbol)===sym)?'on':''}">
+  function b100RowHtml(c, opts){
+    const outside = !!(opts && opts.outside);
+    const sym = c.ticker || c.symbol;
+    const dec = c.decision||'NO_DATA';
+    const priceTxt = c.price!=null ? money(c.price)+' TL' : '—';
+    const chg = c.change_pct!=null ? pct(c.change_pct) : '';
+    const chgCls = (c.change_pct||0)>=0?'up':'down';
+    const score = c.final_score!=null ? c.final_score : (c.scores&&c.scores.final)!=null ? c.scores.final : c.buy_score;
+    const inPort = !!(c.in_portfolio || (c.position_qty||0) > 0);
+    const canBuy = c.price!=null;
+    const secLabel = outside ? (c.sector ? c.sector+' · BIST100 dışı' : 'BIST100 dışı') : c.sector;
+    return `
+      <div class="bist100-item ${outside?'outside':''} ${(bist100.selected&&(bist100.selected.ticker||bist100.selected.symbol)===sym)?'on':''}">
         <button type="button" class="b100-main" data-b100="${sym}">
           <div class="t">${sym}${c.is_favorite?' ★':''}${inPort?' · portföy':''}</div>
           <div class="n">${c.name||c.company_name||''}</div>
-          <span class="sec">${c.sector}</span>
+          <span class="sec">${secLabel||''}</span>
         </button>
         <div class="b100-right">
-          <span class="b100-sig ${dec}">${c.decision_label||dec}</span>
+          <span class="b100-sig ${outside?'WATCH':dec}">${outside?(c.decision_label||'BIST100 dışı'):(c.decision_label||dec)}</span>
           <div class="b100-price">${priceTxt}</div>
           ${chg?`<div class="b100-chg ${chgCls}">${chg}</div>`:''}
-          <div class="b100-score">Skor ${score!=null?Number(score).toFixed(0):'—'}</div>
+          ${outside?'':`<div class="b100-score">Skor ${score!=null?Number(score).toFixed(0):'—'}</div>`}
           <div class="b100-actions">
             <button type="button" class="b100-trade buy" data-b100-buy="${sym}" ${canBuy?'':'disabled'} title="Paper AL">AL</button>
             <button type="button" class="b100-trade sell" data-b100-sell="${sym}" ${inPort?'':'disabled'} title="Paper SAT">SAT</button>
           </div>
         </div>
       </div>`;
-    }).join('');
+  }
+
+  function bindBist100ListHandlers(list){
     list.querySelectorAll('[data-b100]').forEach(btn=>{
       btn.onclick = ()=>{
-        const company = (bist100.companies||[]).find(x => (x.ticker||x.symbol) === btn.dataset.b100);
+        const all = [...(bist100.companies||[]), ...(bist100.extra||[])];
+        const company = all.find(x => (x.ticker||x.symbol) === btn.dataset.b100);
         if(!company) return;
         bist100.selected = company;
         renderBist100List();
@@ -1604,6 +1584,59 @@
         b100Trade(btn.dataset.b100Sell, 'SELL');
       };
     });
+  }
+
+  async function renderBist100List(){
+    const qRaw = (document.getElementById('b100q').value||'').trim();
+    const q = qRaw.toLocaleLowerCase('tr-TR');
+    const sector = document.getElementById('b100Sector').value||'';
+    let rows = bist100.companies || [];
+    if(sector) rows = rows.filter(c => c.sector === sector);
+    if(q){
+      rows = rows.filter(c => {
+        const sym = (c.ticker||c.symbol||'').toLocaleLowerCase('tr-TR');
+        return sym.includes(q) ||
+          (c.name||'').toLocaleLowerCase('tr-TR').includes(q) ||
+          (c.sector||'').toLocaleLowerCase('tr-TR').includes(q);
+      });
+    }
+    rows = sortBist100Rows(rows);
+
+    let extra = [];
+    if(qRaw.length >= 2){
+      try{
+        const body = await (await fetch('/api/bist/search?q='+encodeURIComponent(qRaw)+'&limit=15')).json();
+        const xu = new Set((bist100.companies||[]).map(c=>(c.ticker||c.symbol)));
+        extra = (body.results||[]).filter(r => !r.xu100 && !xu.has(r.symbol));
+      }catch(_e){ extra = []; }
+    }
+    bist100.extra = extra;
+
+    document.getElementById('b100Meta').textContent =
+      `${rows.length} / ${bist100.total||100} XU100` +
+      (extra.length ? ` · +${extra.length} BIST100 dışı` : '') +
+      ` · ${bist100.analyzed||0} analiz`;
+    const sumEl = document.getElementById('b100Summary');
+    if(sumEl){
+      const s = bist100.summary||{};
+      sumEl.textContent = bist100.note || (
+        `Güçlü AL ${s.STRONG_BUY||0} · AL ${s.BUY||0} · İzle ${s.WATCH||0} · Bekle ${s.WAIT||0} · Sat ${(s.SELL||0)}`
+      );
+    }
+    const list = document.getElementById('bist100List');
+    if(!rows.length && !extra.length){
+      list.innerHTML = qRaw
+        ? `<div class="empty">“${qRaw}” BIST100'de yok.<br><span style="font-size:.8rem">Tüm BIST aramasında da sonuç çıkmadı. Kod doğru mu? (örn. AGROT)</span></div>`
+        : '<div class="empty">Sonuç yok</div>';
+      return;
+    }
+    let html = rows.map(c => b100RowHtml(c, {outside:false})).join('');
+    if(extra.length){
+      html += `<div class="b100-outside-head">BIST100 dışı sonuçlar</div>` +
+        extra.map(c => b100RowHtml(c, {outside:true})).join('');
+    }
+    list.innerHTML = html;
+    bindBist100ListHandlers(list);
   }
 
   async function loadBist100(){

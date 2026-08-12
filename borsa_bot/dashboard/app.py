@@ -212,6 +212,62 @@ def bist100_company(ticker: str) -> dict:
     }
 
 
+@app.get("/api/bist/search")
+def bist_search(q: str = "", limit: int = 20) -> dict:
+    """Search full BIST catalog (XU100 + outside). Paper quote when available."""
+    from universe.bist100 import get_company
+    from universe.tradeable import search_tradeable
+
+    needle = (q or "").strip()
+    if len(needle) < 2:
+        return {
+            "ok": True,
+            "q": needle,
+            "count": 0,
+            "results": [],
+            "note": "En az 2 karakter girin",
+        }
+    hits = search_tradeable(needle, limit=max(1, min(40, int(limit))))
+    results: list[dict] = []
+    for inst in hits:
+        in_xu100 = bool(inst.xu100 or get_company(inst.symbol))
+        row: dict = {
+            "symbol": inst.symbol,
+            "ticker": inst.symbol,
+            "name": inst.name,
+            "sector": inst.sector,
+            "xu100": in_xu100,
+            "tradingview_symbol": f"BIST:{inst.symbol}",
+            "decision": "OUTSIDE_XU100" if not in_xu100 else "XU100",
+            "decision_label": "BIST100 dışı" if not in_xu100 else "BIST100",
+            "price": None,
+            "change_pct": None,
+            "in_portfolio": service.ledger.get_position(inst.symbol) is not None,
+            "position_qty": 0.0,
+        }
+        pos = service.ledger.get_position(inst.symbol)
+        if pos:
+            row["position_qty"] = float(pos.quantity)
+        try:
+            quote = service.provider.get_quote(inst.symbol)
+            row["price"] = round(float(quote.price), 4)
+        except Exception:  # noqa: BLE001
+            pass
+        results.append(row)
+    outside = [r for r in results if not r["xu100"]]
+    return {
+        "ok": True,
+        "q": needle,
+        "count": len(results),
+        "outside_xu100": len(outside),
+        "results": results,
+        "note": (
+            f"{len(results)} sonuç · {len(outside)} BIST100 dışı · "
+            "AGROT gibi hisseler XU100'de olmayabilir"
+        ),
+    }
+
+
 @app.get("/api/crypto/status")
 def crypto_status() -> dict:
     """CRYPTO plane status. Never mixes into BIST TradingService."""

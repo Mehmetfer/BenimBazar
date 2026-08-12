@@ -45,16 +45,24 @@ def _default_symbols() -> list[str]:
 
 def _sector_for(sym: str) -> str:
     from universe.bist100 import get_company
+    from universe.tradeable import get_instrument
 
     c = get_company(sym)
-    return c.sector if c else ""
+    if c:
+        return c.sector
+    inst = get_instrument(sym)
+    return inst.sector if inst else ""
 
 
 def _name_for(sym: str) -> str:
     from universe.bist100 import get_company
+    from universe.tradeable import get_instrument
 
     c = get_company(sym)
-    return c.name if c else sym
+    if c:
+        return c.name
+    inst = get_instrument(sym)
+    return inst.name if inst else sym
 
 
 class YahooBistMarketDataProvider:

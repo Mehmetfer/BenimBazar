@@ -4,7 +4,7 @@
   "kind": "TRADEABLE_UNIVERSE_CATALOG",
   "note": "Metadata catalog for discovery. NOT live prices. XU100 membership is separate (xu100/index_membership). Live symbol discovery from MARKET_DATA_URL overrides when connected.",
   "updated": "2026-08-11",
-  "count": 508,
+  "count": 509,
   "xu100_count": 100,
   "instruments": [
     {
@@ -85,6 +85,20 @@
       "exchange": "BIST",
       "market": "BIST",
       "sector": "Holding",
+      "currency": "TRY",
+      "status": "ACTIVE",
+      "tradable": true,
+      "lot_size": 1,
+      "tick_size": null,
+      "xu100": false,
+      "index_membership": []
+    },
+    {
+      "symbol": "AGROT",
+      "name": "Agrotech Yüksek Teknoloji ve Yatırım A.Ş.",
+      "exchange": "BIST",
+      "market": "BIST",
+      "sector": "Teknoloji",
       "currency": "TRY",
       "status": "ACTIVE",
       "tradable": true,
