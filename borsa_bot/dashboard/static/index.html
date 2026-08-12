@@ -15,7 +15,7 @@
     *{box-sizing:border-box}
     body{margin:0;font-family:"Segoe UI",ui-sans-serif,system-ui,sans-serif;background:
       radial-gradient(900px 420px at 80% -10%,rgba(46,207,138,.12),transparent),
-      linear-gradient(180deg,#121c18,var(--bg));color:var(--ink);min-height:100dvh;padding:12px 12px 88px}
+      linear-gradient(180deg,#121c18,var(--bg));color:var(--ink);min-height:100dvh;padding:12px 12px 88px;overflow-x:hidden;max-width:100vw}
     .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
     .brand{font-size:1.35rem;font-weight:800;letter-spacing:-.03em;margin:0}
     .sub{margin:2px 0 0;color:var(--mute);font-size:.78rem}
@@ -38,7 +38,7 @@
     .search input{flex:1;min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:0 12px;font:inherit}
     .search button{min-height:44px;min-width:44px;border:0;border-radius:12px;background:var(--buy);color:#fff;font-weight:800}
     h2{margin:14px 0 8px;font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
-    .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px;cursor:pointer}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px;cursor:pointer;max-width:100%;overflow:hidden;min-width:0}
     .card:active{transform:scale(.995)}
     .row1{display:flex;justify-content:space-between;align-items:center;gap:8px}
     .sym{font-size:1.15rem;font-weight:800}
@@ -53,7 +53,7 @@
     .price{font-size:1.55rem;font-weight:800;margin-top:8px;letter-spacing:-.02em}
     .chg{font-size:.9rem;font-weight:700;margin-top:2px}
     .up{color:var(--ok)}.down{color:var(--bad)}
-    .meta{color:var(--mute);font-size:.72rem;margin-top:4px}
+    .meta{color:var(--mute);font-size:.72rem;margin-top:4px;overflow-wrap:anywhere;word-break:break-word;max-width:100%}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
     .k{background:rgba(0,0,0,.18);border-radius:12px;padding:8px 10px}
     .k span{display:block;color:var(--mute);font-size:.68rem;margin-bottom:2px}
@@ -65,9 +65,11 @@
     .nav button{border:0;background:transparent;color:var(--mute);font-size:.68rem;font-weight:700;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
     .nav button.on{color:var(--buy2)}
     .nav .ico{font-size:1.05rem;line-height:1}
-    .panel{display:none}.panel.on{display:block}
+    .panel{display:none;max-width:100%;overflow-x:hidden;min-width:0}.panel.on{display:block}
     .detail-back{min-height:40px;border:0;background:transparent;color:var(--buy2);font-weight:800;padding:0;margin-bottom:8px}
-    .why{color:var(--mute);font-size:.8rem;line-height:1.4}
+    .why{color:var(--mute);font-size:.8rem;line-height:1.4;overflow-wrap:anywhere;word-break:break-word;max-width:100%}
+    .plan-pre{margin:0;padding:10px;border-radius:10px;background:rgba(0,0,0,.18);font-size:.72rem;line-height:1.45;overflow-x:auto;white-space:pre-wrap;word-break:break-word;max-width:100%}
+    .trade-plan-grid .k b{overflow-wrap:anywhere;word-break:break-word}
     .sysline{font-size:.78rem;color:var(--mute);margin-bottom:8px}
     .market-switch{display:flex;gap:6px;margin:0 0 10px}
     .market-btn{flex:1;min-height:40px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--mute);font-weight:800;font-size:.8rem}
@@ -981,19 +983,14 @@
         <div class="meta">${chart.note||''} · n=${chart.count||0}</div>
       </div>
       <div class="card" style="cursor:default"><h2 style="margin-top:0">Indicators</h2>
-        <div class="why">MTF: ${JSON.stringify(ind.mtf||{})}</div>
+        <pre class="plan-pre">${JSON.stringify(ind.mtf||{}, null, 2)}</pre>
         <div class="meta" style="margin-top:6px">Confirmations: ${(ind.confirmations||[]).join(', ')||'—'} · Model skoru ${ind.model_score??'—'} (${ind.probability_label||'NOT_A_PROBABILITY'})</div>
       </div>
       <div class="card" style="cursor:default"><h2 style="margin-top:0">Signal</h2>
         <div class="why">${r.decision_label||r.signal||'—'} · skor ${r.confidence??r.model_score??'—'}</div>
       </div>
       <div class="card" style="cursor:default"><h2 style="margin-top:0">Trade Plan</h2>
-        <div class="grid">
-          <div class="k"><span>Giriş</span><b>${plan.entry??'—'}</b></div>
-          <div class="k"><span>Stop</span><b>${plan.stop_loss??'—'}</b></div>
-          <div class="k"><span>Hedef 1</span><b>${plan.target_1??'—'}</b></div>
-          <div class="k"><span>R/R</span><b>${plan.risk_reward??'—'}</b></div>
-        </div>
+        ${formatTradePlanHtml(r.trade_plan || r.ai_trade_plan)}
         <div class="meta" style="margin-top:6px">Plan ≠ emir. Canlı broker yok.</div>
       </div>
       <div class="card" style="cursor:default"><h2 style="margin-top:0">Prediction Accuracy</h2>
@@ -1002,7 +999,7 @@
       </div>
       <div class="card" style="cursor:default"><h2 style="margin-top:0">Risk</h2>
         <div class="why">${risk.allowed===false?'BLOKE':(risk.verdict||risk.reason||'—')}</div>
-        <div class="meta">${typeof risk==='object'?JSON.stringify(risk):String(risk||'—')}</div>
+        <div class="meta">${risk.size_mult!=null?`Size ×${risk.size_mult}`:''}${risk.risk_level?` · ${risk.risk_level}`:''}</div>
       </div>`;
     document.querySelectorAll('#tfRow .tf-btn').forEach(b=>{
       b.onclick = ()=>{ cryptoTf=b.dataset.tf; openCryptoDetail(sym); };
@@ -1059,6 +1056,31 @@
 
   function fmtNum(n, digits=2){
     return Number(n||0).toLocaleString('tr-TR',{minimumFractionDigits:digits,maximumFractionDigits:digits});
+  }
+
+  function formatTradePlanHtml(plan){
+    if(!plan) return '<div class="empty">Plan yok</div>';
+    const ez = plan.entry_zone || plan.entry || {};
+    const low = ez.low;
+    const high = ez.high;
+    const optimal = ez.optimal;
+    const stop = plan.stop_loss ?? plan.stop ?? null;
+    const t1 = (plan.target1 && plan.target1.price != null) ? plan.target1.price : (plan.target_1 ?? plan.t1 ?? null);
+    const rr = plan.risk_reward ?? plan.rr ?? null;
+    let entryTxt = '—';
+    if(low != null && high != null && Number(low) !== Number(high)){
+      entryTxt = `${money(low)} – ${money(high)}`;
+    } else if(optimal != null){
+      entryTxt = money(optimal) + (ez.label ? ` (${ez.label})` : '');
+    } else if(plan.entry != null){
+      entryTxt = money(plan.entry);
+    }
+    return `<div class="grid trade-plan-grid">
+      <div class="k"><span>Giriş</span><b>${entryTxt}</b></div>
+      <div class="k"><span>Stop</span><b>${stop!=null?money(stop)+' TL':'—'}</b></div>
+      <div class="k"><span>Hedef 1</span><b>${t1!=null?money(t1)+' TL':'—'}</b></div>
+      <div class="k"><span>R/R</span><b>${rr!=null?('1 : '+Number(rr).toFixed(2)):'—'}</b></div>
+    </div>`;
   }
 
   function bindPortfolioRows(){
@@ -1435,10 +1457,7 @@
         </div>
       </div>
       <div class="card" style="cursor:default"><h2 style="margin-top:0">Trade Plan</h2>
-        <div class="why">${r.ai_trade_plan?JSON.stringify({
-          entry:r.ai_trade_plan.entry_zone, stop:r.ai_trade_plan.stop_loss,
-          t1:(r.ai_trade_plan.target1||{}).price, rr:r.ai_trade_plan.risk_reward
-        }):'Plan yok'}</div>
+        ${formatTradePlanHtml(r.ai_trade_plan || r.trade_plan)}
         <div class="meta" style="margin-top:6px">Plan ≠ emir. Risk Engine + onay gerekir.</div>
       </div>
       <div class="card" style="cursor:default"><h2 style="margin-top:0">AI Forecast</h2><div class="fc">${fc}</div>
