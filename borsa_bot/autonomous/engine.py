@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from alerts.bridge import emit_kill_switch, emit_risk_alert
 from autonomous.audit import AutonomyAuditLog
+from autonomous.desk_gate import evaluate_desk_gate
 from autonomous.discovery import discover_bist
 from autonomous.events import AutonomyEventLog, AutonomyEventType
 from autonomous.execution_modes import ExecutionMode, parse_execution_mode
@@ -65,9 +66,10 @@ class EngineCycleReport:
     reconcile: dict[str, Any] = field(default_factory=dict)
     explainable: list[dict[str, Any]] = field(default_factory=list)
     ai_decision: dict[str, Any] = field(default_factory=dict)
+    desk_gate: dict[str, Any] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
     live_broker: str = "DISABLED"
-    note: str = "SIGNAL ≠ ORDER · model_score ≠ calibrated probability · LIVE default locked"
+    note: str = "SIGNAL ≠ ORDER · DESK gate on AUTO · LIVE default locked"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -126,6 +128,7 @@ class AutonomousTradingEngine:
         )
         if not gov.new_trades_allowed:
             blocked = True
+        live_flag = bool(getattr(settings, "live_broker_enabled", False))
         return {
             "autonomous_mode": bool(getattr(settings, "autonomy_enabled", True)) and not self._halted,
             "autonomy_level": level.to_dict(),
@@ -136,9 +139,21 @@ class AutonomousTradingEngine:
             "execution_mode": em.value,
             "blocked": blocked,
             "halt_reason": self._halt_reason,
+            "halted": self._halted,
             "health": health.to_dict(),
-            "live_broker": "DISABLED" if not getattr(settings, "live_broker_enabled", False) else "ENABLED_FLAG_ONLY",
+            "live_broker": "DISABLED" if not live_flag else "ENABLED_FLAG_ONLY",
             "live_trading": False,
+            "desk_gate_auto": bool(getattr(settings, "desk_gate_auto", True)),
+            "honesty": {
+                "trading_maturity_level": level.level,
+                "trading_maturity_label": level.label,
+                "full_level8_claimed": False,
+                "live_ready": False,
+                "live_exec_selected_but_locked": em is ExecutionMode.LIVE and not live_flag,
+                "desk_gate_auto": bool(getattr(settings, "desk_gate_auto", True)),
+                "signal_ne_order": True,
+                "note": "Trading L* ≠ protocol Otonomi L8 · AI score ≠ profit",
+            },
             "account": {
                 "equity": self.trading.ledger.equity(),
                 "cash": self.trading.ledger.cash,
@@ -147,7 +162,7 @@ class AutonomousTradingEngine:
             },
             "last_cycle": self._last.to_dict() if self._last else None,
             "ai": self.ai.status(),
-            "note": self._last.note if self._last else "AUTONOMOUS ENGINE ready · LIVE locked · no guaranteed profit",
+            "note": self._last.note if self._last else "AUTONOMOUS ENGINE ready · DESK gate · LIVE locked",
         }
 
     def self_awareness(self) -> dict[str, Any]:
@@ -441,6 +456,7 @@ class AutonomousTradingEngine:
                 "orders_submitted": report.orders_submitted,
                 "shadow_intents": len(report.shadow_intents),
                 "symbols_scanned": report.symbols_scanned,
+                "desk_gate": report.desk_gate.get("stats") or {},
             },
             note=report.status,
         )
@@ -518,6 +534,51 @@ class AutonomousTradingEngine:
             symbol=decision.symbol,
             payload={"risk_verdict": decision.risk_verdict},
         )
+
+        # Institutional desk gate — required for AUTO paper fills (fail-closed)
+        desk_require = bool(getattr(settings, "desk_gate_auto", True)) and auto_paper_allowed(um) and em is ExecutionMode.PAPER
+        desk = evaluate_desk_gate(
+            self.trading,
+            decision,
+            ser if isinstance(ser, dict) else None,
+            require_buy=desk_require or em is ExecutionMode.SHADOW,
+        )
+        stats = report.desk_gate.setdefault(
+            "stats",
+            {"evaluated": 0, "allowed": 0, "blocked": 0, "veto": 0},
+        )
+        stats["evaluated"] = int(stats.get("evaluated") or 0) + 1
+        if desk.get("veto"):
+            stats["veto"] = int(stats.get("veto") or 0) + 1
+        if desk.get("allowed"):
+            stats["allowed"] = int(stats.get("allowed") or 0) + 1
+        else:
+            stats["blocked"] = int(stats.get("blocked") or 0) + 1
+        report.desk_gate.setdefault("last", desk)
+        report.explainable.append(
+            {
+                "symbol": decision.symbol,
+                "desk_decision": desk.get("decision"),
+                "desk_entry": desk.get("entry_action"),
+                "desk_allowed": desk.get("allowed"),
+                "desk_reason": desk.get("reason"),
+            }
+        )
+
+        if desk_require and not desk.get("allowed"):
+            self.events.emit(
+                AutonomyEventType.ORDER_BLOCKED,
+                cycle_id=report.cycle_id,
+                symbol=decision.symbol,
+                payload={
+                    "reason": desk.get("reason") or "DESK_GATE",
+                    "desk_decision": desk.get("decision"),
+                    "desk_entry": desk.get("entry_action"),
+                    "veto": desk.get("veto"),
+                    "reason_codes": ["DESK_GATE"],
+                },
+            )
+            return
 
         # PAPER/SEMI user modes: no auto fills. SHADOW may still emit WOULD_* intents.
         if em is ExecutionMode.SHADOW:

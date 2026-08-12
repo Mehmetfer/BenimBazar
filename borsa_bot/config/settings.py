@@ -150,6 +150,8 @@ class Settings:
     allow_paper_when_closed: bool = _b("ALLOW_PAPER_WHEN_CLOSED", True)
     bist_paper_auto_follow: bool = _b("BIST_PAPER_AUTO_FOLLOW", False)
     paper_wallet_cycle_sec: int = _i("PAPER_WALLET_CYCLE_SEC", 90)
+    # Institutional desk must PASS before AUTO paper entries (fail-closed)
+    desk_gate_auto: bool = _b("DESK_GATE_AUTO", True)
     # Auth
     auth_enabled: bool = _b("AUTH_ENABLED", False)
     auth_session_ttl_sec: int = _i("AUTH_SESSION_TTL_SEC", 86400)

@@ -620,18 +620,17 @@ def desk_scan(limit: int = 20) -> dict:
 
 @app.post("/api/paper/wallet/init")
 def paper_wallet_init() -> dict:
-    """Reset BIST paper wallet to STARTING_CASH (default 100k). Does not unlock live money."""
+    """Reset BIST paper wallet to STARTING_CASH (default 100k). Does not change autonomy mode."""
     service.ledger.reset()
-    autonomy.set_user_mode("AUTO")
     mode_store.set_execution_mode("PAPER")
     return {
         "ok": True,
         "message": (
             f"BIST paper cüzdan {settings.starting_cash:,.0f} TL ile sıfırlandı · "
-            f"auto_follow={settings.bist_paper_auto_follow}"
+            f"otonomi modu değişmedi · auto_follow={settings.bist_paper_auto_follow}"
         ),
         "wallet": service.paper_wallet(),
-        "user_trading_mode": "AUTO",
+        "user_trading_mode": engine.user_mode().value,
         "execution_mode": "PAPER",
         "auto_follow": settings.bist_paper_auto_follow,
     }
@@ -1410,6 +1409,34 @@ def autonomy_set_execution_mode(body: AutonomyExecutionModeBody) -> dict:
         out["warning"] = "LIVE selected but LIVE_BROKER_ENABLED=false — orders remain BLOCKED"
         return out
     return engine.set_execution_mode(m.value)
+
+
+@app.post("/api/autonomy/halt")
+def autonomy_halt(body: dict | None = None) -> dict:
+    """Manual kill — blocks new autonomous entries until clear-halt."""
+    reason = "MANUAL_UI_HALT"
+    if isinstance(body, dict) and body.get("reason"):
+        reason = str(body.get("reason"))[:200]
+    engine.halt(reason)
+    return {
+        "ok": True,
+        "halted": True,
+        "halt_reason": reason,
+        "status": engine.status(),
+        "note": "New AUTO entries blocked · clear with /api/autonomy/clear-halt",
+    }
+
+
+@app.post("/api/autonomy/clear-halt")
+def autonomy_clear_halt() -> dict:
+    """Manual clear only — never auto-clears."""
+    engine.clear_halt()
+    return {
+        "ok": True,
+        "halted": False,
+        "status": engine.status(),
+        "note": "Halt cleared · LIVE still locked by default",
+    }
 
 
 @app.post("/api/autonomy/cycle")

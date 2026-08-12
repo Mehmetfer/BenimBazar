@@ -60,7 +60,8 @@ def test_paper_wallet_init_api():
   body = r.json()
   assert body["ok"] is True
   assert body["wallet"]["cash"] == 100_000
-  assert body["user_trading_mode"] == "AUTO"
+  assert body["user_trading_mode"] in {"PAPER", "SEMI_AUTO", "AUTO", "PAUSED"}
+  assert body["execution_mode"] == "PAPER"
 
 
 def test_paper_wallet_topup_api():

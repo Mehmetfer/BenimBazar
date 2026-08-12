@@ -473,7 +473,7 @@
       <div class="meta" style="margin-top:6px">İleride açılır · şimdi sadece paper · LIVE READY: HAYIR</div>
     </div>
     <div class="card" style="cursor:default" id="autonomyCard">
-      <div class="why"><b>AUTONOMY</b> — SIGNAL ≠ ORDER · LIVE broker kilitli</div>
+      <div class="why"><b>OTONOMİ</b> — SIGNAL ≠ ORDER · DESK gate · LIVE kilitli</div>
       <div class="filters" id="autonomyModes" style="margin-top:8px">
         <button class="filter" data-amode="PAPER" type="button">PAPER</button>
         <button class="filter" data-amode="SEMI_AUTO" type="button">SEMI</button>
@@ -486,7 +486,14 @@
         <button class="filter" data-emode="LIVE" type="button">LIVE*</button>
       </div>
       <div id="autonomyMeta" class="meta" style="margin-top:8px">—</div>
-      <button class="more" id="autonomyCycleBtn" type="button" style="margin-top:8px">Engine cycle (BIST)</button>
+      <div id="autonomyHonesty" class="meta" style="margin-top:6px">—</div>
+      <div id="autonomyDesk" class="meta" style="margin-top:6px">Desk: —</div>
+      <div id="autonomyEvents" class="meta" style="margin-top:6px;max-height:120px;overflow:auto">—</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+        <button class="more" id="autonomyCycleBtn" type="button">Engine cycle (BIST)</button>
+        <button class="more" id="autonomyHaltBtn" type="button" style="border-color:#c44b4b;color:#ffb4b4">HALT</button>
+        <button class="more" id="autonomyClearHaltBtn" type="button">Halt temizle</button>
+      </div>
     </div>
     <div class="card" style="cursor:default" id="aiDecisionCard">
       <div class="why"><b>AI STATUS</b> ● <span id="aiStatusDot">—</span></div>
@@ -2077,10 +2084,47 @@
       document.querySelectorAll('#execModes .filter').forEach(b=>{
         b.classList.toggle('on', b.dataset.emode===em);
       });
-      document.getElementById('autonomyMeta').textContent =
-        `L${(st.autonomy_level||{}).level??'?'} ${(st.autonomy_level||{}).label||''} · ${st.autonomous_status||'—'} · User ${mode} · Exec ${em} · blocked=${st.blocked} · gov ${(st.governor||{}).state||'—'} · LIVE ${st.live_broker||'DISABLED'}`;
+      const lvl = st.autonomy_level||{};
+      const last = st.last_cycle||{};
+      const dg = (last.desk_gate&&last.desk_gate.stats)||{};
+      document.getElementById('autonomyMeta').innerHTML =
+        `Trading L${lvl.level??'?'} <b>${lvl.label||''}</b> · ${st.autonomous_status||'—'}`+
+        ` · User <b>${mode}</b> · Exec <b>${em}</b>`+
+        ` · blocked=${st.blocked} · gov ${(st.governor||{}).state||'—'}`+
+        ` · LIVE ${st.live_broker||'DISABLED'}`+
+        (st.halted ? ` · <b style="color:#ff6b6b">HALTED</b> ${st.halt_reason||''}` : '')+
+        `<br>Son cycle: ${last.status||'—'} · orders=${last.orders_submitted??'—'} · desk ${dg.allowed??0}/${dg.evaluated??0} geçti`;
+      const h = st.honesty||{};
+      let honesty = `DESK_GATE_AUTO=${st.desk_gate_auto!==false?'ON':'OFF'} · full_L8_claimed=${h.full_level8_claimed===true} · LIVE READY=HAYIR · SIGNAL≠ORDER`;
+      if(h.live_exec_selected_but_locked){
+        honesty = `⚠ LIVE* seçili ama broker KİLİTLİ — emir yok · ` + honesty;
+      }
+      document.getElementById('autonomyHonesty').textContent = honesty;
     }catch(e){
       document.getElementById('autonomyMeta').textContent = 'Autonomy API yok';
+    }
+    try{
+      const br = await (await fetch('/api/desk/briefing')).json();
+      const b = br.briefing || br;
+      document.getElementById('autonomyDesk').textContent =
+        `Desk: ${b.market_regime||b.regime||'—'} · risk ${b.risk_posture||b.risk||'—'} · `+
+        `fırsat ${(b.top_opportunities||b.opportunities||[]).length||0} · ${b.note||b.summary||'committee+pipeline'}`;
+    }catch(_e){
+      document.getElementById('autonomyDesk').textContent = 'Desk briefing yok';
+    }
+    try{
+      const ev = await (await fetch('/api/autonomy/events?limit=12')).json();
+      const rows = (ev.events||ev||[]).slice(-10).reverse();
+      document.getElementById('autonomyEvents').innerHTML = rows.length
+        ? rows.map(e=>{
+            const ts = (e.ts||e.created_at||'').toString().slice(11,19);
+            const sym = e.symbol ? ` ${e.symbol}` : '';
+            const why = (e.payload&& (e.payload.reason||e.payload.desk_reason)) || '';
+            return `${ts} <b>${e.event_type||e.type||'?'}</b>${sym}${why?(' · '+why):''}`;
+          }).join('<br>')
+        : 'Henüz autonomy event yok — cycle çalıştırın';
+    }catch(_e){
+      document.getElementById('autonomyEvents').textContent = 'Events API yok';
     }
     try{
       const ai = await (await fetch('/api/ai/status')).json();
@@ -2161,8 +2205,18 @@
     document.getElementById('autonomyMeta').textContent = 'Engine cycle…';
     const r = await (await fetch('/api/autonomy/cycle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({market:'BIST',force:true,use_engine:true})})).json();
     const f = r.filter_stats||{};
+    const dg = (r.desk_gate&&r.desk_gate.stats)||{};
     document.getElementById('autonomyMeta').textContent =
-      `${r.status} · exec=${r.execution_mode} · UNIVERSE=${f.UNIVERSE??'—'} DEEP=${f.DEEP_ANALYSIS??r.symbols_scanned??'—'} orders=${r.orders_submitted??0} shadow=${(r.shadow_intents||[]).length} · LIVE=${r.live_broker||'DISABLED'}`;
+      `${r.status} · exec=${r.execution_mode} · UNIVERSE=${f.UNIVERSE??'—'} DEEP=${f.DEEP_ANALYSIS??r.symbols_scanned??'—'} orders=${r.orders_submitted??0} shadow=${(r.shadow_intents||[]).length} · desk ${dg.allowed??0}/${dg.evaluated??0} · LIVE=${r.live_broker||'DISABLED'}`;
+    await loadAutonomy();
+  };
+  document.getElementById('autonomyHaltBtn').onclick=async()=>{
+    if(!confirm('Otonomi HALT? Yeni AUTO girişler durur.')) return;
+    await fetch('/api/autonomy/halt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'MANUAL_UI_HALT'})});
+    await loadAutonomy();
+  };
+  document.getElementById('autonomyClearHaltBtn').onclick=async()=>{
+    await fetch('/api/autonomy/clear-halt',{method:'POST'});
     await loadAutonomy();
   };
   const l7btn=document.getElementById('level7CycleBtn');
