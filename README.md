@@ -1,22 +1,30 @@
-# Borsa
+# CHANGE X
 
-Kağıt üstü **al–sat** uygulaması. Ollama yok.
+Para yok. Satın alma yok. **Sadece takas.**
+
+Platform birimleri: **Mandal · Dirhem · Madalyon**  
+(1 Madalyon = 254 Dirhem = 64.516 Mandal — gerçek para değildir)
 
 ## Çalıştır
 
 ```bash
 bash scripts/install.sh
-bash scripts/dev.sh
+bash scripts/start.sh
 ```
 
 Aç: http://127.0.0.1:8000
 
-Başlangıç nakdi: 100.000 TL (simülasyon)
+## API (özet)
 
-## API
+- `POST /api/auth/register|login`
+- `GET /api/listings` (ziyaretçi OK)
+- `POST /api/listings` (login)
+- `POST /api/trades/offer` (login)
+- Değer hesabı sunucuda (`changex/app/value.py`)
 
-- `GET /api/market` — fiyatlar
-- `GET /api/portfolio` — nakit, pozisyon, işlemler
-- `POST /api/buy` `{ "symbol": "THYAO", "quantity": 10 }`
-- `POST /api/sell` `{ "symbol": "THYAO", "quantity": 5 }`
-- `POST /api/reset`
+## Mimari
+
+Detay: `docs/CHANGE_X_ARCHITECTURE.md`
+
+Flutter kaynak: `changex_app/`  
+Backend: `changex/`

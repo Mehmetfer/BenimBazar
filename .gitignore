@@ -384,3 +384,6 @@ borsa_app/.flutter-plugins
 borsa_app/.flutter-plugins-dependencies
 borsa_app/build/
 borsa_app/.packages
+
+changex/data/
+.venv/
