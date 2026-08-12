@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
@@ -74,6 +74,15 @@ from .value import ChangeValue, ChangeValueError
 
 WEB_DIR = Path(__file__).resolve().parents[2] / "changex_app" / "build" / "web"
 ALT_WEB = Path("/home/ubuntu/varmisin-app/build/web")
+UPLOAD_DIR = db.DATA_DIR / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
 
 # Structured request log sink (tests can replace). No secrets.
 REQUEST_LOGS: list[dict[str, Any]] = []
@@ -1838,14 +1847,83 @@ def listing_matchability(
         return matchability_report(d, user_pref=prefs.get("trade_preference"))
 
 
+@app.post("/api/uploads/image")
+async def upload_listing_image(
+    request: Request,
+    user: Annotated[dict, Depends(require_user)],
+    file: UploadFile = File(...),
+) -> dict:
+    """Upload a listing photo; returns a public /uploads/... URL (no money)."""
+    _rate_limit(request, limit=30, endpoint="/api/uploads/image", user_id=int(user["id"]))
+    content_type = (file.content_type or "").lower().strip()
+    ext = ALLOWED_IMAGE_TYPES.get(content_type)
+    if not ext:
+        # Fallback by filename
+        name = (file.filename or "").lower()
+        if name.endswith((".jpg", ".jpeg")):
+            ext = ".jpg"
+        elif name.endswith(".png"):
+            ext = ".png"
+        elif name.endswith(".webp"):
+            ext = ".webp"
+        elif name.endswith(".gif"):
+            ext = ".gif"
+        else:
+            raise HTTPException(
+                400,
+                detail={
+                    "code": "INVALID_IMAGE",
+                    "message": "Yalnızca JPG/PNG/WEBP/GIF yükleyebilirsiniz",
+                },
+            )
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, detail={"code": "EMPTY_FILE", "message": "Boş dosya"})
+    if len(raw) > 8 * 1024 * 1024:
+        raise HTTPException(
+            400,
+            detail={"code": "FILE_TOO_LARGE", "message": "Görsel en fazla 8 MB olabilir"},
+        )
+    # Basic magic-byte sniff
+    if not (
+        raw.startswith(b"\xff\xd8\xff")  # jpeg
+        or raw.startswith(b"\x89PNG\r\n\x1a\n")  # png
+        or raw.startswith(b"GIF87a")
+        or raw.startswith(b"GIF89a")
+        or raw.startswith(b"RIFF")  # webp container
+    ):
+        raise HTTPException(
+            400,
+            detail={"code": "INVALID_IMAGE", "message": "Geçersiz görsel içeriği"},
+        )
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    fname = f"{uuid.uuid4().hex}{ext}"
+    path = UPLOAD_DIR / fname
+    path.write_bytes(raw)
+    url = f"/uploads/{fname}"
+    with db.connect() as conn:
+        db.audit(
+            conn,
+            actor_id=user["id"],
+            action="upload.image",
+            entity="upload",
+            entity_id=None,
+            detail=db.dumps({"url": url, "bytes": len(raw), "content_type": content_type}),
+            correlation_id=_cid(request),
+        )
+    return {"url": url, "bytes": len(raw), "content_type": content_type or f"image/{ext[1:]}"}
+
 
 def _web_root() -> Path | None:
-    if (ALT_WEB / "index.html").exists():
-        return ALT_WEB
     if (WEB_DIR / "index.html").exists():
         return WEB_DIR
+    if (ALT_WEB / "index.html").exists():
+        return ALT_WEB
     return None
 
+
+# Uploaded listing photos (before catch-all web mount)
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 _static = _web_root()
 if _static is not None:

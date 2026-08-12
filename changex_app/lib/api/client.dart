@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ChangeXApi {
@@ -92,6 +93,35 @@ class ChangeXApi {
       body: jsonEncode(body),
     );
     return _decode(res);
+  }
+
+  Future<String> uploadImage({
+    required List<int> bytes,
+    required String filename,
+    String contentType = 'image/jpeg',
+  }) async {
+    final uri = Uri.parse('$_root/api/uploads/image');
+    final req = http.MultipartRequest('POST', uri);
+    final token = await getToken();
+    if (token != null) {
+      req.headers['Authorization'] = 'Bearer $token';
+    }
+    req.files.add(
+      http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: filename,
+        contentType: MediaType.parse(contentType),
+      ),
+    );
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    final data = _decode(res);
+    final url = data['url']?.toString();
+    if (url == null || url.isEmpty) {
+      throw ApiException('Görsel yüklenemedi');
+    }
+    return url;
   }
 
   Future<List<dynamic>> myListings() async {

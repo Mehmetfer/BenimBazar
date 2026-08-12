@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../api/client.dart';
 import '../theme/app_theme.dart';
 import '../widgets/listing_media.dart';
-import '../widgets/value_widgets.dart';
 import 'admin_login_screen.dart';
 import 'home_screen.dart';
 
@@ -28,7 +27,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   bool _loading = true;
   String? _error;
   final _userSearch = TextEditingController();
-  final _assignNote = TextEditingController();
 
   @override
   void initState() {
@@ -41,7 +39,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   void dispose() {
     _tabs.dispose();
     _userSearch.dispose();
-    _assignNote.dispose();
     super.dispose();
   }
 
@@ -81,11 +78,21 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
 
   Future<void> _decide(int id, String decision, {String reason = ''}) async {
     try {
-      await api.moderationDecision(id, decision, reason: reason.isEmpty ? 'panel' : reason);
+      await api.moderationDecision(
+        id,
+        decision,
+        reason: reason.isEmpty ? 'panel' : reason,
+      );
       await _refreshAll();
       if (!mounted) return;
+      final labels = {
+        'APPROVE': 'Onaylandı',
+        'REJECT': 'Reddedildi',
+        'REQUEST_EDIT': 'Düzenleme istendi',
+        'DELETE': 'Silindi',
+      };
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$decision uygulandı')),
+        SnackBar(content: Text(labels[decision] ?? decision)),
       );
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -117,11 +124,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
 
   Future<void> _assignTask(int listingId, int assigneeId) async {
     try {
-      await api.createAssignment(
-        listingId: listingId,
-        assigneeId: assigneeId,
-        note: _assignNote.text.trim(),
-      );
+      await api.createAssignment(listingId: listingId, assigneeId: assigneeId);
       await _refreshAll();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -149,6 +152,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   @override
   Widget build(BuildContext context) {
     final role = widget.user['role']?.toString() ?? '';
+    final pending = (_panel?['stats'] as Map?)?['pending_moderation'] ?? _queue.length;
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
@@ -166,7 +170,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
               ),
             ),
             Text(
-              '${widget.user['username']} · $role',
+              '${widget.user['username']} · $role · onay bekleyen: $pending',
               style: GoogleFonts.montserrat(color: AppColors.muted, fontSize: 11),
             ),
           ],
@@ -195,10 +199,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
           indicatorColor: AppColors.gold,
           labelColor: AppColors.gold,
           unselectedLabelColor: AppColors.muted,
-          tabs: const [
-            Tab(text: 'ONAY KUTUSU'),
-            Tab(text: 'GÖREVLERİM'),
-            Tab(text: 'PERSONEL'),
+          labelStyle: GoogleFonts.montserrat(
+            fontWeight: FontWeight.w800,
+            fontSize: 11,
+          ),
+          tabs: [
+            Tab(text: 'ONAY ($pending)'),
+            Tab(text: 'GÖREVLERİM (${_myTasks.length})'),
+            const Tab(text: 'PERSONEL'),
           ],
         ),
       ),
@@ -206,7 +214,17 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
           ? const Center(child: CircularProgressIndicator(color: AppColors.gold))
           : _error != null
               ? Center(
-                  child: Text(_error!, style: const TextStyle(color: AppColors.danger)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_error!, style: const TextStyle(color: AppColors.danger)),
+                        const SizedBox(height: 12),
+                        FilledButton(onPressed: _refreshAll, child: const Text('Tekrar dene')),
+                      ],
+                    ),
+                  ),
                 )
               : TabBarView(
                   controller: _tabs,
@@ -220,7 +238,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         child: TextButton(
           onPressed: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const HomeScreen(user: null)),
+              MaterialPageRoute(
+                builder: (_) => HomeScreen(user: widget.user),
+              ),
             );
           },
           child: Text(
@@ -233,35 +253,78 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   }
 
   Widget _buildQueueTab() {
-    final stats = _panel?['stats'] as Map? ?? {};
     return RefreshIndicator(
       color: AppColors.gold,
       onRefresh: _refreshAll,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: _queue.length + 1,
+        itemCount: _queue.isEmpty ? 2 : _queue.length + 1,
         itemBuilder: (context, i) {
           if (i == 0) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const BrandMark(compact: true),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Bekleyen: ${stats['pending_moderation'] ?? _queue.length} · '
-                    'Görevlerim: ${stats['my_open_tasks'] ?? 0}',
-                    style: GoogleFonts.montserrat(color: AppColors.muted, fontSize: 12),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Onayla · Reddet · Sil · Tekrar düzenleme iste',
-                    style: GoogleFonts.montserrat(
-                      color: AppColors.ink,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.goldSoft,
+                  border: Border.all(color: AppColors.gold.withValues(alpha: 0.5)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'ONAY BEKLEYEN TAKAS İLANLARI',
+                      style: GoogleFonts.montserrat(
+                        color: AppColors.gold,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                        fontSize: 13,
+                      ),
                     ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Burada AI ön incelemeden geçen ilanlar listelenir.\n'
+                      'Her kartta: Onayla · Reddet · Düzenleme iste · Sil',
+                      style: GoogleFonts.montserrat(
+                        color: AppColors.ink,
+                        fontSize: 12,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${_queue.length} ilan onay kutusunda',
+                      style: GoogleFonts.montserrat(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          if (_queue.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 40),
+              child: Column(
+                children: [
+                  Icon(Icons.inbox_outlined, size: 48, color: AppColors.muted.withValues(alpha: 0.7)),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Şu an onay bekleyen ilan yok',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.montserrat(
+                      color: AppColors.muted,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Kullanıcılar yeni takas kaydı oluşturunca\nburada görünecek.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.montserrat(color: AppColors.muted, fontSize: 12),
                   ),
                 ],
               ),
@@ -285,7 +348,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     if (_myTasks.isEmpty) {
       return Center(
         child: Text(
-          'Açık görev yok',
+          'Size atanmış açık görev yok',
           style: GoogleFonts.montserrat(color: AppColors.muted),
         ),
       );
@@ -311,13 +374,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
               ),
               const SizedBox(height: 4),
               Text(
-                '${t['listing_status']} · ${t['category'] ?? ''} · risk ${t['risk_level'] ?? '-'}',
+                '${t['listing_status']} · ${t['category'] ?? ''}',
                 style: GoogleFonts.montserrat(color: AppColors.muted, fontSize: 12),
               ),
-              if ((t['note']?.toString() ?? '').isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(t['note'].toString(), style: GoogleFonts.montserrat(fontSize: 12)),
-              ],
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
@@ -365,10 +424,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text(
-          'Aktif personel',
-          style: GoogleFonts.montserrat(fontWeight: FontWeight.w800),
-        ),
+        Text('Aktif personel', style: GoogleFonts.montserrat(fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
         ..._staff.map((raw) {
           final s = Map<String, dynamic>.from(raw as Map);
@@ -503,7 +559,7 @@ class _QueueCard extends StatelessWidget {
                     ),
                     const Spacer(),
                     Text(
-                      item['ai_result']?.toString() ?? '-',
+                      item['status']?.toString() ?? '',
                       style: GoogleFonts.montserrat(color: AppColors.muted, fontSize: 12),
                     ),
                   ],
@@ -511,10 +567,7 @@ class _QueueCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   item['title']?.toString() ?? '',
-                  style: GoogleFonts.montserrat(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                  ),
+                  style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 16),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -573,15 +626,11 @@ class _QueueCard extends StatelessWidget {
                     runSpacing: 8,
                     children: [
                       for (final raw in staff)
-                        if ((raw as Map)['role'] != 'superadmin' || true)
-                          _ActionChip(
-                            label: '${raw['username']} (${raw['role']})',
-                            color: AppColors.line,
-                            onTap: () => onAssign(
-                              item['id'] as int,
-                              raw['id'] as int,
-                            ),
-                          ),
+                        _ActionChip(
+                          label: '${raw['username']} (${raw['role']})',
+                          color: AppColors.line,
+                          onTap: () => onAssign(item['id'] as int, raw['id'] as int),
+                        ),
                     ],
                   ),
                 ],

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../api/client.dart';
 import '../theme/app_theme.dart';
 import '../widgets/value_widgets.dart';
+import 'admin_panel_screen.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
 
@@ -40,8 +41,14 @@ class _LoginScreenState extends State<LoginScreen> {
       await api.setToken(res['token'] as String);
       final user = Map<String, dynamic>.from(res['user'] as Map);
       if (!mounted) return;
+      final role = user['role']?.toString() ?? '';
+      final isStaff = {'superadmin', 'admin', 'moderator'}.contains(role);
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => HomeScreen(user: user)),
+        MaterialPageRoute(
+          builder: (_) => isStaff
+              ? AdminPanelScreen(user: user)
+              : HomeScreen(user: user),
+        ),
         (_) => false,
       );
     } on ApiException catch (e) {
