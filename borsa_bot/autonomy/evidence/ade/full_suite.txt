@@ -1,0 +1,5 @@
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_autonomous_engine.py::test_pretrade_gate_duplicate_position
+1 failed, 394 passed, 4 warnings in 37.24s

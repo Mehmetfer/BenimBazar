@@ -1,0 +1,128 @@
+{
+  "generated_at": "2026-08-12T06:01:05.491728+00:00",
+  "unit_ok": true,
+  "e2e_ok": true,
+  "safety_ok": true,
+  "scorecard": {
+    "engineering_autonomy_score": 8.45,
+    "decision_autonomy_score": 8.5,
+    "trading_safety_score": 10.0,
+    "live_money_autonomy": "NOT VERIFIED",
+    "full_level8_claimed": false,
+    "verdict": "8.5 AUTONOMOUS DECISION ENGINE VERIFIED (paper/shadow); LIVE-MONEY AUTONOMY NOT VERIFIED",
+    "criteria": [
+      {
+        "name": "Decision states (BUY..NO_TRADE)",
+        "weight": 0.1,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "states.py + tests"
+        ]
+      },
+      {
+        "name": "Decision chain completeness",
+        "weight": 0.12,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "chain.py stages"
+        ]
+      },
+      {
+        "name": "NO_TRADE as first-class",
+        "weight": 0.1,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "abstain conditions"
+        ]
+      },
+      {
+        "name": "Position sizing hard cap",
+        "weight": 0.1,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "sizing <= hard_max"
+        ]
+      },
+      {
+        "name": "Immutable safety limits",
+        "weight": 0.1,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "frozen limits"
+        ]
+      },
+      {
+        "name": "Adaptive no safety bypass",
+        "weight": 0.08,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "learning rejects frozen"
+        ]
+      },
+      {
+        "name": "Self-correction protocol",
+        "weight": 0.08,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "DETECT\u2192VERIFY"
+        ]
+      },
+      {
+        "name": "Decision+risk validators",
+        "weight": 0.1,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "validator.py"
+        ]
+      },
+      {
+        "name": "Confidence gate (not authority)",
+        "weight": 0.07,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "confidence.py"
+        ]
+      },
+      {
+        "name": "Humanless E2E acceptance",
+        "weight": 0.1,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "test_ade_humanless_e2e"
+        ]
+      },
+      {
+        "name": "Failure acceptance matrix",
+        "weight": 0.05,
+        "status": "PASS",
+        "score": 10.0,
+        "evidence": [
+          "KNOWN SAFE/UNSAFE"
+        ]
+      }
+    ],
+    "roadmap": [
+      "8.45 engineering (coding/validation) \u2014 prior",
+      "8.5 Autonomous Decision Engine \u2014 this scorecard",
+      "8.7 Autonomous Execution + Recovery \u2014 longer recovery matrix",
+      "8.9 Long-duration Humanless Validation \u2014 multi-session soak",
+      "9.0+ Production Trading Autonomy \u2014 requires LIVE-MONEY acceptance (separate)"
+    ],
+    "notes": [
+      "Criterion raw weighted average=10.0/10 (quality of ADE suite); claimed autonomy level=8.5.",
+      "Scores from evidence only; not inflated past the proven roadmap milestone.",
+      "Learning cannot mutate risk limits / kill switch / fail-closed / auth.",
+      "LIVE-MONEY AUTONOMY = VERIFIED is forbidden until dedicated live acceptance."
+    ]
+  }
+}

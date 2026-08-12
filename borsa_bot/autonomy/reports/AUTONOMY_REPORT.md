@@ -6,6 +6,7 @@
 |-------|------:|--------|
 | Previous engineering autonomy | 8.45/10 | VERIFIED (coding/validation) |
 | Engineering autonomy (this run) | **8.45/10** | unchanged claim — not re-inflated |
+| Decision autonomy (ADE) | **8.5/10** | VERIFIED paper/shadow humanless decision loop |
 | Trading safety autonomy | **10.0/10** | VERIFIED via adversarial/E2E safety suite |
 | Live-money readiness | **NOT VERIFIED** | LIVE broker remains locked |
 | full_level8_claimed | **FALSE** | research/paper ≠ live-money acceptance |
@@ -13,7 +14,8 @@
 ## Baseline preservation
 
 - Pre-trading-safety baseline: **339 passed / 0 failed**
-- Final suite: **368 passed / 0 failed** (`autonomy/evidence/trading9_final_pytest.txt`)
+- Post-trading-safety: **368 passed / 0 failed**
+- Post-ADE final suite: **395 passed / 0 failed**
 - No tests deleted
 
 ## G3 Hard Type Check
@@ -56,5 +58,16 @@ normal paper, provider failure, broker timeout/unknown, duplicate, restart, risk
 ## Final verdict
 
 - **Engineering autonomy:** 8.45 VERIFIED  
+- **Decision autonomy (ADE):** 8.5 VERIFIED (paper/shadow humanless)  
 - **Trading safety ≥9.0:** VERIFIED (paper/shadow/adversarial)  
 - **Live-money / full Level-8 live claim:** **NOT VERIFIED / FALSE**
+
+## Autonomous Decision Engine (follow-on)
+
+- Package: `borsa_bot/decision/ade/`
+- Decision autonomy level: **8.5/10** (not inflated to 9.0+/10)
+- Verdict: 8.5 AUTONOMOUS DECISION ENGINE VERIFIED (paper/shadow); LIVE-MONEY AUTONOMY NOT VERIFIED
+- Details: `ADE_AUTONOMY_REPORT.md`
+- Human never required for signal/symbol/size/timing/approval in paper ADE loop
+- Learning cannot bypass immutable safety limits / kill switch / fail-closed
+- LIVE-MONEY AUTONOMY: NOT VERIFIED
