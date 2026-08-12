@@ -215,7 +215,7 @@
     .tv-head{padding:12px 14px;border-bottom:1px solid var(--line)}
     .tv-head .sym{font-size:1.2rem;font-weight:800}
     .tv-chart{height:460px}
-    .tv-chart iframe{width:100%!important}
+    .tv-chart iframe{width:100%!important;height:100%!important;border:0;display:block}
     @media (max-width:560px){
       .crypto-card .grid{display:none}
       .crypto-card .chg,.crypto-card .meta.desktop-only{display:none}
@@ -903,6 +903,19 @@
     const ba = bidAsk(px, item);
     const chg = Number(item.change_pct||0);
     const isFav = item.is_favorite !== false && sym !== 'XU100';
+    // Keep Piyasalar chart in sync with the stock the user opened
+    const chartCompany = {
+      ...item,
+      ticker: sym,
+      symbol: sym,
+      name: name || item.name,
+      sector: item.sector || '',
+      tradingview_symbol: item.tradingview_symbol || (sym === 'XU100' ? 'BIST:XU100' : ('BIST:' + sym)),
+    };
+    bist100.selected = chartCompany;
+    if(document.getElementById('panel-mkt')?.classList.contains('on')){
+      renderTradingView(chartCompany);
+    }
     document.getElementById('sdSym').textContent = sym || '—';
     document.getElementById('sdName').textContent = name && name !== sym ? name : (sym === 'XU100' ? 'BIST 100 Endeksi' : '');
     document.getElementById('sdPrice').textContent = px ? money(px)+' TL' : '—';
@@ -1757,6 +1770,18 @@
       </div>`;
   }
 
+  function normalizeTvSymbol(company){
+    const raw = (company && (company.tradingview_symbol || company.ticker || company.symbol)) || '';
+    let s = String(raw).trim().toUpperCase();
+    if(!s) return '';
+    if(s.indexOf(':') >= 0){
+      const ex = s.slice(0, s.indexOf(':'));
+      const tick = s.slice(s.indexOf(':') + 1).replace(/\.E$/, '');
+      return ex + ':' + tick;
+    }
+    return 'BIST:' + s.replace(/\.E$/, '');
+  }
+
   function renderTradingView(company){
     const title = document.getElementById('tvSymTitle');
     const meta = document.getElementById('tvSymMeta');
@@ -1768,35 +1793,40 @@
       tvWidget = null;
       return;
     }
-    const tvSymbol = company.tradingview_symbol || ('BIST:' + (company.ticker || company.symbol));
-    const sym = company.ticker || company.symbol;
+    const tvSymbol = normalizeTvSymbol(company);
+    const sym = String(company.ticker || company.symbol || '').toUpperCase() || tvSymbol;
     title.textContent = sym;
-    meta.textContent = `${company.name} · ${company.sector} · ${tvSymbol}`;
+    meta.textContent = [company.name, company.sector, tvSymbol].filter(Boolean).join(' · ');
+    // iframe embed: symbol is in the URL. Reusing TradingView.widget on the same
+    // container_id often keeps the default AAPL chart while our title updates.
+    const frameId = 'tvf_' + String(sym).replace(/[^A-Z0-9]/g, '') + '_' + Date.now();
+    const params = new URLSearchParams({
+      frameElementId: frameId,
+      symbol: tvSymbol,
+      interval: 'D',
+      hidesidetoolbar: '0',
+      symboledit: '0',
+      saveimage: '0',
+      toolbarbg: '15201b',
+      studies: JSON.stringify(['Volume@tv-basicstudies']),
+      theme: 'dark',
+      style: '1',
+      timezone: 'Europe/Istanbul',
+      withdateranges: '1',
+      hideideas: '1',
+      locale: 'tr',
+    });
     container.innerHTML = '';
-    if(typeof TradingView === 'undefined' || !TradingView.widget){
-      container.innerHTML = `<div class="empty">TradingView yüklenemedi. Sembol: ${tvSymbol}</div>`;
-      return;
-    }
-    try{
-      tvWidget = new TradingView.widget({
-        autosize: true,
-        symbol: tvSymbol,
-        interval: 'D',
-        timezone: 'Europe/Istanbul',
-        theme: 'dark',
-        style: '1',
-        locale: 'tr',
-        toolbar_bg: '#15201b',
-        enable_publishing: false,
-        hide_top_toolbar: false,
-        hide_legend: false,
-        save_image: false,
-        container_id: 'tv_chart_container',
-        studies: ['Volume@tv-basicstudies']
-      });
-    }catch(err){
-      container.innerHTML = `<div class="empty">Grafik hatası: ${String(err&&err.message||err)}</div>`;
-    }
+    const iframe = document.createElement('iframe');
+    iframe.id = frameId;
+    iframe.title = tvSymbol + ' grafiği';
+    iframe.src = 'https://s.tradingview.com/widgetembed/?' + params.toString();
+    iframe.setAttribute('allowtransparency', 'true');
+    iframe.setAttribute('scrolling', 'no');
+    iframe.setAttribute('frameborder', '0');
+    iframe.style.cssText = 'width:100%;height:100%;margin:0;padding:0;border:0;display:block';
+    container.appendChild(iframe);
+    tvWidget = {symbol: tvSymbol, frameId: frameId};
   }
 
   async function b100Trade(sym, side){
