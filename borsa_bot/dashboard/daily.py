@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from config.models import utc_now
-from data.integrity import DataSourceMeta, FreshnessStatus, format_age_tr
+from data.integrity import DataSourceKind, DataSourceMeta, FreshnessStatus, format_age_tr
 
 
 # Display rank (lower = higher on screen). Favorites boost within same bucket only.
@@ -181,9 +181,18 @@ def simplify_card(item: dict[str, Any], source: DataSourceMeta) -> dict[str, Any
     elif tp.get("entry") is not None:
         entry = str(tp.get("entry"))
 
-    # Stale / no-data: strip actionable trade fields
-    show_prices = source.kind.value == "SIMULATED" or source.is_live_market
-    if source.freshness in {FreshnessStatus.NO_DATA, FreshnessStatus.DISCONNECTED} or not show_prices:
+    # Show prices for any connected feed with data (SIMULATED, DELAYED Yahoo, LIVE, BROKER).
+    has_feed = source.kind in {
+        DataSourceKind.SIMULATED,
+        DataSourceKind.LIVE,
+        DataSourceKind.DELAYED,
+        DataSourceKind.BROKER,
+    }
+    show_prices = has_feed and source.freshness not in {
+        FreshnessStatus.NO_DATA,
+        FreshnessStatus.DISCONNECTED,
+    }
+    if not show_prices:
         return {
             "symbol": item.get("symbol"),
             "name": item.get("name"),
@@ -246,7 +255,11 @@ def simplify_card(item: dict[str, Any], source: DataSourceMeta) -> dict[str, Any
         "ui_status": (
             "● LIVE"
             if source.is_live_market
-            else ("◐ SIMULATED" if source.kind.value == "SIMULATED" else "⚠ DATA UNAVAILABLE")
+            else (
+                "◐ DELAYED"
+                if source.kind == DataSourceKind.DELAYED
+                else ("◐ SIMULATED" if source.kind == DataSourceKind.SIMULATED else "⚠ DATA UNAVAILABLE")
+            )
         ),
         "plan_invalid": plan_invalid,
         "plan_note": item.get("plan_note"),
