@@ -153,7 +153,9 @@ def sectionize(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     wait = [
         r
         for r in rows
-        if r.get("signal") in {"WAIT", "WATCH", "BEKLE", "HOLD", "WAIT_FOR_ENTRY"} and not r.get("is_favorite")
+        if r.get("signal")
+        in {"WAIT", "WATCH", "BEKLE", "HOLD", "WAIT_FOR_ENTRY", "NO_DATA", "NO_TRADE"}
+        and not r.get("is_favorite")
     ]
     sell = [r for r in rows if r.get("signal") in {"SELL", "SAT"} and not r.get("is_favorite")]
     strong_sell = [r for r in rows if r.get("signal") == "STRONG_SELL" and not r.get("is_favorite")]

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
@@ -27,7 +30,29 @@ from universe.tradeable import universe_stats
 STATIC = Path(__file__).resolve().parent / "static"
 STATIC.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="Borsa Bot", version="0.3.0")
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Refresh BIST + crypto market data while dashboard is up."""
+    async def _poll() -> None:
+        while True:
+            try:
+                service.tick()
+            except Exception:  # noqa: BLE001
+                pass
+            await asyncio.sleep(max(15, int(settings.data_freshness_sec)))
+
+    task = asyncio.create_task(_poll())
+    try:
+        service.tick()
+        yield
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+app = FastAPI(title="Borsa Bot", version="0.3.0", lifespan=_lifespan)
 service = TradingService()
 crypto_service = CryptoFoundationService()
 crypto_service.bind_shared(favorites=service.favorites, alerts=service.alerts)

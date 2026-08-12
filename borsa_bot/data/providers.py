@@ -333,6 +333,24 @@ def create_provider(name: str = "simulated") -> MarketDataProvider:
         return RequiredLiveProvider(
             "DATA_PROVIDER=broker rejected as market-data provider — BROKER source is SEPARATE"
         )
+    if key in {"yahoo", "bist_yahoo", "yf", "yahoo_finance"}:
+        from data.yahoo_bist import YahooBistMarketDataProvider
+
+        provider = YahooBistMarketDataProvider()
+        try:
+            provider.tick()
+        except Exception:  # noqa: BLE001
+            pass
+        return provider
+    if key == "auto":
+        from data.session_auto import SessionAutoBistProvider
+
+        provider = SessionAutoBistProvider()
+        try:
+            provider.tick()
+        except Exception:  # noqa: BLE001
+            pass
+        return provider
     if key in {"live", "bist", "http"}:
         url = os.getenv("MARKET_DATA_URL", "").strip()
         token = os.getenv("MARKET_DATA_TOKEN", "").strip()
@@ -363,17 +381,19 @@ def create_provider(name: str = "simulated") -> MarketDataProvider:
         )
     raise ValueError(
         f"Unknown data provider: {name}. "
-        "Use simulated | required | live (needs MARKET_DATA_URL + MARKET_DATA_TOKEN)."
+        "Use simulated | auto | yahoo | required | live (needs MARKET_DATA_URL + MARKET_DATA_TOKEN)."
     )
 
 
 def classify_provider(provider: object) -> str:
     """REAL | STUB | MOCK — readiness audit helper."""
     from data.http_live import HttpLiveMarketDataProvider
+    from data.session_auto import SessionAutoBistProvider
+    from data.yahoo_bist import YahooBistMarketDataProvider
 
     if getattr(provider, "is_stub", False) or isinstance(provider, HttpLiveProviderStub):
         return "STUB"
-    if isinstance(provider, HttpLiveMarketDataProvider):
+    if isinstance(provider, (HttpLiveMarketDataProvider, YahooBistMarketDataProvider, SessionAutoBistProvider)):
         return "REAL"
     if getattr(provider, "kind", None) == DataSourceKind.SIMULATED:
         return "MOCK"
