@@ -11,6 +11,7 @@ from ..states import (
     POLICY_VERSION,
     AiModerationResult,
     ListingStatus,
+    MODERATION_STAFF_ROLES,
     ModerationDecision,
     RiskLevel,
     UserRole,
@@ -208,7 +209,7 @@ def run_ai_premoderation(
     }
 
 
-def apply_superadmin_decision(
+def apply_moderation_decision(
     conn,
     *,
     listing_id: int,
@@ -218,8 +219,22 @@ def apply_superadmin_decision(
     reason: str = "",
     correlation_id: str | None = None,
 ) -> dict[str, Any]:
-    if actor_role != UserRole.SUPERADMIN.value:
-        raise ModerationError("SUPERADMIN_REQUIRED", "Yayın onayı yalnızca Superadmin", 403)
+    """Staff moderation decision — admin / moderator / superadmin.
+
+    Superadmin: all decisions including SUSPEND_USER.
+    Admin/Moderator: APPROVE, REJECT, REQUEST_EDIT, DELETE (soft), ESCALATE.
+    """
+    if actor_role not in MODERATION_STAFF_ROLES:
+        raise ModerationError("STAFF_REQUIRED", "Moderasyon yetkisi gerekli", 403)
+
+    # Only Superadmin may suspend users via moderation decision
+    if decision == ModerationDecision.SUSPEND_USER and actor_role != UserRole.SUPERADMIN.value:
+        raise ModerationError(
+            "SUPERADMIN_REQUIRED",
+            "Kullanıcı askıya alma yalnızca Superadmin",
+            403,
+        )
+
     correlation_id = correlation_id or str(uuid.uuid4())
 
     row = conn.execute("SELECT * FROM trade_listings WHERE id = ?", (listing_id,)).fetchone()
@@ -236,6 +251,7 @@ def apply_superadmin_decision(
         ModerationDecision.REQUEST_EDIT: ListingStatus.EDIT_REQUIRED,
         ModerationDecision.ESCALATE: ListingStatus.ESCALATED,
         ModerationDecision.SUSPEND_USER: ListingStatus.SUSPENDED,
+        ModerationDecision.DELETE: ListingStatus.CANCELLED,
     }
     target = target_map[decision]
 
@@ -244,6 +260,9 @@ def apply_superadmin_decision(
             ListingStatus.ADMIN_REVIEW,
             ListingStatus.MODERATION_UNAVAILABLE,
             ListingStatus.ESCALATED,
+            ListingStatus.PENDING_MODERATION,
+            ListingStatus.AI_REVIEW,
+            ListingStatus.EDIT_REQUIRED,
         }:
             raise ModerationError(
                 "INVALID_STATE",
@@ -261,12 +280,20 @@ def apply_superadmin_decision(
             """,
             (listing_id, mod_version),
         )
+    elif decision == ModerationDecision.DELETE:
+        # Soft-delete: cancel listing; allow from most non-terminal states
+        if previous in {ListingStatus.TRADED, ListingStatus.CANCELLED}:
+            raise ModerationError("INVALID_STATE", "İlan zaten kapalı / takas edilmiş", 409)
+        try:
+            listing_transition(previous, ListingStatus.CANCELLED)
+        except InvalidTransition:
+            # Force cancel for staff delete even if transition matrix is narrow
+            pass
     elif decision == ModerationDecision.ESCALATE:
         try:
             listing_transition(previous, ListingStatus.ESCALATED)
         except InvalidTransition as exc:
             raise ModerationError("CONFLICT", str(exc), 409) from exc
-
     else:
         try:
             listing_transition(previous, target)
@@ -328,6 +355,16 @@ def apply_superadmin_decision(
             (listing["owner_id"],),
         )
 
+    # Close open assignments for this listing
+    conn.execute(
+        """
+        UPDATE moderation_assignments
+        SET status = 'DONE', updated_at = ?
+        WHERE listing_id = ? AND status IN ('OPEN', 'IN_PROGRESS')
+        """,
+        (now, listing_id),
+    )
+
     conn.execute(
         """
         INSERT INTO moderation_decisions(
@@ -374,6 +411,28 @@ def apply_superadmin_decision(
     invalidate_listing(listing_id)
     invalidate_public_listings()
     return dict(row2)
+
+
+# Backward-compatible alias
+def apply_superadmin_decision(
+    conn,
+    *,
+    listing_id: int,
+    actor_id: int,
+    actor_role: str,
+    decision: ModerationDecision,
+    reason: str = "",
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    return apply_moderation_decision(
+        conn,
+        listing_id=listing_id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        decision=decision,
+        reason=reason,
+        correlation_id=correlation_id,
+    )
 
 
 def remoderate_after_edit(

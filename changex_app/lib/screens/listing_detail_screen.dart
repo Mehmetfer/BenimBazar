@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../api/client.dart';
 import '../theme/app_theme.dart';
+import '../widgets/listing_media.dart';
 import '../widgets/value_widgets.dart';
 import 'login_screen.dart';
 
@@ -37,7 +38,16 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     super.dispose();
   }
 
+  bool get _tradeOpen {
+    final ribbon = resolveListingRibbon(widget.listing);
+    return ribbon == ListingTradeRibbon.none;
+  }
+
   Future<void> _offer() async {
+    if (!_tradeOpen) {
+      setState(() => _result = 'Bu ilan takasa kapalı veya takas edilmiştir.');
+      return;
+    }
     if (widget.user == null) {
       await Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -49,7 +59,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       _result = null;
     });
     try {
-      // 1) Create proposer's listing from form (server stores canonical mandal_units)
       final offeredListing = await api.createListing({
         'title': _offerName.text.trim().isEmpty ? 'Teklif ürünü' : _offerName.text.trim(),
         'description': 'CHANGE X takas teklifi ürünü',
@@ -65,7 +74,6 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           }
         ],
       });
-      // 2) Offer by listing ids — backend recalculates values, ignores client totals
       final res = await api.createOffer({
         'requested_listing_ids': [widget.listing['id']],
         'offered_listing_ids': [offeredListing['id']],
@@ -98,93 +106,170 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   Widget build(BuildContext context) {
     final value = Map<String, dynamic>.from(widget.listing['value'] as Map? ?? {});
     final owner = Map<String, dynamic>.from(widget.listing['owner'] as Map? ?? {});
+    final ribbon = resolveListingRibbon(widget.listing);
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Takas kaydı',
-          style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Text(
-            widget.listing['title']?.toString() ?? '',
-            style: GoogleFonts.montserrat(fontSize: 26, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '${widget.listing['category']} · ${owner['username']} · skor ${owner['change_score']}',
-            style: GoogleFonts.montserrat(color: AppColors.muted),
-          ),
-          const SizedBox(height: 12),
-          ValueChip(value: value),
-          const SizedBox(height: 14),
-          Text(
-            widget.listing['description']?.toString() ?? '',
-            style: GoogleFonts.montserrat(height: 1.4),
-          ),
-          if ((widget.listing['wanted_items']?.toString() ?? '').isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              'İstiyor: ${widget.listing['wanted_items']}',
-              style: GoogleFonts.montserrat(color: AppColors.gold),
-            ),
-          ],
-          const SizedBox(height: 24),
-          Text(
-            'Takas teklifi ver',
-            style: GoogleFonts.montserrat(fontSize: 18, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          const PlatformBanner(),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _offerName,
-            decoration: const InputDecoration(labelText: 'Teklif ürün adı'),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _madalyon,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Madalyon'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: _dirhem,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Dirhem'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: _mandal,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Mandal'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 52,
-            child: FilledButton(
-              onPressed: _busy ? null : _offer,
-              child: Text(
-                widget.user == null ? 'Giriş yap & teklif ver' : 'Takas teklifi ver',
-              ),
+      backgroundColor: AppColors.bg,
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            pinned: true,
+            backgroundColor: AppColors.bg,
+            title: Text(
+              'CHANGE X',
+              style: GoogleFonts.montserrat(fontWeight: FontWeight.w800),
             ),
           ),
-          if (_result != null) ...[
-            const SizedBox(height: 14),
-            Text(_result!, style: GoogleFonts.montserrat(height: 1.35)),
-          ],
+          SliverToBoxAdapter(
+            child: ListingHeroMedia(
+              listing: widget.listing,
+              height: MediaQuery.sizeOf(context).width * 0.95,
+              borderRadius: 0,
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: ListingSpecStrip(listing: widget.listing),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.listing['title']?.toString() ?? '',
+                    style: GoogleFonts.montserrat(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${owner['username'] ?? '?'} · skor ${owner['change_score'] ?? '-'}',
+                    style: GoogleFonts.montserrat(
+                      color: AppColors.muted,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ValueChip(value: value),
+                  if (ribbon != ListingTradeRibbon.none) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      ribbonLabel(ribbon),
+                      style: GoogleFonts.montserrat(
+                        color: AppColors.gold,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 18),
+                  ListingAttributeList(listing: widget.listing),
+                  if ((widget.listing['description']?.toString() ?? '')
+                      .trim()
+                      .isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      'AÇIKLAMA',
+                      style: GoogleFonts.montserrat(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                        letterSpacing: 1,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      widget.listing['description'].toString(),
+                      style: GoogleFonts.montserrat(height: 1.4),
+                    ),
+                  ],
+                  if ((widget.listing['wanted_items']?.toString() ?? '')
+                      .isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'İstiyor: ${widget.listing['wanted_items']}',
+                      style: GoogleFonts.montserrat(color: AppColors.gold),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  Text(
+                    'Takas teklifi ver',
+                    style: GoogleFonts.montserrat(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const PlatformBanner(),
+                  const SizedBox(height: 12),
+                  if (!_tradeOpen)
+                    Text(
+                      ribbon == ListingTradeRibbon.exchanged
+                          ? 'Bu ürün takas edilmiştir. Yeni teklif alınamaz.'
+                          : 'Bu ilan takasa kapalıdır.',
+                      style: GoogleFonts.montserrat(color: AppColors.danger),
+                    )
+                  else ...[
+                    TextField(
+                      controller: _offerName,
+                      decoration:
+                          const InputDecoration(labelText: 'Teklif ürün adı'),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _madalyon,
+                            keyboardType: TextInputType.number,
+                            decoration:
+                                const InputDecoration(labelText: 'Madalyon'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _dirhem,
+                            keyboardType: TextInputType.number,
+                            decoration:
+                                const InputDecoration(labelText: 'Dirhem'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _mandal,
+                            keyboardType: TextInputType.number,
+                            decoration:
+                                const InputDecoration(labelText: 'Mandal'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      height: 52,
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _busy ? null : _offer,
+                        child: Text(
+                          widget.user == null
+                              ? 'Giriş yap & teklif ver'
+                              : 'Takas teklifi ver',
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (_result != null) ...[
+                    const SizedBox(height: 14),
+                    Text(_result!, style: GoogleFonts.montserrat(height: 1.35)),
+                  ],
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

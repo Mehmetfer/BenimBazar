@@ -265,7 +265,8 @@ def test_match_candidate_contract_no_materialization():
     c = MatchCandidate(source_listing_id=1, target_listing_id=2, scores=NullScoreProvider().score_pair({}, {}))
     d = c.to_dict()
     assert d["graph_edge_materialized"] is False
-    assert d["chain_algorithm"] == "NOT_IMPLEMENTED"
+    # Edges stay on-demand; algorithm version is advertised by Chain Engine V1
+    assert d["chain_algorithm"] == "CHANGE_CHAIN_ENGINE_V1"
     assert d["total_score"] == 0.0
 
 

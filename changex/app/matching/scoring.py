@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from .config import MATCHING_POLICY_VERSION
+from .config import CHAIN_ENGINE_VERSION, MATCHING_POLICY_VERSION
 
 
 @dataclass
@@ -74,9 +74,9 @@ class MatchCandidate:
             "policy_version": self.policy_version,
             "eligible": self.eligible,
             "rejection_reasons": self.rejection_reasons,
-            # Explicit: Exchange Graph V1 does not create live edges / cycles
+            # Edges are computed on-demand; full edge table is not persisted
             "graph_edge_materialized": False,
-            "chain_algorithm": "NOT_IMPLEMENTED",
+            "chain_algorithm": CHAIN_ENGINE_VERSION,
         }
 
 

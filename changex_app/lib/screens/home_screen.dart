@@ -3,11 +3,12 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../api/client.dart';
 import '../theme/app_theme.dart';
+import '../widgets/listing_media.dart';
 import '../widgets/value_widgets.dart';
+import 'admin_panel_screen.dart';
 import 'create_listing_screen.dart';
 import 'listing_detail_screen.dart';
 import 'login_screen.dart';
-import 'moderation_queue_screen.dart';
 import 'trades_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -182,7 +183,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                           ],
                         ),
-                        if (widget.user?['role'] == 'superadmin') ...[
+                        if (widget.user?['role'] == 'superadmin' ||
+                            widget.user?['role'] == 'admin' ||
+                            widget.user?['role'] == 'moderator') ...[
                           const SizedBox(height: 8),
                           Align(
                             alignment: Alignment.centerLeft,
@@ -190,16 +193,16 @@ class _HomeScreenState extends State<HomeScreen> {
                               onPressed: () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
-                                    builder: (_) => ModerationQueueScreen(
+                                    builder: (_) => AdminPanelScreen(
                                       user: widget.user!,
                                     ),
                                   ),
                                 );
                               },
-                              icon: const Icon(Icons.shield_outlined,
+                              icon: const Icon(Icons.admin_panel_settings_outlined,
                                   color: AppColors.gold, size: 18),
                               label: Text(
-                                'MODERASYON',
+                                'YÖNETİM PANELİ',
                                 style: GoogleFonts.montserrat(
                                   color: AppColors.gold,
                                   fontWeight: FontWeight.w700,
@@ -401,47 +404,75 @@ class _ListingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final value = Map<String, dynamic>.from(item['value'] as Map? ?? {});
     final owner = Map<String, dynamic>.from(item['owner'] as Map? ?? {});
+    final ribbon = resolveListingRibbon(item);
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: AppColors.bgCard,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.line),
         ),
+        clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              item['title']?.toString() ?? '',
-              style: GoogleFonts.montserrat(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
+            ListingHeroMedia(
+              listing: item,
+              height: 190,
+              borderRadius: 0,
+            ),
+            ListingSpecStrip(listing: item),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item['title']?.toString() ?? '',
+                    style: GoogleFonts.montserrat(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${item['category']} · ${owner['username'] ?? '?'} · skor ${owner['change_score'] ?? '-'}',
+                    style: GoogleFonts.montserrat(
+                      color: AppColors.muted,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ValueChip(value: value, dense: true),
+                  if (ribbon != ListingTradeRibbon.none) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      ribbonLabel(ribbon),
+                      style: GoogleFonts.montserrat(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
+                        color: AppColors.gold,
+                      ),
+                    ),
+                  ] else if ((item['wanted_items']?.toString() ?? '')
+                      .isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'İstiyor: ${item['wanted_items']}',
+                      style: GoogleFonts.montserrat(
+                        fontSize: 12,
+                        color: AppColors.blue,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              '${item['category']} · ${owner['username'] ?? '?'} · skor ${owner['change_score'] ?? '-'}',
-              style: GoogleFonts.montserrat(
-                color: AppColors.muted,
-                fontSize: 11,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ValueChip(value: value),
-            if ((item['wanted_items']?.toString() ?? '').isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text(
-                'İstiyor: ${item['wanted_items']}',
-                style: GoogleFonts.montserrat(
-                  fontSize: 12,
-                  color: AppColors.blue,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
           ],
         ),
       ),

@@ -11,7 +11,7 @@ from ..domain_status import (
     TradePreference,
     split_from_legacy_status,
 )
-from .config import CHANGE_CHAIN_ENABLED
+from .config import CHANGE_CHAIN_ENABLED, change_chain_enabled
 
 
 def _moderation_of(row: dict[str, Any]) -> ModerationStatus:
@@ -68,7 +68,7 @@ def is_chain_candidate(row: dict[str, Any], *, user_pref: str | None = None) -> 
 
 
 def chain_feature_enabled() -> bool:
-    return CHANGE_CHAIN_ENABLED
+    return change_chain_enabled()
 
 
 def matchability_report(row: dict[str, Any], *, user_pref: str | None = None) -> dict[str, Any]:
@@ -94,7 +94,7 @@ def matchability_report(row: dict[str, Any], *, user_pref: str | None = None) ->
         "inventory_status": inv.value,
         "public_matchable": public_ok,
         "chain_candidate": chain_ok,
-        "chain_feature_enabled": CHANGE_CHAIN_ENABLED,
+        "chain_feature_enabled": change_chain_enabled(),
         "reasons": reasons if not chain_ok else [],
         "moderation_version": row.get("moderation_version"),
     }

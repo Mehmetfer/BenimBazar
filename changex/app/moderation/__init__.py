@@ -13,6 +13,7 @@ from .provider import (
 )
 from .service import (
     ModerationError,
+    apply_moderation_decision,
     apply_superadmin_decision,
     assert_listing_approved_for_trade,
     remoderate_after_edit,
@@ -30,6 +31,7 @@ __all__ = [
     "set_provider",
     "validate_assessment",
     "ModerationError",
+    "apply_moderation_decision",
     "apply_superadmin_decision",
     "assert_listing_approved_for_trade",
     "remoderate_after_edit",

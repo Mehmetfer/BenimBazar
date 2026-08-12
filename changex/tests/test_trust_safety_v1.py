@@ -115,18 +115,31 @@ def test_user_cannot_set_approved(client):
     assert r.json()["detail"]["code"] == "STATUS_IMMUTABLE"
 
 
-def test_admin_cannot_superadmin_approve(client):
+def test_user_cannot_staff_approve(client):
     a = register(client, "ts_adm_a")
-    adm = register(client, "ts_adm")
-    promote_admin(adm["user"]["id"])
-    listing = make_listing(client, a["token"], "NeedsSA", approve=False)
+    plain = register(client, "ts_plain")
+    listing = make_listing(client, a["token"], "NeedsStaff", approve=False)
     r = client.post(
         f"/api/admin/moderation/{listing['id']}/decision",
-        headers=auth(adm["token"]),
+        headers=auth(plain["token"]),
         json={"decision": "APPROVE", "reason": "nope"},
     )
     assert r.status_code == 403
-    assert r.json()["detail"]["code"] == "SUPERADMIN_REQUIRED"
+    assert r.json()["detail"]["code"] == "STAFF_REQUIRED"
+
+
+def test_admin_and_moderator_can_approve(client):
+    a = register(client, "ts_staff_a")
+    adm = register(client, "ts_staff_adm")
+    promote_admin(adm["user"]["id"])
+    listing = make_listing(client, a["token"], "NeedsAdmin", approve=False)
+    r = client.post(
+        f"/api/admin/moderation/{listing['id']}/decision",
+        headers=auth(adm["token"]),
+        json={"decision": "APPROVE", "reason": "admin ok"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "APPROVED"
 
 
 def test_superadmin_can_approve_and_reject(client):

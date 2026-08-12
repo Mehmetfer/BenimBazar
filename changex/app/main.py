@@ -25,6 +25,7 @@ from .engine import (
 from .metrics import compute_trade_metrics
 from .moderation import (
     ModerationError,
+    apply_moderation_decision,
     apply_superadmin_decision,
     remoderate_after_edit,
     run_ai_premoderation,
@@ -43,6 +44,15 @@ from .matching import (
     set_user_preferences,
     validate_structured_want,
 )
+from .matching import config as matching_config
+from .matching.engine import ChainEngineError, run_chain_match
+from .matching.proposals import (
+    ChainProposalError,
+    accept_proposal,
+    list_proposals_for_user,
+    proposal_public,
+    reject_proposal,
+)
 from .matching.wants import validate_value_tolerance
 from .domain_status import TradePreference
 from .moderation.cache import cache_get, cache_set, invalidate_listing, reset_cache
@@ -51,6 +61,8 @@ from .recovery import recover_stale_reservations
 from .states import (
     ListingStatus,
     ModerationDecision,
+    MODERATION_STAFF_ROLES,
+    ASSIGNABLE_ROLES,
     PUBLIC_LISTING,
     TradeState,
     UserRole,
@@ -273,6 +285,24 @@ class OfferCreateIn(BaseModel):
     listing_id: int | None = None
 
 
+class ChainMatchIn(BaseModel):
+    """Seed a chain search from one of the caller's listings."""
+
+    listing_id: int | None = None
+    # Legacy shape kept so disabled-flag clients still validate
+    requested_listing_ids: list[int] = []
+    offered_listing_ids: list[int] = []
+    max_length: int | None = Field(default=None, ge=3, le=10)
+    max_results: int = Field(default=10, ge=1, le=50)
+    persist_proposals: bool = True
+
+
+class ChainConsentIn(BaseModel):
+    idempotency_key: str | None = None
+    expected_version: int | None = None
+    note: str = ""
+
+
 class TransitionIn(BaseModel):
     target_state: TradeState
     note: str = ""
@@ -339,6 +369,26 @@ def require_superadmin(user: Annotated[dict, Depends(require_user)]) -> dict:
             detail={"code": "SUPERADMIN_REQUIRED", "message": "Superadmin yetkisi gerekli"},
         )
     return user
+
+
+def require_moderation_staff(user: Annotated[dict, Depends(require_user)]) -> dict:
+    if user.get("role") not in MODERATION_STAFF_ROLES:
+        raise HTTPException(
+            403,
+            detail={"code": "STAFF_REQUIRED", "message": "Yönetim paneli yetkisi gerekli"},
+        )
+    return user
+
+
+class StaffRoleIn(BaseModel):
+    role: str
+    note: str = ""
+
+
+class AssignmentIn(BaseModel):
+    listing_id: int
+    assignee_id: int
+    note: str = ""
 
 
 def _http_domain(exc: DomainError) -> HTTPException:
@@ -1004,16 +1054,40 @@ def admin_stats(user: Annotated[dict, Depends(require_admin)]) -> dict:
 
 
 @app.get("/api/admin/moderation/queue")
-def moderation_queue(user: Annotated[dict, Depends(require_superadmin)]) -> dict:
+def moderation_queue(user: Annotated[dict, Depends(require_moderation_staff)]) -> dict:
+    """Onay kutusu — yönetici / onaycı / superadmin."""
     with db.connect() as conn:
-        rows = conn.execute(
-            """
-            SELECT * FROM trade_listings
-            WHERE status IN ('PENDING_MODERATION','AI_REVIEW','ADMIN_REVIEW','MODERATION_UNAVAILABLE','EDIT_REQUIRED','ESCALATED')
-            ORDER BY moderation_priority DESC, created_at ASC
-            LIMIT 200
-            """
-        ).fetchall()
+        role = user.get("role")
+        if role == UserRole.MODERATOR.value:
+            # Moderators see assigned listings + unassigned pool
+            rows = conn.execute(
+                """
+                SELECT DISTINCT l.*
+                FROM trade_listings l
+                LEFT JOIN moderation_assignments a
+                  ON a.listing_id = l.id AND a.status IN ('OPEN','IN_PROGRESS')
+                WHERE l.status IN (
+                  'PENDING_MODERATION','AI_REVIEW','ADMIN_REVIEW',
+                  'MODERATION_UNAVAILABLE','EDIT_REQUIRED','ESCALATED'
+                )
+                AND (a.assignee_id = ? OR a.id IS NULL)
+                ORDER BY l.moderation_priority DESC, l.created_at ASC
+                LIMIT 200
+                """,
+                (user["id"],),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT * FROM trade_listings
+                WHERE status IN (
+                  'PENDING_MODERATION','AI_REVIEW','ADMIN_REVIEW',
+                  'MODERATION_UNAVAILABLE','EDIT_REQUIRED','ESCALATED'
+                )
+                ORDER BY moderation_priority DESC, created_at ASC
+                LIMIT 200
+                """
+            ).fetchall()
         items = []
         for r in rows:
             d = dict(r)
@@ -1032,6 +1106,16 @@ def moderation_queue(user: Annotated[dict, Depends(require_superadmin)]) -> dict
                 "SELECT * FROM listing_photos WHERE listing_id = ? ORDER BY id DESC LIMIT 20",
                 (d["id"],),
             ).fetchall()
+            assign = conn.execute(
+                """
+                SELECT a.*, u.username AS assignee_username
+                FROM moderation_assignments a
+                JOIN users u ON u.id = a.assignee_id
+                WHERE a.listing_id = ? AND a.status IN ('OPEN','IN_PROGRESS')
+                ORDER BY a.id DESC LIMIT 1
+                """,
+                (d["id"],),
+            ).fetchone()
             pub = _listing_public(conn, d, include_moderation=True)
             pub["owner_history"] = {
                 "user_risk_score": (owner["user_risk_score"] if owner else 0),
@@ -1039,8 +1123,14 @@ def moderation_queue(user: Annotated[dict, Depends(require_superadmin)]) -> dict
             }
             pub["prior_decisions"] = [dict(x) for x in decisions]
             pub["photo_moderation"] = [dict(x) for x in photos]
+            pub["assignment"] = dict(assign) if assign else None
             items.append(pub)
-        return {"queue": items, "count": len(items)}
+        return {
+            "queue": items,
+            "count": len(items),
+            "panel": "CHANGE_X_ADMIN",
+            "actor_role": role,
+        }
 
 
 @app.post("/api/admin/moderation/{listing_id}/decision")
@@ -1048,16 +1138,16 @@ def moderation_decision_api(
     listing_id: int,
     body: ModerationDecisionIn,
     request: Request,
-    user: Annotated[dict, Depends(require_superadmin)],
+    user: Annotated[dict, Depends(require_moderation_staff)],
 ) -> dict:
     with db.connect() as conn:
         try:
             with db.immediate_tx(conn):
-                row = apply_superadmin_decision(
+                row = apply_moderation_decision(
                     conn,
                     listing_id=listing_id,
                     actor_id=int(user["id"]),
-                    actor_role=user["role"],
+                    actor_role=str(user["role"]),
                     decision=body.decision,
                     reason=body.reason,
                     correlation_id=_cid(request),
@@ -1070,7 +1160,7 @@ def moderation_decision_api(
 @app.get("/api/admin/moderation/{listing_id}/audit")
 def moderation_audit(
     listing_id: int,
-    user: Annotated[dict, Depends(require_superadmin)],
+    user: Annotated[dict, Depends(require_moderation_staff)],
 ) -> dict:
     with db.connect() as conn:
         decisions = [
@@ -1098,7 +1188,7 @@ def moderation_audit(
 def moderation_rerun_ai(
     listing_id: int,
     request: Request,
-    user: Annotated[dict, Depends(require_superadmin)],
+    user: Annotated[dict, Depends(require_admin)],
 ) -> dict:
     with db.connect() as conn:
         with db.immediate_tx(conn):
@@ -1110,6 +1200,229 @@ def moderation_rerun_ai(
                 conn, listing_id=listing_id, correlation_id=_cid(request)
             )
         return result
+
+
+@app.get("/api/admin/staff")
+def admin_staff_list(user: Annotated[dict, Depends(require_admin)]) -> dict:
+    with db.connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, username, role, suspended, change_score, user_risk_score, created_at
+            FROM users
+            WHERE role IN ('moderator','admin','superadmin')
+            ORDER BY
+              CASE role WHEN 'superadmin' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END,
+              username
+            """
+        ).fetchall()
+        return {
+            "staff": [dict(r) for r in rows],
+            "assignable_roles": sorted(ASSIGNABLE_ROLES),
+        }
+
+
+@app.get("/api/admin/users")
+def admin_users_search(
+    user: Annotated[dict, Depends(require_admin)],
+    q: str = "",
+    limit: int = 50,
+) -> dict:
+    limit = max(1, min(int(limit), 100))
+    with db.connect() as conn:
+        if q.strip():
+            rows = conn.execute(
+                """
+                SELECT id, username, role, suspended, change_score, created_at
+                FROM users
+                WHERE username LIKE ? COLLATE NOCASE
+                ORDER BY username LIMIT ?
+                """,
+                (f"%{q.strip()}%", limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT id, username, role, suspended, change_score, created_at
+                FROM users ORDER BY id DESC LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return {"users": [dict(r) for r in rows]}
+
+
+@app.post("/api/admin/users/{user_id}/role")
+def admin_assign_role(
+    user_id: int,
+    body: StaffRoleIn,
+    request: Request,
+    user: Annotated[dict, Depends(require_superadmin)],
+) -> dict:
+    """Superadmin: assign yönetici / onaycı / user roles (unlimited)."""
+    role = (body.role or "").strip().lower()
+    if role == UserRole.SUPERADMIN.value:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "ROLE_FORBIDDEN",
+                "message": "Başka kullanıcıya superadmin atanamaz",
+            },
+        )
+    if role not in ASSIGNABLE_ROLES:
+        raise HTTPException(
+            400,
+            detail={"code": "INVALID_ROLE", "message": f"Geçersiz rol: {role}"},
+        )
+    with db.connect() as conn:
+        target = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not target:
+            raise HTTPException(404, detail={"code": "USER_NOT_FOUND", "message": "Kullanıcı yok"})
+        if str(target["role"]) == UserRole.SUPERADMIN.value and int(target["id"]) != int(user["id"]):
+            raise HTTPException(
+                403,
+                detail={"code": "PROTECTED", "message": "Superadmin rolü değiştirilemez"},
+            )
+        with db.immediate_tx(conn):
+            conn.execute("UPDATE users SET role = ? WHERE id = ?", (role, user_id))
+            db.audit(
+                conn,
+                actor_id=user["id"],
+                action="admin.assign_role",
+                entity="user",
+                entity_id=user_id,
+                detail=db.dumps({"role": role, "note": body.note}),
+                correlation_id=_cid(request),
+            )
+        row = conn.execute(
+            "SELECT id, username, role, suspended, created_at FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        return {"user": dict(row)}
+
+
+@app.post("/api/admin/assignments")
+def admin_create_assignment(
+    body: AssignmentIn,
+    request: Request,
+    user: Annotated[dict, Depends(require_admin)],
+) -> dict:
+    """Yönetici / Superadmin: onaycıya takas ilanı görevi ata."""
+    with db.connect() as conn:
+        listing = conn.execute(
+            "SELECT * FROM trade_listings WHERE id = ?", (body.listing_id,)
+        ).fetchone()
+        if not listing:
+            raise HTTPException(404, detail={"code": "LISTING_NOT_FOUND", "message": "İlan yok"})
+        assignee = conn.execute("SELECT * FROM users WHERE id = ?", (body.assignee_id,)).fetchone()
+        if not assignee:
+            raise HTTPException(404, detail={"code": "USER_NOT_FOUND", "message": "Atanan yok"})
+        if str(assignee["role"]) not in MODERATION_STAFF_ROLES:
+            raise HTTPException(
+                400,
+                detail={
+                    "code": "NOT_STAFF",
+                    "message": "Görev yalnızca yönetici/onaycıya atanabilir",
+                },
+            )
+        now = time.time()
+        with db.immediate_tx(conn):
+            # Close prior open assignments for same listing
+            conn.execute(
+                """
+                UPDATE moderation_assignments
+                SET status = 'REASSIGNED', updated_at = ?
+                WHERE listing_id = ? AND status IN ('OPEN','IN_PROGRESS')
+                """,
+                (now, body.listing_id),
+            )
+            cur = conn.execute(
+                """
+                INSERT INTO moderation_assignments(
+                  listing_id, assignee_id, assigned_by, note, status, created_at, updated_at
+                ) VALUES (?,?,?,?, 'OPEN', ?, ?)
+                """,
+                (
+                    body.listing_id,
+                    body.assignee_id,
+                    user["id"],
+                    (body.note or "")[:300],
+                    now,
+                    now,
+                ),
+            )
+            aid = int(cur.lastrowid)
+            db.audit(
+                conn,
+                actor_id=user["id"],
+                action="admin.assign_task",
+                entity="listing",
+                entity_id=body.listing_id,
+                detail=db.dumps(
+                    {"assignment_id": aid, "assignee_id": body.assignee_id, "note": body.note}
+                ),
+                correlation_id=_cid(request),
+            )
+        row = conn.execute("SELECT * FROM moderation_assignments WHERE id = ?", (aid,)).fetchone()
+        return {"assignment": dict(row)}
+
+
+@app.get("/api/admin/assignments/mine")
+def admin_my_assignments(user: Annotated[dict, Depends(require_moderation_staff)]) -> dict:
+    with db.connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT a.*, l.title, l.status AS listing_status, l.category, l.risk_level
+            FROM moderation_assignments a
+            JOIN trade_listings l ON l.id = a.listing_id
+            WHERE a.assignee_id = ? AND a.status IN ('OPEN','IN_PROGRESS')
+            ORDER BY a.created_at DESC
+            LIMIT 100
+            """,
+            (user["id"],),
+        ).fetchall()
+        return {"assignments": [dict(r) for r in rows], "count": len(rows)}
+
+
+@app.get("/api/admin/panel")
+def admin_panel_bootstrap(user: Annotated[dict, Depends(require_moderation_staff)]) -> dict:
+    """Separate yönetim paneli bootstrap — kullanıcı uygulamasından bağımsız."""
+    with db.connect() as conn:
+        pending = conn.execute(
+            """
+            SELECT COUNT(*) c FROM trade_listings
+            WHERE status IN (
+              'PENDING_MODERATION','AI_REVIEW','ADMIN_REVIEW',
+              'MODERATION_UNAVAILABLE','EDIT_REQUIRED','ESCALATED'
+            )
+            """
+        ).fetchone()["c"]
+        mine = conn.execute(
+            """
+            SELECT COUNT(*) c FROM moderation_assignments
+            WHERE assignee_id = ? AND status IN ('OPEN','IN_PROGRESS')
+            """,
+            (user["id"],),
+        ).fetchone()["c"]
+        return {
+            "panel": "CHANGE_X_ADMIN",
+            "actor": {
+                "id": user["id"],
+                "username": user.get("username"),
+                "role": user.get("role"),
+            },
+            "capabilities": {
+                "moderation_queue": True,
+                "approve": True,
+                "reject": True,
+                "request_edit": True,
+                "delete": True,
+                "assign_tasks": user.get("role")
+                in {UserRole.ADMIN.value, UserRole.SUPERADMIN.value},
+                "assign_roles": user.get("role") == UserRole.SUPERADMIN.value,
+                "unlimited": user.get("role") == UserRole.SUPERADMIN.value,
+            },
+            "stats": {"pending_moderation": pending, "my_open_tasks": mine},
+            "actions": ["APPROVE", "REJECT", "REQUEST_EDIT", "DELETE"],
+        }
 
 
 
@@ -1266,13 +1579,14 @@ def _listing_public(conn, row: dict, include_moderation: bool = False) -> dict:
     return out
 
 
-# Change Chain gate — feature-flagged; algorithm NOT implemented in Exchange Graph V1
+# Change Chain Proposal Engine V1 — feature-flagged; no Asset Lock settlement
 @app.post("/api/change-chain/match")
-def change_chain_match_stub(
-    body: OfferCreateIn,
+def change_chain_match(
+    body: ChainMatchIn,
+    request: Request,
     user: Annotated[dict, Depends(require_user)],
 ) -> dict:
-    if not CHANGE_CHAIN_ENABLED:
+    if not matching_config.change_chain_enabled():
         raise HTTPException(
             501,
             detail={
@@ -1281,32 +1595,173 @@ def change_chain_match_stub(
                 "feature_flag": "CHANGE_CHAIN_ENABLED=false",
             },
         )
+    seed_id = body.listing_id
+    if seed_id is None:
+        # Prefer caller's offered listing as seed when using legacy shape
+        seed_id = (body.offered_listing_ids or body.requested_listing_ids or [None])[0]
+    if seed_id is None:
+        raise HTTPException(
+            400,
+            detail={"code": "SEED_REQUIRED", "message": "listing_id gerekli"},
+        )
+    try:
+        with db.connect() as conn:
+            with db.immediate_tx(conn):
+                result = run_chain_match(
+                    conn,
+                    seed_listing_id=int(seed_id),
+                    actor_id=int(user["id"]),
+                    max_length=body.max_length,
+                    max_results=body.max_results,
+                    persist=body.persist_proposals,
+                )
+                db.audit(
+                    conn,
+                    actor_id=user["id"],
+                    action="chain.match",
+                    entity="chain",
+                    entity_id=None,
+                    detail=db.dumps(
+                        {
+                            "seed": seed_id,
+                            "cycles": result.get("cycle_count"),
+                            "proposals": len(result.get("proposals") or []),
+                        }
+                    ),
+                    correlation_id=_cid(request),
+                )
+                return result
+    except ChainEngineError as exc:
+        raise HTTPException(
+            exc.http_status, detail={"code": exc.code, "message": exc.message}
+        ) from exc
+
+
+@app.get("/api/change-chain/proposals")
+def change_chain_proposals_list(user: Annotated[dict, Depends(require_user)]) -> dict:
+    if not matching_config.change_chain_enabled():
+        raise HTTPException(
+            501,
+            detail={
+                "code": "CHANGE_CHAIN_DISABLED",
+                "message": "Change Chain feature flag kapalı",
+            },
+        )
     with db.connect() as conn:
-        for lid in list(body.requested_listing_ids) + list(body.offered_listing_ids):
-            row = conn.execute("SELECT * FROM trade_listings WHERE id = ?", (lid,)).fetchone()
-            if not row:
-                raise HTTPException(404, detail={"code": "LISTING_NOT_FOUND", "message": "Listing yok"})
-            d = dict(row)
-            if not is_public_matchable(d):
-                raise HTTPException(
-                    409,
-                    detail={
-                        "code": "LISTING_NOT_APPROVED",
-                        "message": "Onaysız veya müsait olmayan listing Change Chain'e giremez",
-                    },
+        items = list_proposals_for_user(conn, int(user["id"]))
+        return {"proposals": items, "count": len(items)}
+
+
+@app.get("/api/change-chain/proposals/{proposal_id}")
+def change_chain_proposal_detail(
+    proposal_id: int,
+    user: Annotated[dict, Depends(require_user)],
+) -> dict:
+    if not matching_config.change_chain_enabled():
+        raise HTTPException(
+            501,
+            detail={
+                "code": "CHANGE_CHAIN_DISABLED",
+                "message": "Change Chain feature flag kapalı",
+            },
+        )
+    try:
+        with db.connect() as conn:
+            prop = proposal_public(conn, proposal_id)
+            if int(user["id"]) not in {int(x) for x in prop["owner_ids"]}:
+                if user.get("role") not in {UserRole.ADMIN.value, UserRole.SUPERADMIN.value}:
+                    raise HTTPException(
+                        403, detail={"code": "FORBIDDEN", "message": "Yetkisiz"}
+                    )
+            return prop
+    except ChainProposalError as exc:
+        raise HTTPException(
+            exc.http_status, detail={"code": exc.code, "message": exc.message}
+        ) from exc
+
+
+@app.post("/api/change-chain/proposals/{proposal_id}/accept")
+def change_chain_proposal_accept(
+    proposal_id: int,
+    body: ChainConsentIn,
+    request: Request,
+    user: Annotated[dict, Depends(require_user)],
+) -> dict:
+    if not matching_config.change_chain_enabled():
+        raise HTTPException(
+            501,
+            detail={
+                "code": "CHANGE_CHAIN_DISABLED",
+                "message": "Change Chain feature flag kapalı",
+            },
+        )
+    try:
+        with db.connect() as conn:
+            with db.immediate_tx(conn):
+                result = accept_proposal(
+                    conn,
+                    proposal_id,
+                    actor_id=int(user["id"]),
+                    actor_role=str(user.get("role") or "user"),
+                    expected_version=body.expected_version,
+                    idempotency_key=body.idempotency_key,
                 )
-            if not is_chain_candidate(d):
-                raise HTTPException(
-                    409,
-                    detail={
-                        "code": "NOT_CHAIN_CANDIDATE",
-                        "message": "Listing chain opt-in / preference koşullarını karşılamıyor",
-                    },
+                db.audit(
+                    conn,
+                    actor_id=user["id"],
+                    action="chain.accept",
+                    entity="chain_proposal",
+                    entity_id=proposal_id,
+                    detail=db.dumps({"status": result.get("status"), "settlement": "NOT_IMPLEMENTED"}),
+                    correlation_id=_cid(request),
                 )
-    raise HTTPException(
-        501,
-        detail={"code": "CHANGE_CHAIN_NOT_IMPLEMENTED", "message": "Change Chain algoritması henüz yok"},
-    )
+                return result
+    except ChainProposalError as exc:
+        raise HTTPException(
+            exc.http_status, detail={"code": exc.code, "message": exc.message}
+        ) from exc
+
+
+@app.post("/api/change-chain/proposals/{proposal_id}/reject")
+def change_chain_proposal_reject(
+    proposal_id: int,
+    body: ChainConsentIn,
+    request: Request,
+    user: Annotated[dict, Depends(require_user)],
+) -> dict:
+    if not matching_config.change_chain_enabled():
+        raise HTTPException(
+            501,
+            detail={
+                "code": "CHANGE_CHAIN_DISABLED",
+                "message": "Change Chain feature flag kapalı",
+            },
+        )
+    try:
+        with db.connect() as conn:
+            with db.immediate_tx(conn):
+                result = reject_proposal(
+                    conn,
+                    proposal_id,
+                    actor_id=int(user["id"]),
+                    actor_role=str(user.get("role") or "user"),
+                    expected_version=body.expected_version,
+                    idempotency_key=body.idempotency_key,
+                )
+                db.audit(
+                    conn,
+                    actor_id=user["id"],
+                    action="chain.reject",
+                    entity="chain_proposal",
+                    entity_id=proposal_id,
+                    detail=db.dumps({"status": result.get("status")}),
+                    correlation_id=_cid(request),
+                )
+                return result
+    except ChainProposalError as exc:
+        raise HTTPException(
+            exc.http_status, detail={"code": exc.code, "message": exc.message}
+        ) from exc
 
 
 @app.get("/api/matching/preferences")
@@ -1321,7 +1776,7 @@ def get_matching_preferences(user: Annotated[dict, Depends(require_user)]) -> di
         return {
             "preferences": view,
             "feature_flags": {
-                "CHANGE_CHAIN_ENABLED": CHANGE_CHAIN_ENABLED,
+                "CHANGE_CHAIN_ENABLED": matching_config.change_chain_enabled(),
             },
             "compatibility_policy": get_compatibility().policy_version,
         }
@@ -1354,7 +1809,9 @@ def patch_matching_preferences(
                 )
             return {
                 "preferences": public_preferences_view(prefs),
-                "feature_flags": {"CHANGE_CHAIN_ENABLED": CHANGE_CHAIN_ENABLED},
+                "feature_flags": {
+                    "CHANGE_CHAIN_ENABLED": matching_config.change_chain_enabled()
+                },
             }
     except ValueError as exc:
         raise HTTPException(

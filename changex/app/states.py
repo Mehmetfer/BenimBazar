@@ -40,6 +40,7 @@ class ModerationDecision(str, Enum):
     REQUEST_EDIT = "REQUEST_EDIT"
     ESCALATE = "ESCALATE"
     SUSPEND_USER = "SUSPEND_USER"
+    DELETE = "DELETE"  # soft-cancel listing from queue / panel
 
 
 class RiskLevel(str, Enum):
@@ -51,8 +52,24 @@ class RiskLevel(str, Enum):
 
 class UserRole(str, Enum):
     USER = "user"
-    ADMIN = "admin"
-    SUPERADMIN = "superadmin"
+    MODERATOR = "moderator"  # onaycı — onay kutusunda karar verir
+    ADMIN = "admin"  # yönetici — kuyruk + görev atama
+    SUPERADMIN = "superadmin"  # sınırsız
+
+
+# Staff who may act on moderation queue (approve / reject / edit / delete)
+MODERATION_STAFF_ROLES = {
+    UserRole.MODERATOR.value,
+    UserRole.ADMIN.value,
+    UserRole.SUPERADMIN.value,
+}
+
+# Roles Superadmin may assign to others
+ASSIGNABLE_ROLES = {
+    UserRole.USER.value,
+    UserRole.MODERATOR.value,
+    UserRole.ADMIN.value,
+}
 
 
 class TradeState(str, Enum):
@@ -114,12 +131,18 @@ LISTING_TRANSITIONS: dict[ListingStatus, set[ListingStatus]] = {
         ListingStatus.AI_REVIEW,
         ListingStatus.ADMIN_REVIEW,
         ListingStatus.MODERATION_UNAVAILABLE,
+        ListingStatus.APPROVED,  # staff may approve from pending
+        ListingStatus.REJECTED,
+        ListingStatus.EDIT_REQUIRED,
         ListingStatus.CANCELLED,
     },
     ListingStatus.AI_REVIEW: {
         ListingStatus.ADMIN_REVIEW,
         ListingStatus.MODERATION_UNAVAILABLE,
+        ListingStatus.APPROVED,
         ListingStatus.REJECTED,  # hard safety reject (e.g. CSAM)
+        ListingStatus.EDIT_REQUIRED,
+        ListingStatus.CANCELLED,
     },
     ListingStatus.ADMIN_REVIEW: {
         ListingStatus.APPROVED,
@@ -127,6 +150,7 @@ LISTING_TRANSITIONS: dict[ListingStatus, set[ListingStatus]] = {
         ListingStatus.EDIT_REQUIRED,
         ListingStatus.ESCALATED,
         ListingStatus.SUSPENDED,
+        ListingStatus.CANCELLED,
     },
     ListingStatus.ESCALATED: {
         ListingStatus.APPROVED,
@@ -134,12 +158,15 @@ LISTING_TRANSITIONS: dict[ListingStatus, set[ListingStatus]] = {
         ListingStatus.EDIT_REQUIRED,
         ListingStatus.SUSPENDED,
         ListingStatus.ADMIN_REVIEW,
+        ListingStatus.CANCELLED,
     },
     ListingStatus.MODERATION_UNAVAILABLE: {
         ListingStatus.ADMIN_REVIEW,
         ListingStatus.APPROVED,
         ListingStatus.REJECTED,
         ListingStatus.PENDING_MODERATION,
+        ListingStatus.EDIT_REQUIRED,
+        ListingStatus.CANCELLED,
     },
     ListingStatus.APPROVED: {
         ListingStatus.PENDING_MODERATION,  # critical edit re-moderation
@@ -159,7 +186,12 @@ LISTING_TRANSITIONS: dict[ListingStatus, set[ListingStatus]] = {
         ListingStatus.SUSPENDED,
     },
     ListingStatus.REJECTED: {ListingStatus.PENDING_MODERATION, ListingStatus.CANCELLED},
-    ListingStatus.EDIT_REQUIRED: {ListingStatus.PENDING_MODERATION, ListingStatus.CANCELLED},
+    ListingStatus.EDIT_REQUIRED: {
+        ListingStatus.PENDING_MODERATION,
+        ListingStatus.APPROVED,
+        ListingStatus.REJECTED,
+        ListingStatus.CANCELLED,
+    },
     ListingStatus.SUSPENDED: {ListingStatus.ADMIN_REVIEW, ListingStatus.CANCELLED},
     ListingStatus.RESERVED: {
         ListingStatus.APPROVED,  # release after cancel

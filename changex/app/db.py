@@ -491,7 +491,94 @@ def _migrate(conn: sqlite3.Connection) -> None:
           note TEXT NOT NULL DEFAULT '',
           UNIQUE(policy_version, source_category, target_category)
         );
+
+        CREATE TABLE IF NOT EXISTS chain_proposals (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          chain_id TEXT NOT NULL UNIQUE,
+          listing_ids TEXT NOT NULL,
+          owner_ids TEXT NOT NULL,
+          length INTEGER NOT NULL,
+          edges_json TEXT NOT NULL,
+          score REAL NOT NULL DEFAULT 0,
+          score_breakdowns TEXT NOT NULL DEFAULT '[]',
+          explanations TEXT NOT NULL DEFAULT '[]',
+          risk_flags TEXT NOT NULL DEFAULT '[]',
+          status TEXT NOT NULL DEFAULT 'PROPOSED',
+          version INTEGER NOT NULL DEFAULT 1,
+          expires_at REAL NOT NULL,
+          created_at REAL NOT NULL,
+          updated_at REAL NOT NULL,
+          created_by INTEGER NOT NULL REFERENCES users(id),
+          engine_version TEXT NOT NULL DEFAULT 'CHANGE_CHAIN_ENGINE_V1'
+        );
+
+        CREATE TABLE IF NOT EXISTS chain_proposal_participants (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          proposal_id INTEGER NOT NULL REFERENCES chain_proposals(id) ON DELETE CASCADE,
+          owner_id INTEGER NOT NULL REFERENCES users(id),
+          listing_id INTEGER NOT NULL REFERENCES trade_listings(id),
+          consent TEXT NOT NULL DEFAULT 'PENDING',
+          version INTEGER NOT NULL DEFAULT 1,
+          updated_at REAL,
+          UNIQUE(proposal_id, owner_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_chain_proposals_status
+          ON chain_proposals(status, expires_at);
+        CREATE INDEX IF NOT EXISTS idx_chain_participants_owner
+          ON chain_proposal_participants(owner_id, proposal_id);
+
+        CREATE TABLE IF NOT EXISTS moderation_assignments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          listing_id INTEGER NOT NULL REFERENCES trade_listings(id) ON DELETE CASCADE,
+          assignee_id INTEGER NOT NULL REFERENCES users(id),
+          assigned_by INTEGER NOT NULL REFERENCES users(id),
+          note TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'OPEN',
+          created_at REAL NOT NULL,
+          updated_at REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_mod_assign_assignee
+          ON moderation_assignments(assignee_id, status);
+        CREATE INDEX IF NOT EXISTS idx_mod_assign_listing
+          ON moderation_assignments(listing_id, status);
         """
+    )
+    _seed_default_superadmin(conn)
+
+
+DEFAULT_SUPERADMIN_USERNAME = "superadmin"
+DEFAULT_SUPERADMIN_PASSWORD = "14531453"
+
+
+def _seed_default_superadmin(conn: sqlite3.Connection) -> None:
+    """Ensure bootstrap Superadmin exists (password temporarily 14531453)."""
+    from .states import UserRole
+
+    row = conn.execute(
+        "SELECT id, role FROM users WHERE username = ? COLLATE NOCASE",
+        (DEFAULT_SUPERADMIN_USERNAME,),
+    ).fetchone()
+    if row:
+        if str(row["role"]) != UserRole.SUPERADMIN.value:
+            conn.execute(
+                "UPDATE users SET role = ?, suspended = 0 WHERE id = ?",
+                (UserRole.SUPERADMIN.value, row["id"]),
+            )
+        return
+    import time as _time
+
+    conn.execute(
+        """
+        INSERT INTO users(username, password_hash, role, created_at, suspended)
+        VALUES (?,?,?,?,0)
+        """,
+        (
+            DEFAULT_SUPERADMIN_USERNAME,
+            hash_password(DEFAULT_SUPERADMIN_PASSWORD),
+            UserRole.SUPERADMIN.value,
+            _time.time(),
+        ),
     )
 
 

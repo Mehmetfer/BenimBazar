@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../api/client.dart';
 import '../theme/app_theme.dart';
 import '../widgets/value_widgets.dart';
+import 'admin_login_screen.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 
@@ -105,6 +106,21 @@ class _SplashScreenState extends State<SplashScreen>
                     child: Text(
                       'Giriş / Kayıt',
                       style: GoogleFonts.montserrat(color: AppColors.gold),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      _navigated = true;
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
+                      );
+                    },
+                    child: Text(
+                      'Yönetim Paneli',
+                      style: GoogleFonts.montserrat(
+                        color: AppColors.muted,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 18),

@@ -143,6 +143,71 @@ class ChangeXApi {
     return _decode(res);
   }
 
+  Future<Map<String, dynamic>> adminPanel() async {
+    final res = await http.get(
+      Uri.parse('$_root/api/admin/panel'),
+      headers: await _headers(auth: true),
+    );
+    return _decode(res);
+  }
+
+  Future<List<dynamic>> adminStaff() async {
+    final res = await http.get(
+      Uri.parse('$_root/api/admin/staff'),
+      headers: await _headers(auth: true),
+    );
+    final data = _decode(res);
+    return (data['staff'] as List?) ?? [];
+  }
+
+  Future<List<dynamic>> adminUsers({String q = ''}) async {
+    final uri = Uri.parse('$_root/api/admin/users').replace(
+      queryParameters: q.isEmpty ? null : {'q': q},
+    );
+    final res = await http.get(uri, headers: await _headers(auth: true));
+    final data = _decode(res);
+    return (data['users'] as List?) ?? [];
+  }
+
+  Future<Map<String, dynamic>> assignUserRole(
+    int userId,
+    String role, {
+    String note = '',
+  }) async {
+    final res = await http.post(
+      Uri.parse('$_root/api/admin/users/$userId/role'),
+      headers: await _headers(auth: true),
+      body: jsonEncode({'role': role, 'note': note}),
+    );
+    return _decode(res);
+  }
+
+  Future<Map<String, dynamic>> createAssignment({
+    required int listingId,
+    required int assigneeId,
+    String note = '',
+  }) async {
+    final res = await http.post(
+      Uri.parse('$_root/api/admin/assignments'),
+      headers: await _headers(auth: true),
+      body: jsonEncode({
+        'listing_id': listingId,
+        'assignee_id': assigneeId,
+        'note': note,
+      }),
+    );
+    return _decode(res);
+  }
+
+  Future<List<dynamic>> myAssignments() async {
+    final res = await http.get(
+      Uri.parse('$_root/api/admin/assignments/mine'),
+      headers: await _headers(auth: true),
+    );
+    final data = _decode(res);
+    return (data['assignments'] as List?) ?? [];
+  }
+
   Map<String, dynamic> _decode(http.Response res) {
     Map<String, dynamic> body;
     try {
