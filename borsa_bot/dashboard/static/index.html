@@ -27,6 +27,10 @@
     .banner.bad{background:rgba(255,92,92,.12);border:1px solid rgba(255,92,92,.35);color:#ffb4b4}
     .banner.warn{background:rgba(230,162,60,.12);border:1px solid rgba(230,162,60,.35);color:#ffd79a}
     .banner.ok{background:rgba(61,214,140,.1);border:1px solid rgba(61,214,140,.28);color:#b9f5d3}
+    .banner.loading .banner-row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}
+    .banner.loading .banner-pct{font-weight:800;font-size:.9rem;min-width:3.2em;text-align:right;color:#c9dbff}
+    .banner-progress{height:6px;border-radius:999px;background:rgba(0,0,0,.22);overflow:hidden}
+    .banner-progress-bar{height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,#5b8def,#2ecf8a);transition:width .35s ease}
     .filters{display:flex;gap:6px;overflow:auto;margin:0 0 10px;padding-bottom:2px}
     .filter{flex:0 0 auto;min-height:38px;padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--mute);font-weight:700;font-size:.78rem}
     .filter.on{background:rgba(46,207,138,.16);color:var(--buy2);border-color:rgba(46,207,138,.4)}
@@ -144,7 +148,13 @@
     <button type="button" class="market-btn on" data-market="BIST" id="mktBist">BIST</button>
     <button type="button" class="market-btn" data-market="CRYPTO" id="mktCrypto">CRYPTO</button>
   </div>
-  <div id="integrityBanner" class="banner sim">Veri kaynağı kontrol ediliyor…</div>
+  <div id="integrityBanner" class="banner sim loading">
+    <div class="banner-row">
+      <span id="integrityBannerLabel">Veri kaynağı kontrol ediliyor…</span>
+      <span id="integrityBannerPct" class="banner-pct">0%</span>
+    </div>
+    <div class="banner-progress" aria-hidden="true"><div id="integrityBannerBar" class="banner-progress-bar"></div></div>
+  </div>
   <div class="sysline" id="clockLine">Son veri: —</div>
 
   <div id="bistShell">
@@ -327,6 +337,17 @@
   let bist100 = {companies: [], sectors: [], selected: null, summary: {}, note: ''};
   let paperWallet = null;
   let tvWidget = null;
+  let dsLoadTimer = null;
+  let dsLoadPct = 0;
+  const DS_LOAD_STEPS = [
+    {pct: 10, label: 'Veri kaynağı kontrol ediliyor…'},
+    {pct: 24, label: 'Sağlayıcıya bağlanılıyor…'},
+    {pct: 42, label: 'BIST fiyatları yükleniyor…'},
+    {pct: 58, label: 'Evren taranıyor…'},
+    {pct: 74, label: 'Sinyaller hesaplanıyor…'},
+    {pct: 88, label: 'Öneriler hazırlanıyor…'},
+    {pct: 95, label: 'Veri kaynağı kontrol ediliyor…'},
+  ];
   const money = n => Number(n||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
   const pct = n => (n==null||n===undefined) ? '—' : `${n>=0?'+':''}${Number(n).toFixed(2)}%`;
   const B100_SIGNAL_RANK = {
@@ -578,25 +599,31 @@
   }
 
   async function loadCrypto(){
+    beginDataSourceLoading({quick: true});
     try{
       cryptoDash = await (await fetch('/api/crypto/dashboard?limit=40')).json();
       await renderCryptoHome();
-      // Update top integrity line lightly for crypto context
       const st = cryptoDash.status||{};
       const pill = document.getElementById('mktText');
       const dot = document.getElementById('mktDot');
       if(activeMarket==='CRYPTO'){
-        pill.textContent = `CRYPTO · ${(st.has_market_data?'LIVE MD':'VERİ YOK')}`;
-        dot.className = st.has_market_data ? 'dot open' : 'dot bad';
-        document.getElementById('clockLine').textContent =
-          `CRYPTO · ${(cryptoDash.count||0)} coin · Paper only · Son yenileme az önce`;
-        const banner = document.getElementById('integrityBanner');
-        banner.className = st.has_market_data ? 'banner ok' : 'banner sim';
-        banner.textContent = (st.ui&&st.ui.message) || 'CRYPTO · canlı emir yok';
+        endDataSourceLoading(()=>{
+          pill.textContent = `CRYPTO · ${(st.has_market_data?'LIVE MD':'VERİ YOK')}`;
+          dot.className = st.has_market_data ? 'dot open' : 'dot bad';
+          document.getElementById('clockLine').textContent =
+            `CRYPTO · ${(cryptoDash.count||0)} coin · Paper only · Son yenileme az önce`;
+          const banner = document.getElementById('integrityBanner');
+          banner.className = st.has_market_data ? 'banner ok' : 'banner sim';
+          banner.innerHTML = `<div class="banner-status">${(st.ui&&st.ui.message) || 'CRYPTO · canlı emir yok'}</div>`;
+        });
+      } else {
+        if(dsLoadTimer){ clearInterval(dsLoadTimer); dsLoadTimer = null; }
       }
     }catch(e){
-      document.getElementById('cryptoBanner').className = 'banner bad';
-      document.getElementById('cryptoBanner').textContent = 'CRYPTO dashboard alınamadı';
+      endDataSourceLoading(()=>{
+        document.getElementById('cryptoBanner').className = 'banner bad';
+        document.getElementById('cryptoBanner').textContent = 'CRYPTO dashboard alınamadı';
+      });
     }
   }
 
@@ -700,7 +727,57 @@
     }
   }
 
-  function renderIntegrity(m, health){
+  function setDataSourceProgress(pct, label){
+    const bar = document.getElementById('integrityBannerBar');
+    const pctEl = document.getElementById('integrityBannerPct');
+    const lab = document.getElementById('integrityBannerLabel');
+    const banner = document.getElementById('integrityBanner');
+    const p = Math.max(0, Math.min(100, Math.round(pct)));
+    if(bar) bar.style.width = p + '%';
+    if(pctEl) pctEl.textContent = p + '%';
+    if(lab && label) lab.textContent = label;
+    if(banner){
+      banner.classList.add('loading');
+      if(!banner.classList.contains('sim') && !banner.classList.contains('bad') && !banner.classList.contains('warn') && !banner.classList.contains('ok')){
+        banner.classList.add('sim');
+      }
+      if(!banner.querySelector('.banner-progress')){
+        banner.innerHTML = `
+          <div class="banner-row">
+            <span id="integrityBannerLabel">${label||'Veri kaynağı kontrol ediliyor…'}</span>
+            <span id="integrityBannerPct" class="banner-pct">${p}%</span>
+          </div>
+          <div class="banner-progress" aria-hidden="true"><div id="integrityBannerBar" class="banner-progress-bar" style="width:${p}%"></div></div>`;
+      }
+    }
+  }
+
+  function beginDataSourceLoading(opts){
+    const quick = !!(opts && opts.quick);
+    if(dsLoadTimer) clearInterval(dsLoadTimer);
+    dsLoadPct = 0;
+    let step = 0;
+    setDataSourceProgress(0, 'Veri kaynağı kontrol ediliyor…');
+    const interval = quick ? 180 : 420;
+    dsLoadTimer = setInterval(()=>{
+      if(step < DS_LOAD_STEPS.length){
+        const s = DS_LOAD_STEPS[step++];
+        dsLoadPct = s.pct;
+        setDataSourceProgress(s.pct, s.label);
+      } else if(dsLoadPct < 97){
+        dsLoadPct += 1;
+        setDataSourceProgress(dsLoadPct, 'Veri kaynağı kontrol ediliyor…');
+      }
+    }, interval);
+  }
+
+  function endDataSourceLoading(done){
+    if(dsLoadTimer){ clearInterval(dsLoadTimer); dsLoadTimer = null; }
+    setDataSourceProgress(100, 'Veri kaynağı hazır');
+    setTimeout(()=>{ if(typeof done === 'function') done(); }, 180);
+  }
+
+  function renderIntegrity(m, health, extra){
     const banner = document.getElementById('integrityBanner');
     const pill = document.getElementById('mktText');
     const dot = document.getElementById('mktDot');
@@ -711,28 +788,34 @@
     const ago = (daily&&daily.market&&daily.market.last_update_ago) || '—';
     const ui = (m&&m.ui_status) || (kind==='SIMULATED'?'◐ SIMULATED':(live?'● LIVE':'⚠ DATA UNAVAILABLE'));
     clock.textContent = `Son veri: ${ago} · Kaynak: ${(m&&m.display_name)||'—'} · ${ui}`;
+    let text = '';
+    let cls = 'banner ok';
     if(kind==='SIMULATED' || kind==='TEST' || kind==='BACKTEST'){
-      banner.className='banner sim';
-      banner.textContent=`${ui} · CANLI PİYASA DEĞİL — Paper / demo. Tradeable: hayır. LIVE READY değil.`;
+      cls = 'banner sim';
+      text = `${ui} · CANLI PİYASA DEĞİL — Paper / demo. Tradeable: hayır. LIVE READY değil.`;
       pill.textContent = `BIST · ${kind} · ${session==='OPEN'?'seans': 'kapalı'}`;
       dot.className='dot sim';
     } else if(kind==='REQUIRED' || kind==='UNAVAILABLE' || kind==='UNKNOWN' || !(m&&m.connected)){
-      banner.className='banner bad';
+      cls = 'banner bad';
       const gateMsg = (daily&&daily.market_data_gate&&daily.market_data_gate.ui_message) || 'MARKET DATA UNAVAILABLE';
       const code = (daily&&daily.market_data_gate&&daily.market_data_gate.code) || '';
-      banner.textContent = `⚠ ${gateMsg}${code?(' — '+code):''}. Uydurma/eski fiyat gösterilmez.`;
+      text = `⚠ ${gateMsg}${code?(' — '+code):''}. Uydurma/eski fiyat gösterilmez.`;
       pill.textContent='BIST · VERİ YOK';
       dot.className='dot bad';
     } else if((m&&m.freshness)==='STALE'){
-      banner.className='banner warn';
-      banner.textContent='STALE DATA — Eski veri canlı gibi gösterilmez. Sinyaller PAUSED.';
+      cls = 'banner warn';
+      text = 'STALE DATA — Eski veri canlı gibi gösterilmez. Sinyaller PAUSED.';
       pill.textContent=`BIST · ESKİ VERİ`;
       dot.className='dot bad';
     } else {
-      banner.className='banner ok';
-      banner.textContent=`${ui} · ${m.price_label||''} · ${m.note||''}`;
+      text = `${ui} · ${m.price_label||''} · ${m.note||''}`;
       pill.textContent=`BIST · ${session==='OPEN'?'● PİYASA AÇIK':'● PİYASA KAPALI'}`;
       dot.className = session==='OPEN'?'dot open':'dot closed';
+    }
+    if(extra) text += extra;
+    if(banner){
+      banner.className = cls;
+      banner.innerHTML = `<div class="banner-status">${text}</div>`;
     }
     if(health&&health.live_ready){ /* never true until real feed */ }
   }
@@ -1021,18 +1104,34 @@
     }
   }
 
-  async function load(){
-    const res = await fetch('/api/daily');
-    const data = await res.json();
+  async function load(opts){
+    const quick = !!(opts && opts.quick);
+    beginDataSourceLoading({quick});
+    let data = null;
+    try{
+      const res = await fetch('/api/daily');
+      data = await res.json();
+    }catch(e){
+      endDataSourceLoading(()=>{
+        const banner = document.getElementById('integrityBanner');
+        if(banner){
+          banner.className = 'banner bad';
+          banner.innerHTML = '<div class="banner-status">⚠ Veri kaynağı yüklenemedi — yenileyin</div>';
+        }
+      });
+      return;
+    }
     daily = data.daily||{};
     const health = data.health||{};
-    renderIntegrity(data.data_source||daily.integrity||{}, health);
     const uni = data.universe||{};
     const ss = data.scan_stats||{};
-    const banner = document.getElementById('integrityBanner');
-    if(banner && uni.full_universe){
-      banner.textContent += ` · Universe ${uni.full_universe} · MD ${ss.WITH_MARKET_DATA??'—'} · Deep ${ss.DEEP_ANALYSIS??ss.ANALYZED??'—'} · UI top ≠ full scan`;
+    let extra = '';
+    if(uni.full_universe){
+      extra = ` · Universe ${uni.full_universe} · MD ${ss.WITH_MARKET_DATA??'—'} · Deep ${ss.DEEP_ANALYSIS??ss.ANALYZED??'—'} · UI top ≠ full scan`;
     }
+    endDataSourceLoading(()=>{
+      renderIntegrity(data.data_source||daily.integrity||{}, health, extra);
+    });
     renderHome();
     document.getElementById('favHome').innerHTML = ((daily.sections||{}).favorites||[]).map(cardHtml).join('') || '<div class="empty">Favori yok — aramadan ★ ekleyin</div>';
     bindCards();
@@ -1191,7 +1290,7 @@
   setMarket('BIST');
   load();
   loadBist100();
-  setInterval(()=>{ if(activeMarket==='BIST') load(); else loadCrypto(); }, 15000);
+  setInterval(()=>{ if(activeMarket==='BIST') load({quick:true}); else loadCrypto(); }, 15000);
 })();
 </script>
 </body>
