@@ -10,20 +10,50 @@ import time
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 DB_PATH = DATA_DIR / "changex.db"
 
+# Controllable failure injection for rollback tests (test-only).
+_FAILURE_HOOK: Callable[[str], None] | None = None
+
+# Soft metrics for SQLite contention (process-local).
+LOCK_STATS: dict[str, int] = {
+    "begin_immediate": 0,
+    "busy_retries": 0,
+    "busy_failures": 0,
+    "rollbacks": 0,
+    "commits": 0,
+}
+
+
+def set_failure_hook(hook: Callable[[str], None] | None) -> None:
+    global _FAILURE_HOOK
+    _FAILURE_HOOK = hook
+
+
+def maybe_fail(stage: str) -> None:
+    if _FAILURE_HOOK is not None:
+        _FAILURE_HOOK(stage)
+
+
+def reset_lock_stats() -> None:
+    for k in LOCK_STATS:
+        LOCK_STATS[k] = 0
+
 
 def _connect(path: Path | None = None) -> sqlite3.Connection:
     db_path = path or DB_PATH
     db_path.parent.mkdir(parents=True, exist_ok=True)
+    # timeout=30s cooperates with PRAGMA busy_timeout for lock waits
     conn = sqlite3.connect(str(db_path), timeout=30, isolation_level=None)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA synchronous = NORMAL")
+    conn.execute("PRAGMA busy_timeout = 30000")
     return conn
 
 
@@ -38,12 +68,35 @@ def connect(path: Path | None = None) -> Iterator[sqlite3.Connection]:
 
 @contextmanager
 def immediate_tx(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
-    conn.execute("BEGIN IMMEDIATE")
+    """BEGIN IMMEDIATE with busy retry — serializes writers under concurrency."""
+    attempts = 0
+    while True:
+        attempts += 1
+        try:
+            LOCK_STATS["begin_immediate"] += 1
+            conn.execute("BEGIN IMMEDIATE")
+            break
+        except sqlite3.OperationalError as exc:
+            msg = str(exc).lower()
+            if "locked" in msg or "busy" in msg:
+                LOCK_STATS["busy_retries"] += 1
+                if attempts >= 8:
+                    LOCK_STATS["busy_failures"] += 1
+                    raise
+                time.sleep(0.005 * attempts)
+                continue
+            raise
     try:
         yield conn
+        maybe_fail("before_commit")
         conn.execute("COMMIT")
+        LOCK_STATS["commits"] += 1
     except Exception:
-        conn.execute("ROLLBACK")
+        LOCK_STATS["rollbacks"] += 1
+        try:
+            conn.execute("ROLLBACK")
+        except sqlite3.Error:
+            pass
         raise
 
 

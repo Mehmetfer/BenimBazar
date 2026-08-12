@@ -21,11 +21,17 @@ from .engine import (
     create_offer,
     trade_public,
 )
+from .metrics import compute_trade_metrics
+from .observability import safe_log_fields
+from .recovery import recover_stale_reservations
 from .states import ListingStatus, TradeState, InvalidTransition, transition
-from .value import ChangeValue, ChangeValueError, value_gap
+from .value import ChangeValue, ChangeValueError
 
 WEB_DIR = Path(__file__).resolve().parents[2] / "changex_app" / "build" / "web"
 ALT_WEB = Path("/home/ubuntu/varmisin-app/build/web")
+
+# Structured request log sink (tests can replace). No secrets.
+REQUEST_LOGS: list[dict[str, Any]] = []
 
 
 @asynccontextmanager
@@ -34,7 +40,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="CHANGE X", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="CHANGE X", version="0.2.1", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -43,21 +49,83 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Rate buckets: key -> timestamps. Keys include ip / user / endpoint dimensions.
 _RATE: dict[str, list[float]] = {}
 
 
-def _rate_limit(request: Request, limit: int = 60, window: float = 60.0) -> None:
-    ip = request.client.host if request.client else "unknown"
+def _rate_hit(key: str, limit: int, window: float) -> None:
     now = time.time()
-    bucket = [t for t in _RATE.get(ip, []) if now - t < window]
+    bucket = [t for t in _RATE.get(key, []) if now - t < window]
     if len(bucket) >= limit:
-        raise HTTPException(429, detail={"code": "RATE_LIMIT", "message": "Çok fazla istek"})
+        raise HTTPException(
+            429,
+            detail={
+                "code": "RATE_LIMIT",
+                "message": "Çok fazla istek",
+                "scope": key.split(":")[0],
+                "key": key,
+            },
+        )
     bucket.append(now)
-    _RATE[ip] = bucket
+    _RATE[key] = bucket
+
+
+def _rate_limit(
+    request: Request,
+    limit: int = 60,
+    window: float = 60.0,
+    *,
+    endpoint: str | None = None,
+    user_id: int | None = None,
+    global_ip_limit: int = 600,
+) -> None:
+    """Enforce IP + endpoint (+ optional user) rate limits independently."""
+    ip = request.client.host if request.client else "unknown"
+    ep = endpoint or request.url.path
+    _rate_hit(f"ip:{ip}", global_ip_limit, window)
+    _rate_hit(f"ip:{ip}:ep:{ep}", limit, window)
+    if user_id is not None:
+        _rate_hit(f"user:{user_id}", global_ip_limit, window)
+        _rate_hit(f"user:{user_id}:ep:{ep}", limit, window)
 
 
 def _cid(request: Request) -> str:
     return request.headers.get("x-correlation-id") or str(uuid.uuid4())
+
+
+@app.middleware("http")
+async def observability_middleware(request: Request, call_next):
+    cid = request.headers.get("x-correlation-id") or str(uuid.uuid4())
+    request.state.correlation_id = cid
+    start = time.perf_counter()
+    error_code = None
+    result = "ok"
+    try:
+        response = await call_next(request)
+        if response.status_code >= 400:
+            result = "error"
+            error_code = str(response.status_code)
+        response.headers["X-Correlation-Id"] = cid
+        return response
+    except Exception:
+        result = "error"
+        error_code = "UNHANDLED"
+        raise
+    finally:
+        duration_ms = (time.perf_counter() - start) * 1000.0
+        entry = safe_log_fields(
+            actor_id=getattr(request.state, "actor_id", None),
+            action=f"{request.method} {request.url.path}",
+            entity="request",
+            result=result,
+            error_code=error_code,
+            duration_ms=round(duration_ms, 3),
+            correlation_id=cid,
+        )
+        # Never log Authorization / password / token bodies
+        REQUEST_LOGS.append(entry)
+        if len(REQUEST_LOGS) > 5000:
+            del REQUEST_LOGS[:2500]
 
 
 class RegisterIn(BaseModel):
@@ -139,7 +207,7 @@ def current_user(
     request: Request,
     authorization: Annotated[str | None, Header()] = None,
 ) -> dict[str, Any] | None:
-    _rate_limit(request, limit=120)
+    _rate_limit(request, limit=180, endpoint=request.url.path)
     token = None
     if authorization and authorization.lower().startswith("bearer "):
         token = authorization.split(" ", 1)[1].strip()
@@ -154,7 +222,16 @@ def current_user(
             """,
             (token, time.time()),
         ).fetchone()
-        return db.row_to_dict(row)
+        user = db.row_to_dict(row)
+        if user:
+            request.state.actor_id = user["id"]
+            _rate_limit(
+                request,
+                limit=120,
+                endpoint=request.url.path,
+                user_id=int(user["id"]),
+            )
+        return user
 
 
 def require_user(user: Annotated[dict | None, Depends(current_user)]) -> dict:
@@ -193,13 +270,14 @@ def health() -> dict:
         "unit_system": "CHANGE_X",
         "units": ["Mandal", "Dirhem", "Madalyon"],
         "canonical": "mandal_units",
-        "version": "0.2.0",
+        "version": "0.2.1",
+        "core": "v1.1",
     }
 
 
 @app.post("/api/auth/register")
 def register(body: RegisterIn, request: Request) -> dict:
-    _rate_limit(request, limit=20)
+    _rate_limit(request, limit=15, endpoint="/api/auth/register")
     username = body.username.strip()
     with db.connect() as conn:
         exists = conn.execute(
@@ -213,13 +291,14 @@ def register(body: RegisterIn, request: Request) -> dict:
         )
         uid = int(cur.lastrowid)
         token = _new_session(conn, uid)
+        request.state.actor_id = uid
         db.audit(conn, actor_id=uid, action="register", entity="user", entity_id=uid, detail=username, correlation_id=_cid(request))
         return {"token": token, "user": {"id": uid, "username": username, "role": "user"}}
 
 
 @app.post("/api/auth/login")
 def login(body: LoginIn, request: Request) -> dict:
-    _rate_limit(request, limit=30)
+    _rate_limit(request, limit=20, endpoint="/api/auth/login")
     with db.connect() as conn:
         row = conn.execute(
             "SELECT * FROM users WHERE username = ? COLLATE NOCASE",
@@ -228,6 +307,7 @@ def login(body: LoginIn, request: Request) -> dict:
         if not row or not db.verify_password(body.password, row["password_hash"]):
             raise HTTPException(401, detail={"code": "BAD_CREDENTIALS", "message": "Kullanıcı veya şifre hatalı"})
         token = _new_session(conn, row["id"])
+        request.state.actor_id = row["id"]
         db.audit(conn, actor_id=row["id"], action="login", entity="user", entity_id=row["id"], correlation_id=_cid(request))
         return {
             "token": token,
@@ -306,6 +386,7 @@ def create_listing(
     request: Request,
     user: Annotated[dict, Depends(require_user)],
 ) -> dict:
+    _rate_limit(request, limit=40, endpoint="/api/listings", user_id=int(user["id"]))
     try:
         item_vals = [
             (it.name, _parse_value(it.value)) for it in body.items
@@ -413,6 +494,7 @@ def create_offer_api(
     request: Request,
     user: Annotated[dict, Depends(require_user)],
 ) -> dict:
+    _rate_limit(request, limit=40, endpoint="/api/trades/offer", user_id=int(user["id"]))
     requested = list(body.requested_listing_ids)
     if body.listing_id is not None and body.listing_id not in requested:
         requested = [body.listing_id, *requested]
@@ -440,6 +522,7 @@ def accept_offer_api(
     request: Request,
     user: Annotated[dict, Depends(require_user)],
 ) -> dict:
+    _rate_limit(request, limit=40, endpoint="/api/trades/accept", user_id=int(user["id"]))
     with db.connect() as conn:
         try:
             return accept_offer(
@@ -460,6 +543,7 @@ def cancel_offer_api(
     request: Request,
     user: Annotated[dict, Depends(require_user)],
 ) -> dict:
+    _rate_limit(request, limit=40, endpoint="/api/trades/cancel", user_id=int(user["id"]))
     with db.connect() as conn:
         try:
             return cancel_offer(
@@ -591,6 +675,36 @@ def admin_stats(user: Annotated[dict, Depends(require_admin)]) -> dict:
         listings = conn.execute("SELECT COUNT(*) c FROM trade_listings").fetchone()["c"]
         trades = conn.execute("SELECT COUNT(*) c FROM trades").fetchone()["c"]
         return {"users": users, "listings": listings, "trades": trades, "real_money": False}
+
+
+@app.get("/api/admin/metrics")
+def admin_metrics(user: Annotated[dict, Depends(require_admin)]) -> dict:
+    with db.connect() as conn:
+        rows = [dict(r) for r in conn.execute("SELECT * FROM trades").fetchall()]
+        domain = compute_trade_metrics(rows)
+        return {
+            "domain": domain,
+            "sqlite_lock_stats": dict(db.LOCK_STATS),
+            "real_money": False,
+            "asset_lock_note": "Future multi-party trades use ASSET LOCK, not money escrow",
+        }
+
+
+@app.post("/api/admin/recover")
+def admin_recover(user: Annotated[dict, Depends(require_admin)]) -> dict:
+    with db.connect() as conn:
+        with db.immediate_tx(conn):
+            result = recover_stale_reservations(conn, older_than_seconds=0)
+        return result
+
+
+@app.get("/api/observability/sample")
+def observability_sample(user: Annotated[dict, Depends(require_admin)]) -> dict:
+    """Return recent safe log fields (no tokens/passwords)."""
+    sample = REQUEST_LOGS[-20:]
+    blob = str(sample).lower()
+    assert "password" not in blob
+    return {"entries": sample, "count": len(REQUEST_LOGS)}
 
 
 def _listing_public(conn, row: dict) -> dict:

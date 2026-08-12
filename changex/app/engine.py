@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 import time
 import uuid
 from typing import Any
@@ -22,6 +23,13 @@ class DomainError(Exception):
         self.code = code
         self.message = message
         self.status_code = status_code
+
+
+class _IdempotentReplay(Exception):
+    """Internal: duplicate idempotency key under concurrency — replay after rollback."""
+
+    def __init__(self, key: str):
+        self.key = key
 
 
 def _listing_units(row: dict[str, Any]) -> int:
@@ -66,74 +74,106 @@ def create_offer(
     correlation_id: str | None = None,
 ) -> dict[str, Any]:
     correlation_id = correlation_id or str(uuid.uuid4())
-    if idempotency_key:
+    try:
+        with db.immediate_tx(conn):
+            if idempotency_key:
+                existing = conn.execute(
+                    "SELECT * FROM trades WHERE idempotency_key = ?", (idempotency_key,)
+                ).fetchone()
+                if existing:
+                    return trade_public(conn, dict(existing))
+
+            req_value, req_rows = _sum_listings(conn, requested_listing_ids)
+            off_value, off_rows = _sum_listings(conn, offered_listing_ids)
+
+            # Ownership: offered must belong to proposer; requested must NOT.
+            for r in off_rows:
+                if int(r["owner_id"]) != proposer_id:
+                    raise DomainError("NOT_OWNER", "Teklif ettiğin listing sana ait değil", 403)
+            receivers = {int(r["owner_id"]) for r in req_rows}
+            if len(receivers) != 1:
+                raise DomainError("MULTI_RECEIVER", "İstenen listingler tek alıcıya ait olmalı")
+            receiver_id = next(iter(receivers))
+            if receiver_id == proposer_id:
+                raise DomainError("SELF_TRADE", "Kendi kaydına teklif veremezsin")
+            for r in req_rows:
+                if int(r["owner_id"]) == proposer_id:
+                    raise DomainError("SELF_TRADE", "Kendi kaydını isteyemezsin")
+
+            overlap = set(requested_listing_ids) & set(offered_listing_ids)
+            if overlap:
+                raise DomainError("OVERLAP", "Aynı listing her iki tarafta olamaz")
+
+            gap = req_value.mandal_units - off_value.mandal_units
+            now = time.time()
+            try:
+                cur = conn.execute(
+                    """
+                    INSERT INTO trades(
+                      proposer_id, receiver_id, offered_listing_ids, requested_listing_ids,
+                      calculated_offered_mandal_units, calculated_requested_mandal_units,
+                      value_gap_mandal_units, status, version, idempotency_key,
+                      created_at, updated_at, expires_at
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        proposer_id,
+                        receiver_id,
+                        db.dumps(offered_listing_ids),
+                        db.dumps(requested_listing_ids),
+                        off_value.mandal_units,
+                        req_value.mandal_units,
+                        gap,
+                        TradeState.OFFERED.value,
+                        1,
+                        idempotency_key,
+                        now,
+                        now,
+                        now + expires_in_seconds,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                if idempotency_key:
+                    raise _IdempotentReplay(idempotency_key) from exc
+                raise
+            trade_id = int(cur.lastrowid)
+            _event(
+                conn,
+                trade_id,
+                proposer_id,
+                None,
+                TradeState.OFFERED,
+                "Teklif oluşturuldu",
+                correlation_id,
+            )
+            db.audit(
+                conn,
+                actor_id=proposer_id,
+                action="offer.create",
+                entity="trade",
+                entity_id=trade_id,
+                detail=f"offered={offered_listing_ids} requested={requested_listing_ids}",
+                correlation_id=correlation_id,
+            )
+            if idempotency_key:
+                result_preview = trade_public(
+                    conn,
+                    dict(
+                        conn.execute("SELECT * FROM trades WHERE id = ?", (trade_id,)).fetchone()
+                    ),
+                )
+                _idempotent_put(
+                    conn, idempotency_key, proposer_id, "offer", "trade", trade_id, result_preview
+                )
+            row = conn.execute("SELECT * FROM trades WHERE id = ?", (trade_id,)).fetchone()
+            return trade_public(conn, dict(row))
+    except _IdempotentReplay as replay:
         existing = conn.execute(
-            "SELECT * FROM trades WHERE idempotency_key = ?", (idempotency_key,)
+            "SELECT * FROM trades WHERE idempotency_key = ?", (replay.key,)
         ).fetchone()
         if existing:
             return trade_public(conn, dict(existing))
-
-    req_value, req_rows = _sum_listings(conn, requested_listing_ids)
-    off_value, off_rows = _sum_listings(conn, offered_listing_ids)
-
-    # Ownership: offered must belong to proposer; requested must NOT.
-    for r in off_rows:
-        if int(r["owner_id"]) != proposer_id:
-            raise DomainError("NOT_OWNER", "Teklif ettiğin listing sana ait değil", 403)
-    receivers = {int(r["owner_id"]) for r in req_rows}
-    if len(receivers) != 1:
-        raise DomainError("MULTI_RECEIVER", "İstenen listingler tek alıcıya ait olmalı")
-    receiver_id = next(iter(receivers))
-    if receiver_id == proposer_id:
-        raise DomainError("SELF_TRADE", "Kendi kaydına teklif veremezsin")
-    for r in req_rows:
-        if int(r["owner_id"]) == proposer_id:
-            raise DomainError("SELF_TRADE", "Kendi kaydını isteyemezsin")
-
-    overlap = set(requested_listing_ids) & set(offered_listing_ids)
-    if overlap:
-        raise DomainError("OVERLAP", "Aynı listing her iki tarafta olamaz")
-
-    gap = req_value.mandal_units - off_value.mandal_units
-    now = time.time()
-    cur = conn.execute(
-        """
-        INSERT INTO trades(
-          proposer_id, receiver_id, offered_listing_ids, requested_listing_ids,
-          calculated_offered_mandal_units, calculated_requested_mandal_units,
-          value_gap_mandal_units, status, version, idempotency_key,
-          created_at, updated_at, expires_at
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-        """,
-        (
-            proposer_id,
-            receiver_id,
-            db.dumps(offered_listing_ids),
-            db.dumps(requested_listing_ids),
-            off_value.mandal_units,
-            req_value.mandal_units,
-            gap,
-            TradeState.OFFERED.value,
-            1,
-            idempotency_key,
-            now,
-            now,
-            now + expires_in_seconds,
-        ),
-    )
-    trade_id = int(cur.lastrowid)
-    _event(conn, trade_id, proposer_id, None, TradeState.OFFERED, "Teklif oluşturuldu", correlation_id)
-    db.audit(
-        conn,
-        actor_id=proposer_id,
-        action="offer.create",
-        entity="trade",
-        entity_id=trade_id,
-        detail=f"offered={offered_listing_ids} requested={requested_listing_ids}",
-        correlation_id=correlation_id,
-    )
-    row = conn.execute("SELECT * FROM trades WHERE id = ?", (trade_id,)).fetchone()
-    return trade_public(conn, dict(row))
+        raise DomainError("IDEMPOTENCY_CONFLICT", "Tekrarlayan teklif çakışması", 409) from replay
 
 
 def accept_offer(
@@ -189,7 +229,7 @@ def accept_offer(
         all_ids = list(offered) + list(requested)
 
         # Reserve each listing with optimistic version check
-        for lid in all_ids:
+        for idx, lid in enumerate(all_ids):
             row = conn.execute(
                 "SELECT id, status, version FROM trade_listings WHERE id = ?",
                 (lid,),
@@ -226,6 +266,8 @@ def accept_offer(
                 entity_id=lid,
                 correlation_id=correlation_id,
             )
+            # Test hook: fail after first listing reserved to prove full rollback
+            db.maybe_fail(f"after_reserve_{idx}")
 
         now = time.time()
         cur = conn.execute(
