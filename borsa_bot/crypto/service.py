@@ -130,15 +130,17 @@ class CryptoFoundationService:
             "sample_quotes": sample_quotes,
             "websocket": (getattr(self.provider, "status_dict", lambda: {})() or {}).get("websocket"),
             "ui": {
-                "title": "Kripto (Paribu)",
+                "title": "Kripto",
                 "ready": bool(self.provider.has_market_data()),
                 "message": (
-                    f"Paribu LIVE · {len(symbols)} markets · signals={'ON' if gate.signals_allowed else 'OFF'} · PAPER ONLY · BIST etkilenmez"
+                    f"CRYPTO LIVE · {getattr(self.provider, 'provider_id', 'public')} · "
+                    f"{len(symbols)} markets · signals={'ON' if gate.signals_allowed else 'OFF'} · "
+                    f"PAPER ONLY · BIST etkilenmez"
                     if self.provider.has_market_data()
                     else (
                         "CRYPTO_ENABLED=false — kripto piyasası kapalı"
                         if not settings.crypto_enabled
-                        else "Paribu bağlı değil veya veri yok"
+                        else "Kripto sağlayıcı bağlı değil veya veri yok (CRYPTO_PROVIDER=auto|okx|gate|kraken|paribu)"
                     )
                 ),
             },
@@ -377,10 +379,25 @@ class CryptoFoundationService:
         scan_syms: list[str] | None = None
         if is_live_crypto_provider(self.provider) and self.provider.has_market_data():
             universe = list(self.provider.list_symbols())
-            # Favorites first, then rest (capped)
+            # Favorites → liquid majors → rest (avoid alphabetical junk first)
+            _majors = (
+                "BTC_USDT",
+                "ETH_USDT",
+                "SOL_USDT",
+                "XRP_USDT",
+                "BNB_USDT",
+                "DOGE_USDT",
+                "ADA_USDT",
+                "AVAX_USDT",
+                "LINK_USDT",
+                "DOT_USDT",
+                "BTC_USD",
+                "ETH_USD",
+            )
+            major_hit = [m for m in _majors if m in set(universe)]
             ordered: list[str] = []
             seen: set[str] = set()
-            for s in fav_syms + universe:
+            for s in fav_syms + major_hit + universe:
                 s = normalize_crypto_app_symbol(s)
                 if s and s not in seen:
                     seen.add(s)
