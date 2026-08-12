@@ -86,12 +86,6 @@
     .tf-btn.on{background:rgba(46,207,138,.16);color:var(--buy2);border-color:rgba(46,207,138,.4)}
     .bist100-toolbar{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
     .bist100-toolbar select{min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:0 12px;font:inherit}
-    .bist100-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
-    @media (min-width:960px){
-      .bist100-layout{grid-template-columns:minmax(280px,360px) minmax(0,1fr);align-items:start}
-      .bist100-list-wrap{max-height:calc(100dvh - 220px);overflow:auto;padding-right:4px}
-      .tv-sticky{position:sticky;top:8px}
-    }
     .bist100-item{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:14px;padding:12px;margin-bottom:8px;font:inherit}
     .bist100-item:hover,.bist100-item.on{border-color:rgba(46,207,138,.45);background:rgba(46,207,138,.08)}
     .bist100-item .b100-main{flex:1;min-width:0;border:0;background:transparent;color:inherit;text-align:left;padding:0;cursor:pointer;font:inherit}
@@ -211,11 +205,6 @@
     .port-trades-panel{margin-top:8px}
     .b100-sig.NO_TRADE,.b100-sig.NO_DATA{background:rgba(143,163,150,.12);color:var(--mute)}
     .b100-summary{font-size:.78rem;color:var(--mute);margin:6px 0 10px;line-height:1.4}
-    .tv-wrap{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;min-height:480px}
-    .tv-head{padding:12px 14px;border-bottom:1px solid var(--line)}
-    .tv-head .sym{font-size:1.2rem;font-weight:800}
-    .tv-chart{height:460px}
-    .tv-chart iframe{width:100%!important;height:100%!important;border:0;display:block}
     /* Settings — simple first, advanced collapsed */
     #panel-set h2{margin-bottom:4px}
     #panel-set > .why.set-lead{margin-bottom:12px}
@@ -244,7 +233,6 @@
       .crypto-mobile-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px}
       .crypto-mobile-row .m-price{font-size:1.25rem;font-weight:800}
       .crypto-mobile-row .m-conf{font-size:.85rem;color:var(--mute);font-weight:700}
-      .tv-chart{height:360px}
     }
 
     /* CRYPTO theme — gold page, dark readable ink */
@@ -401,7 +389,6 @@
     }
     body.theme-crypto .crypto-mobile-row .m-conf{color:#5c4a1a}
   </style>
-  <script src="https://s3.tradingview.com/tv.js" defer></script>
 </head>
 <body>
   <div class="top">
@@ -454,7 +441,7 @@
 
   <div class="panel" id="panel-mkt">
     <h2>BIST 100 Şirketleri</h2>
-    <p class="why">XU100 · Tam evren tarama · fiyat + öneri · TradingView grafik · arama BIST100 dışı hisseleri de bulur (ör. AGROT)</p>
+    <p class="why">XU100 · Tam evren tarama · fiyat + öneri · arama BIST100 dışı hisseleri de bulur (ör. AGROT)</p>
     <div class="bist100-toolbar">
       <div class="search">
         <input id="b100q" placeholder="Kod veya şirket ara (THYAO, AGROT…)" autocomplete="off" />
@@ -466,18 +453,7 @@
       <div class="sysline" id="b100Meta">Yükleniyor…</div>
       <div class="b100-summary" id="b100Summary">Tam evren taraması başlıyor…</div>
     </div>
-    <div class="bist100-layout">
-      <div class="bist100-list-wrap watch-grid" id="bist100List"></div>
-      <div class="tv-sticky">
-        <div class="tv-wrap">
-          <div class="tv-head">
-            <div class="sym" id="tvSymTitle">BIST 100</div>
-            <div class="meta" id="tvSymMeta">Listeden bir şirket seçin</div>
-          </div>
-          <div class="tv-chart" id="tv_chart_container"></div>
-        </div>
-      </div>
-    </div>
+    <div class="watch-grid" id="bist100List"></div>
   </div>
 
   <div class="panel" id="panel-port">
@@ -711,7 +687,6 @@
   let cryptoDash = null, cFilter = 'ALL', lastCryptoPanel = 'home', cryptoTf = '15m';
   let bist100 = {companies: [], sectors: [], selected: null, summary: {}, note: '', extra: []};
   let paperWallet = null;
-  let tvWidget = null;
   let dsLoadTimer = null;
   let dsLoadPct = 0;
   let favLoadInFlight = false;
@@ -972,19 +947,14 @@
     const ba = bidAsk(px, item);
     const chg = Number(item.change_pct||0);
     const isFav = item.is_favorite !== false && sym !== 'XU100';
-    // Keep Piyasalar chart in sync with the stock the user opened
-    const chartCompany = {
+    // Remember selection for Piyasalar highlight
+    bist100.selected = {
       ...item,
       ticker: sym,
       symbol: sym,
       name: name || item.name,
       sector: item.sector || '',
-      tradingview_symbol: item.tradingview_symbol || (sym === 'XU100' ? 'BIST:XU100' : ('BIST:' + sym)),
     };
-    bist100.selected = chartCompany;
-    if(document.getElementById('panel-mkt')?.classList.contains('on')){
-      renderTradingView(chartCompany);
-    }
     document.getElementById('sdSym').textContent = sym || '—';
     document.getElementById('sdName').textContent = name && name !== sym ? name : (sym === 'XU100' ? 'BIST 100 Endeksi' : '');
     document.getElementById('sdPrice').textContent = px ? money(px)+' TL' : '—';
@@ -1843,65 +1813,6 @@
       </div>`;
   }
 
-  function normalizeTvSymbol(company){
-    const raw = (company && (company.tradingview_symbol || company.ticker || company.symbol)) || '';
-    let s = String(raw).trim().toUpperCase();
-    if(!s) return '';
-    if(s.indexOf(':') >= 0){
-      const ex = s.slice(0, s.indexOf(':'));
-      const tick = s.slice(s.indexOf(':') + 1).replace(/\.E$/, '');
-      return ex + ':' + tick;
-    }
-    return 'BIST:' + s.replace(/\.E$/, '');
-  }
-
-  function renderTradingView(company){
-    const title = document.getElementById('tvSymTitle');
-    const meta = document.getElementById('tvSymMeta');
-    const container = document.getElementById('tv_chart_container');
-    if(!company){
-      title.textContent = 'BIST 100';
-      meta.textContent = 'Listeden bir şirket seçin';
-      container.innerHTML = '<div class="empty">TradingView grafiği için şirket seçin</div>';
-      tvWidget = null;
-      return;
-    }
-    const tvSymbol = normalizeTvSymbol(company);
-    const sym = String(company.ticker || company.symbol || '').toUpperCase() || tvSymbol;
-    title.textContent = sym;
-    meta.textContent = [company.name, company.sector, tvSymbol].filter(Boolean).join(' · ');
-    // iframe embed: symbol is in the URL. Reusing TradingView.widget on the same
-    // container_id often keeps the default AAPL chart while our title updates.
-    const frameId = 'tvf_' + String(sym).replace(/[^A-Z0-9]/g, '') + '_' + Date.now();
-    const params = new URLSearchParams({
-      frameElementId: frameId,
-      symbol: tvSymbol,
-      interval: 'D',
-      hidesidetoolbar: '0',
-      symboledit: '0',
-      saveimage: '0',
-      toolbarbg: '15201b',
-      studies: JSON.stringify(['Volume@tv-basicstudies']),
-      theme: 'dark',
-      style: '1',
-      timezone: 'Europe/Istanbul',
-      withdateranges: '1',
-      hideideas: '1',
-      locale: 'tr',
-    });
-    container.innerHTML = '';
-    const iframe = document.createElement('iframe');
-    iframe.id = frameId;
-    iframe.title = tvSymbol + ' grafiği';
-    iframe.src = 'https://s.tradingview.com/widgetembed/?' + params.toString();
-    iframe.setAttribute('allowtransparency', 'true');
-    iframe.setAttribute('scrolling', 'no');
-    iframe.setAttribute('frameborder', '0');
-    iframe.style.cssText = 'width:100%;height:100%;margin:0;padding:0;border:0;display:block';
-    container.appendChild(iframe);
-    tvWidget = {symbol: tvSymbol, frameId: frameId};
-  }
-
   async function b100Trade(sym, side){
     const all = [...(bist100.companies||[]), ...(bist100.extra||[])];
     const co = all.find(x=>(x.ticker||x.symbol)===sym) || {symbol:sym, ticker:sym};
@@ -1958,7 +1869,6 @@
           bist100.selected = company;
         }
         renderBist100List();
-        if(bist100.selected) renderTradingView(bist100.selected);
         openStockDetail(bist100.selected);
       };
     });
