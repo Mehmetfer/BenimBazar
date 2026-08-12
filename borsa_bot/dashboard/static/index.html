@@ -1997,9 +1997,19 @@
     const sumEl = document.getElementById('b100Summary');
     if(sumEl){
       const s = bist100.summary||{};
-      sumEl.textContent = bist100.note || (
-        `Güçlü AL ${s.STRONG_BUY||0} · AL ${s.BUY||0} · İzle ${s.WATCH||0} · Bekle ${s.WAIT||0} · Sat ${(s.SELL||0)}`
-      );
+      const ds = bist100.data_source||{};
+      const closed = String(bist100.market_session||ds.market_session||'').toUpperCase()==='CLOSED';
+      const label = bist100.price_label || ds.price_label || 'son kapanış';
+      if(closed){
+        const sig = bist100.analysisReady
+          ? ` · ${s.STRONG_BUY||0} Güçlü AL · ${s.BUY||0} AL · ${s.WATCH||0} İzle · ${s.WAIT||0} Bekle`
+          : '';
+        sumEl.textContent = `Piyasa kapalı · ${label}${sig}`;
+      } else {
+        sumEl.textContent = bist100.note || (
+          `Güçlü AL ${s.STRONG_BUY||0} · AL ${s.BUY||0} · İzle ${s.WATCH||0} · Bekle ${s.WAIT||0} · Sat ${(s.SELL||0)}`
+        );
+      }
     }
     const list = document.getElementById('bist100List');
     if(!rows.length && !extra.length){
@@ -2045,6 +2055,9 @@
       bist100.companies = qBody.quotes || [];
       bist100.total = qBody.count || bist100.companies.length;
       bist100.data_source = qBody.data_source || null;
+      bist100.market_session = qBody.market_session || (qBody.data_source||{}).market_session || null;
+      bist100.price_label = qBody.price_label || (qBody.data_source||{}).price_label || null;
+      bist100.note = qBody.note || '';
       try{
         const w = await (await fetch('/api/paper/wallet')).json();
         paperWallet = w;

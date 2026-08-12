@@ -937,13 +937,22 @@ class TradingService:
 
         index = _row("XU100", "BIST 100", "Endeks", "BIST:XU100")
         quotes = [_row(c.ticker, c.name, c.sector, c.tradingview_symbol) for c in list_companies()]
+        session = getattr(source, "market_session", None)
+        session_val = session.value if hasattr(session, "value") else str(session or "")
         return {
             "ok": True,
             "index": index,
             "quotes": quotes,
             "count": len(quotes),
+            "with_price": sum(1 for q in quotes if q.get("price") is not None),
             "data_source": source.to_dict(),
-            "note": "Hızlı kotasyon — sinyal analizi ayrı yüklenir",
+            "market_session": session_val,
+            "price_label": getattr(source, "price_label", None),
+            "note": (
+                "Piyasa kapalı · gösterilenler son kapanış / gecikmeli fiyat"
+                if session_val == "CLOSED"
+                else "Hızlı kotasyon — sinyal analizi ayrı yüklenir"
+            ),
         }
 
     def watchlist_quotes(self) -> dict:

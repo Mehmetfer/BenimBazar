@@ -78,11 +78,59 @@ def test_factory_yahoo_and_auto(monkeypatch):
             assert auto.has_market_data()
 
 
-def test_session_auto_uses_sim_when_closed(monkeypatch):
+def test_session_auto_uses_yahoo_last_when_closed(monkeypatch):
+    """CLOSED must not fall back to the tiny sim universe (blank BIST100 tiles)."""
     monkeypatch.setenv("APP_ENV", "DEVELOPMENT")
     auto = SessionAutoBistProvider()
+
+    def fake_tick(allow_closed: bool = False) -> None:
+        assert allow_closed is True
+        now = datetime.now(timezone.utc)
+        from config.models import QuoteSnapshot
+        from data.integrity import DataSourceKind
+
+        auto._yahoo._quotes = {
+            "THYAO": QuoteSnapshot(
+                symbol="THYAO",
+                name="THYAO",
+                sector="Havacılık",
+                price=300.0,
+                bid=299.5,
+                ask=300.5,
+                volume=1.0,
+                trades=1,
+                ts=now,
+                data_source_kind=DataSourceKind.DELAYED.value,
+            ),
+            "AEFES": QuoteSnapshot(
+                symbol="AEFES",
+                name="AEFES",
+                sector="İçecek",
+                price=10.0,
+                bid=9.9,
+                ask=10.1,
+                volume=1.0,
+                trades=1,
+                ts=now,
+                data_source_kind=DataSourceKind.DELAYED.value,
+            ),
+        }
+        auto._yahoo._connected = True
+        auto._yahoo._last_ok = now
+        auto._yahoo._error = "BIST CLOSED — last/delayed Yahoo quotes"
+
     with patch("data.session_auto.bist_session_now", return_value=MarketSession.CLOSED):
-        auto.tick()
-        assert auto.kind == DataSourceKind.SIMULATED
-        q = auto.get_quote("THYAO")
-        assert q.data_source_kind == DataSourceKind.SIMULATED.value
+        with patch.object(YahooBistMarketDataProvider, "tick", side_effect=fake_tick):
+            auto.tick()
+            assert auto._mode == "yahoo_closed"
+            assert auto.kind == DataSourceKind.DELAYED
+            meta = auto.source_meta()
+            assert meta.market_session == MarketSession.CLOSED
+            assert meta.price_label == "SON KAPANIŞ"
+            assert auto.get_quote("THYAO").price == 300.0
+            assert auto.get_quote("AEFES").price == 10.0
+
+
+def test_session_auto_uses_sim_when_closed(monkeypatch):
+    # Kept for compatibility name — behavior is yahoo-last; sim only if yahoo empty
+    test_session_auto_uses_yahoo_last_when_closed(monkeypatch)

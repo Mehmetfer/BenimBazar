@@ -233,14 +233,23 @@ class YahooBistMarketDataProvider:
         self._bars[sym] = bars
         return bars[-lookback:]
 
-    def tick(self) -> None:
-        if bist_session_now() != MarketSession.OPEN:
+    def tick(self, allow_closed: bool = False) -> None:
+        session = bist_session_now()
+        closed = session != MarketSession.OPEN
+        if closed and not allow_closed:
             self._error = "BIST session CLOSED — Yahoo tick skipped"
             # Keep last quotes if any; do not mark disconnected when we have cache
             if self._quotes:
                 return
             self._connected = False
             return
+        if closed and allow_closed and self._quotes and self._last_ok:
+            age = (datetime.now(timezone.utc) - self._last_ok).total_seconds()
+            # Off-hours: reuse last board for 15m to avoid Yahoo hammering
+            if age < 900:
+                self._connected = True
+                self._error = "BIST CLOSED — serving cached last quotes"
+                return
         if self._rate_limited():
             # Keep last good quotes — do not hammer Yahoo
             if self._quotes:
@@ -259,7 +268,9 @@ class YahooBistMarketDataProvider:
                 raise RuntimeError("no quotes returned")
             self._connected = True
             self._last_ok = datetime.now(timezone.utc)
-            if not self._rate_limited():
+            if closed and allow_closed:
+                self._error = "BIST CLOSED — last/delayed Yahoo quotes"
+            elif not self._rate_limited():
                 self._error = ""
         except Exception as exc:  # noqa: BLE001
             if "RATE_LIMITED" in str(exc):
@@ -271,11 +282,13 @@ class YahooBistMarketDataProvider:
             self._error = f"YAHOO_FETCH_FAILED:{type(exc).__name__}"
             logger.warning("YahooBist tick failed: %s", exc)
 
-    def get_quote(self, symbol: str) -> QuoteSnapshot:
+    def get_quote(self, symbol: str, allow_closed: bool = False) -> QuoteSnapshot:
         sym = normalize_app_symbol(symbol)
         if sym not in self._quotes:
-            if bist_session_now() == MarketSession.OPEN:
-                self._fetch_quotes_batch([sym])
+            session_open = bist_session_now() == MarketSession.OPEN
+            if session_open or allow_closed:
+                if not self._rate_limited():
+                    self._fetch_quotes_batch([sym])
             if sym not in self._quotes:
                 raise RuntimeError(f"NO_MARKET_DATA: no Yahoo quote for {sym}")
         return self._quotes[sym]
