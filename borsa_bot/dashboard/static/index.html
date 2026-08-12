@@ -100,6 +100,20 @@
     .b100-sig.BUY,.b100-sig.AL{background:rgba(46,207,138,.12);color:var(--buy)}
     .b100-sig.WATCH,.b100-sig.WAIT,.b100-sig.BEKLE,.b100-sig.HOLD{background:rgba(255,193,7,.12);color:#e6b800}
     .b100-sig.SELL,.b100-sig.SAT,.b100-sig.STRONG_SELL{background:rgba(255,90,90,.12);color:#ff6b6b}
+    .wallet-hero{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+  @media(min-width:520px){.wallet-hero{grid-template-columns:repeat(4,1fr)}}
+    .wallet-stat{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:12px}
+    .wallet-stat span{display:block;color:var(--mute);font-size:.72rem}
+    .wallet-stat b{display:block;font-size:1.05rem;margin-top:4px}
+    .wallet-stat.big b{font-size:1.35rem}
+    .wallet-pnl.up b{color:var(--buy2)}
+    .wallet-pnl.down b{color:#ff6b6b}
+    .wallet-actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+    .wallet-actions button{flex:1;min-width:140px}
+    .trade-row,.pos-row{display:flex;justify-content:space-between;gap:8px;padding:10px 0;border-bottom:1px solid var(--line);font-size:.85rem}
+    .trade-row:last-child,.pos-row:last-child{border-bottom:none}
+    .trade-side.buy{color:var(--buy2);font-weight:700}
+    .trade-side.sell{color:#ff6b6b;font-weight:700}
     .b100-sig.NO_TRADE,.b100-sig.NO_DATA{background:rgba(143,163,150,.12);color:var(--mute)}
     .b100-summary{font-size:.78rem;color:var(--mute);margin:6px 0 10px;line-height:1.4}
     .tv-wrap{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;min-height:480px}
@@ -187,7 +201,8 @@
   </div>
 
   <div class="panel" id="panel-port">
-    <h2>💼 Portföy (Paper)</h2>
+    <h2>💼 BIST Paper Cüzdan</h2>
+    <p class="why">100.000 TL simülasyon · önerilerden otomatik al/sat · gerçek para değil · CRYPTO sonra</p>
     <div id="port"></div>
   </div>
 
@@ -310,6 +325,7 @@
   let activeMarket = 'BIST';
   let cryptoDash = null, cFilter = 'ALL', lastCryptoPanel = 'home', cryptoTf = '15m';
   let bist100 = {companies: [], sectors: [], selected: null, summary: {}, note: ''};
+  let paperWallet = null;
   let tvWidget = null;
   const money = n => Number(n||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
   const pct = n => (n==null||n===undefined) ? '—' : `${n>=0?'+':''}${Number(n).toFixed(2)}%`;
@@ -594,6 +610,94 @@
     const id = name==='home'?'panel-home': name==='fav'?'panel-fav': name==='mkt'?'panel-mkt': name==='port'?'panel-port': name==='set'?'panel-set':'panel-detail';
     document.getElementById(id).classList.add('on');
     if(name!=='detail') lastPanel = name;
+    if(name==='port') loadPortfolio();
+  }
+
+  function pnlClass(n){
+    return Number(n||0) >= 0 ? 'up' : 'down';
+  }
+
+  function renderPortfolio(w){
+    if(!w) return '<div class="empty">Cüzdan yükleniyor…</div>';
+    const pnl = w.total_pnl||0;
+    const pnlPct = w.total_pnl_pct||0;
+    const daily = w.daily_pnl||0;
+  const positions = (w.positions||[]).map(p=>{
+      const u = p.unrealized_pnl||0;
+      const up = p.unrealized_pnl_pct||0;
+      return `<div class="pos-row">
+        <div><b>${p.symbol}</b><div class="meta">${p.quantity} lot · maliyet ${money(p.avg_cost)}</div></div>
+        <div style="text-align:right">
+          <div>${money(p.price)} TL</div>
+          <div class="${pnlClass(u)}">${u>=0?'+':''}${money(u)} (${up>=0?'+':''}${Number(up).toFixed(1)}%)</div>
+        </div>
+      </div>`;
+    }).join('') || '<div class="empty">Açık pozisyon yok — Güçlü AL / AL önerileri gelince otomatik alınır</div>';
+    const trades = (w.recent_trades||[]).map(t=>{
+      const sideCls = t.side==='BUY'?'buy':'sell';
+      const pnlTxt = t.pnl!=null ? ` · K/Z ${t.pnl>=0?'+':''}${money(t.pnl)}` : '';
+      return `<div class="trade-row">
+        <div><span class="trade-side ${sideCls}">${t.side_label||t.side}</span> <b>${t.symbol}</b><div class="meta">${(t.ts||'').slice(0,19).replace('T',' ')}</div></div>
+        <div style="text-align:right">${t.quantity} × ${money(t.price)}${pnlTxt}</div>
+      </div>`;
+    }).join('') || '<div class="empty">Henüz işlem yok</div>';
+    return `
+      <div class="wallet-hero">
+        <div class="wallet-stat big"><span>Toplam Varlık</span><b>${money(w.equity)} TL</b></div>
+        <div class="wallet-stat wallet-pnl ${pnlClass(pnl)}"><span>Kar / Zarar</span><b>${pnl>=0?'+':''}${money(pnl)} (${pnlPct>=0?'+':''}${Number(pnlPct).toFixed(2)}%)</b></div>
+        <div class="wallet-stat"><span>Nakit</span><b>${money(w.cash)} TL</b></div>
+        <div class="wallet-stat wallet-pnl ${pnlClass(daily)}"><span>Günlük</span><b>${daily>=0?'+':''}${money(daily)} TL</b></div>
+      </div>
+      <div class="card" style="cursor:default">
+        <div class="grid">
+          <div class="k"><span>Başlangıç</span><b>${money(w.starting_cash)} TL</b></div>
+          <div class="k"><span>Hisse Değeri</span><b>${money(w.holdings_value)} TL</b></div>
+          <div class="k"><span>Gerçekleşen K/Z</span><b class="${pnlClass(w.realized_pnl)}">${money(w.realized_pnl)}</b></div>
+          <div class="k"><span>Gerçekleşmeyen</span><b class="${pnlClass(w.unrealized_pnl)}">${money(w.unrealized_pnl)}</b></div>
+        </div>
+        <div class="meta" style="margin-top:8px">${w.note||''} · ${w.trade_count||0} işlem · ${w.open_position_count||0} pozisyon · auto=${w.auto_follow?'AÇIK':'KAPALI'}</div>
+      </div>
+      <div class="wallet-actions">
+        <button class="more" id="walletInitBtn" type="button">Cüzdanı Başlat (100.000 TL)</button>
+        <button class="more" id="walletFollowBtn" type="button">Önerilerden Al</button>
+        <button class="more" id="walletRefreshBtn" type="button">Yenile</button>
+      </div>
+      <h2 style="margin-top:14px">Açık Pozisyonlar</h2>
+      <div class="card" style="cursor:default">${positions}</div>
+      <h2 style="margin-top:14px">Son İşlemler</h2>
+      <div class="card" style="cursor:default">${trades}</div>`;
+  }
+
+  async function loadPortfolio(){
+    const el = document.getElementById('port');
+    try{
+      paperWallet = await (await fetch('/api/paper/wallet')).json();
+      el.innerHTML = renderPortfolio(paperWallet);
+      const initBtn = document.getElementById('walletInitBtn');
+      const followBtn = document.getElementById('walletFollowBtn');
+      const refreshBtn = document.getElementById('walletRefreshBtn');
+      if(initBtn) initBtn.onclick = async ()=>{
+        if(!confirm('Cüzdan sıfırlanacak: 100.000 TL nakit, tüm pozisyonlar kapanır. Devam?')) return;
+        initBtn.disabled = true;
+        const r = await (await fetch('/api/paper/wallet/init',{method:'POST'})).json();
+        paperWallet = r.wallet;
+        el.innerHTML = renderPortfolio(paperWallet);
+        alert(r.message||'Cüzdan hazır');
+        loadPortfolio();
+      };
+      if(followBtn) followBtn.onclick = async ()=>{
+        followBtn.disabled = true;
+        followBtn.textContent = 'Taranıyor…';
+        const r = await (await fetch('/api/paper/follow',{method:'POST'})).json();
+        paperWallet = r.wallet || paperWallet;
+        el.innerHTML = renderPortfolio(paperWallet);
+        followBtn.textContent = 'Önerilerden Al';
+        followBtn.disabled = false;
+      };
+      if(refreshBtn) refreshBtn.onclick = loadPortfolio;
+    }catch(e){
+      el.innerHTML = '<div class="empty">Cüzdan yüklenemedi</div>';
+    }
   }
 
   function renderIntegrity(m, health){
@@ -932,20 +1036,9 @@
     renderHome();
     document.getElementById('favHome').innerHTML = ((daily.sections||{}).favorites||[]).map(cardHtml).join('') || '<div class="empty">Favori yok — aramadan ★ ekleyin</div>';
     bindCards();
-    // portfolio from dashboard light
+    loadPortfolio();
     try {
       dash = await (await fetch('/api/dashboard')).json();
-      const p = dash.portfolio||{};
-      document.getElementById('port').innerHTML = `
-        <div class="card" style="cursor:default">
-          <div class="grid">
-            <div class="k"><span>Equity</span><b>${money(p.equity)}</b></div>
-            <div class="k"><span>Cash</span><b>${money(p.cash)}</b></div>
-            <div class="k"><span>Günlük</span><b>${money(p.daily_pnl)}</b></div>
-            <div class="k"><span>DD</span><b>%${Number(p.drawdown_pct||0).toFixed(2)}</b></div>
-          </div>
-          <div class="meta" style="margin-top:8px">Paper portföy · LIVE kapalı</div>
-        </div>` + ((p.open_positions||[]).map(x=>`<div class="card" data-sym="${x.symbol}"><div class="sym">${x.is_favorite?'★ ':''}${x.symbol}</div><div class="meta">${x.quantity} lot · maliyet ${x.avg_cost}</div></div>`).join('')||'<div class="empty">Pozisyon yok</div>');
       const sh = (dash.health||{}).system_health||{};
       document.getElementById('sysHealth').innerHTML = `
         <div class="why"><b>SYSTEM HEALTH</b></div>

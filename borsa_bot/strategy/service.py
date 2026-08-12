@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import date
+from typing import Any
 
 from ai.quality import assess_signal_quality, classify_volatility_regime
 from alerts import AlertManager
@@ -45,6 +46,7 @@ from market_regime.engine import detect_regime, trend_label
 from news.analyzer import classify_headline, latest_stub_headline, score_news
 from portfolio.construction import build_correlation_matrix, size_position
 from portfolio.ledger import PortfolioLedger
+from portfolio.wallet_view import paper_wallet_snapshot
 from profit.ev import compute_opportunity, decide_matrix, dynamic_size_multiplier
 from profit.modes import select_capital_mode
 from risk.engine import ENTRY_ACTIONS, EXIT_ACTIONS, RiskEngine
@@ -1379,6 +1381,81 @@ class TradingService:
                 )
             out.append({"symbol": pos.symbol, "kind": kind, "ok": result.ok, "status": result.status})
         return out
+
+    def paper_wallet(self) -> dict:
+        """BIST paper wallet snapshot — simulation only."""
+        self.tick()
+        marks: dict[str, float] = {}
+        for p in self.ledger.positions():
+            try:
+                marks[p.symbol] = float(self.provider.get_quote(p.symbol).price)
+            except Exception:  # noqa: BLE001
+                marks[p.symbol] = p.avg_cost
+        self.ledger.set_marks(marks)
+        snap = paper_wallet_snapshot(self.ledger)
+        snap["auto_follow"] = bool(getattr(settings, "bist_paper_auto_follow", True))
+        snap["max_open_positions"] = int(settings.max_open_positions)
+        return snap
+
+    def follow_recommendations(self, *, max_buys: int = 2) -> dict:
+        """Paper-buy BIST STRONG_BUY/BUY recommendations; auto-exit on SAT/stop/target."""
+        from dashboard.daily import SIGNAL_RANK
+
+        if not bool(getattr(settings, "bist_paper_auto_follow", True)):
+            return {"ok": False, "skipped": "BIST_PAPER_AUTO_FOLLOW=false"}
+
+        exits = self.monitor_exits()
+        decisions = self.scan()
+        if not decisions:
+            return {"ok": True, "buys": [], "sells": [], "exits": exits, "note": "no scan data"}
+
+        buy_candidates: list[Any] = []
+        sell_candidates: list[Any] = []
+        for d in decisions:
+            dec = str(d.final_decision or d.decision.value).upper()
+            if dec in {"STRONG_BUY", "BUY", "AL"}:
+                buy_candidates.append(d)
+            elif dec in {"SELL", "SAT", "STRONG_SELL"} and self.ledger.get_position(d.symbol):
+                sell_candidates.append(d)
+
+        def _rank(d: Any) -> tuple:
+            dec = str(d.final_decision or d.decision.value).upper()
+            return (SIGNAL_RANK.get(dec, 50), -float(d.buy_score or 0), d.symbol)
+
+        buy_candidates.sort(key=_rank)
+
+        results: dict[str, Any] = {"buys": [], "sells": [], "exits": exits}
+        for d in sell_candidates:
+            r = self.execute_signal(d.symbol, approved=True)
+            results["sells"].append(
+                {"symbol": d.symbol, "decision": d.decision.value, "ok": r.get("ok"), "message": r.get("message")}
+            )
+
+        bought = 0
+        cap = max(1, min(5, int(max_buys)))
+        for d in buy_candidates:
+            if bought >= cap:
+                break
+            if self.ledger.get_position(d.symbol) is not None:
+                continue
+            if self.ledger.open_position_count() >= int(settings.max_open_positions):
+                break
+            r = self.execute_signal(d.symbol, approved=True)
+            row = {
+                "symbol": d.symbol,
+                "decision": d.decision.value,
+                "score": round(float(d.buy_score or 0), 1),
+                "ok": bool(r.get("ok")),
+                "message": r.get("message"),
+            }
+            results["buys"].append(row)
+            if r.get("ok"):
+                bought += 1
+
+        results["ok"] = True
+        results["bought"] = bought
+        results["wallet"] = self.paper_wallet()
+        return results
 
     def daily_summary_alert(self) -> dict:
         sells = []

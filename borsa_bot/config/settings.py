@@ -140,6 +140,8 @@ class Settings:
     paper_cancel_race_fill_pct: float = _f("PAPER_CANCEL_RACE_FILL_PCT", 0.0)
     block_orders_when_market_closed: bool = _b("BLOCK_ORDERS_WHEN_MARKET_CLOSED", True)
     allow_paper_when_closed: bool = _b("ALLOW_PAPER_WHEN_CLOSED", True)
+    bist_paper_auto_follow: bool = _b("BIST_PAPER_AUTO_FOLLOW", True)
+    paper_wallet_cycle_sec: int = _i("PAPER_WALLET_CYCLE_SEC", 90)
     # Auth
     auth_enabled: bool = _b("AUTH_ENABLED", False)
     auth_session_ttl_sec: int = _i("AUTH_SESSION_TTL_SEC", 86400)

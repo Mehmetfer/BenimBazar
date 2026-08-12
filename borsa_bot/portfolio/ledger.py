@@ -96,6 +96,46 @@ class PortfolioLedger:
         with self._connect() as conn:
             return float(conn.execute("SELECT cash FROM account WHERE id=1").fetchone()["cash"])
 
+    @property
+    def starting_cash(self) -> float:
+        with self._connect() as conn:
+            return float(conn.execute("SELECT starting_cash FROM account WHERE id=1").fetchone()["starting_cash"])
+
+    def realized_pnl(self) -> float:
+        with self._connect() as conn:
+            row = conn.execute("SELECT COALESCE(SUM(pnl), 0) AS s FROM trades WHERE side='SELL'").fetchone()
+        return float(row["s"])
+
+    def trade_count(self) -> int:
+        with self._connect() as conn:
+            row = conn.execute("SELECT COUNT(*) AS c FROM trades").fetchone()
+        return int(row["c"])
+
+    def recent_trades(self, limit: int = 20) -> list[dict]:
+        lim = max(1, min(100, int(limit)))
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT ts, side, symbol, quantity, price, pnl, order_id FROM trades ORDER BY id DESC LIMIT ?",
+                (lim,),
+            ).fetchall()
+        out: list[dict] = []
+        for r in rows:
+            side = str(r["side"]).upper()
+            pnl = float(r["pnl"] or 0)
+            out.append(
+                {
+                    "ts": r["ts"],
+                    "side": side,
+                    "side_label": "AL" if side == "BUY" else "SAT",
+                    "symbol": r["symbol"],
+                    "quantity": float(r["quantity"]),
+                    "price": round(float(r["price"]), 2),
+                    "pnl": round(pnl, 2) if side == "SELL" else None,
+                    "order_id": r["order_id"],
+                }
+            )
+        return out
+
     def set_marks(self, marks: dict[str, float]) -> None:
         self.mark_prices = marks
         self._roll_day_if_needed()

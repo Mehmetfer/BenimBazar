@@ -21,7 +21,7 @@ from autonomous.agent import get_autonomous_agent
 from autonomous.engine import get_autonomous_engine
 from autonomous.execution_modes import parse_execution_mode
 from autonomous.explain import explain_decision
-from autonomous.modes import parse_user_mode
+from autonomous.mode_store import mode_store
 from auth import Role, auth_store
 from alerts.status import channel_status_report
 from data.providers import classify_provider
@@ -42,14 +42,29 @@ async def _lifespan(app: FastAPI):
                 pass
             await asyncio.sleep(max(15, int(settings.data_freshness_sec)))
 
+    async def _wallet_poll() -> None:
+        await asyncio.sleep(12)
+        while True:
+            try:
+                if settings.bist_paper_auto_follow:
+                    service.follow_recommendations(max_buys=2)
+                else:
+                    service.monitor_exits()
+            except Exception:  # noqa: BLE001
+                pass
+            await asyncio.sleep(max(60, int(settings.paper_wallet_cycle_sec)))
+
     task = asyncio.create_task(_poll())
+    wallet_task = asyncio.create_task(_wallet_poll())
     try:
         service.tick()
         yield
     finally:
         task.cancel()
+        wallet_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
+            await wallet_task
 
 
 app = FastAPI(title="Borsa Bot", version="0.3.0", lifespan=_lifespan)
@@ -349,7 +364,35 @@ def execute(body: ExecBody, authorization: str | None = Header(default=None)) ->
 @app.post("/api/reset")
 def reset() -> dict:
     service.ledger.reset()
-    return {"ok": True}
+    return {"ok": True, "wallet": service.paper_wallet()}
+
+
+@app.get("/api/paper/wallet")
+def paper_wallet() -> dict:
+    """BIST simulation wallet — 100k paper, PnL, positions, trades."""
+    return service.paper_wallet()
+
+
+@app.post("/api/paper/wallet/init")
+def paper_wallet_init() -> dict:
+    """Reset BIST paper wallet to STARTING_CASH (default 100k) and enable auto-follow."""
+    service.ledger.reset()
+    autonomy.set_user_mode("AUTO")
+    mode_store.set_execution_mode("PAPER")
+    return {
+        "ok": True,
+        "message": f"BIST paper cüzdan {settings.starting_cash:,.0f} TL ile sıfırlandı · öneri takibi açık",
+        "wallet": service.paper_wallet(),
+        "user_trading_mode": "AUTO",
+        "execution_mode": "PAPER",
+        "auto_follow": settings.bist_paper_auto_follow,
+    }
+
+
+@app.post("/api/paper/follow")
+def paper_follow(max_buys: int = 2) -> dict:
+    """Manually run one recommendation-follow cycle (BIST paper only)."""
+    return service.follow_recommendations(max_buys=max(1, min(5, max_buys)))
 
 
 @app.get("/api/backtest")
