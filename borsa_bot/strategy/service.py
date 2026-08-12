@@ -834,7 +834,7 @@ class TradingService:
         *,
         q: str | None = None,
         sector: str | None = None,
-        sort: str = "score",
+        sort: str = "decision",
     ) -> dict:
         """Full BIST 100 scan merged with catalog metadata — one row per company."""
         from dashboard.daily import _label_tr

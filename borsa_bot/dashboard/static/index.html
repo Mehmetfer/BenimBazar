@@ -313,6 +313,26 @@
   let tvWidget = null;
   const money = n => Number(n||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
   const pct = n => (n==null||n===undefined) ? '—' : `${n>=0?'+':''}${Number(n).toFixed(2)}%`;
+  const B100_SIGNAL_RANK = {
+    STRONG_BUY: 1, BUY: 2, AL: 2, WAIT_FOR_ENTRY: 3, BREAKOUT: 4, WATCH: 5,
+    WAIT: 6, HOLD: 6, BEKLE: 6, SELL: 7, SAT: 7, STRONG_SELL: 8, NO_TRADE: 9, ALMA: 9, NO_DATA: 10
+  };
+  function bist100Score(row){
+    if(row.final_score != null) return Number(row.final_score);
+    if(row.scores && row.scores.final != null) return Number(row.scores.final);
+    if(row.buy_score != null) return Number(row.buy_score);
+    return 0;
+  }
+  function sortBist100Rows(rows){
+    return [...(rows||[])].sort((a, b) => {
+      const ra = B100_SIGNAL_RANK[String(a.final_decision || a.decision || '').toUpperCase()] ?? 50;
+      const rb = B100_SIGNAL_RANK[String(b.final_decision || b.decision || '').toUpperCase()] ?? 50;
+      if(ra !== rb) return ra - rb;
+      const sa = bist100Score(a), sb = bist100Score(b);
+      if(sb !== sa) return sb - sa;
+      return String(a.ticker || a.symbol || '').localeCompare(String(b.ticker || b.symbol || ''), 'tr');
+    });
+  }
 
   function setMarket(m){
     activeMarket = (m === 'CRYPTO') ? 'CRYPTO' : 'BIST';
@@ -818,6 +838,7 @@
           (c.sector||'').toLocaleLowerCase('tr-TR').includes(q);
       });
     }
+    rows = sortBist100Rows(rows);
     document.getElementById('b100Meta').textContent =
       `${rows.length} / ${bist100.total||100} şirket · ${bist100.analyzed||0} analiz · XU100`;
     const sumEl = document.getElementById('b100Summary');

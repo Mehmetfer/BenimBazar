@@ -143,7 +143,7 @@ def markets() -> dict:
 def bist100_analysis(
     q: str | None = None,
     sector: str | None = None,
-    sort: str = "score",
+    sort: str = "decision",
 ) -> dict:
     """BIST 100 full-universe scan — price + signal per company."""
     try:

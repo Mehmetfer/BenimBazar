@@ -119,7 +119,7 @@ def test_bist100_analysis_sorts_strong_buy_before_buy(monkeypatch):
                 sector="Bankacılık",
                 price=120.0,
                 trend="NEUTRAL",
-                buy_score=62.0,
+                buy_score=72.0,
                 sell_score=10.0,
                 ai_confidence=60.0,
                 risk=RiskLevel.LOW,
