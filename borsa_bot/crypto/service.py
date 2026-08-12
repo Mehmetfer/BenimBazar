@@ -20,8 +20,8 @@ from crypto.dashboard import (
 )
 from crypto.engine import CryptoSignalEngine
 from crypto.market import MarketType
-from crypto.providers.factory import create_crypto_provider
-from crypto.providers.paribu import ParibuMarketDataProvider
+from crypto.providers.factory import create_crypto_provider, is_live_crypto_provider
+from crypto.providers.paribu import RequiredCryptoProvider
 from crypto.safety import gate_crypto_provider
 from crypto.symbols import normalize_crypto_app_symbol, to_display_symbol
 from data.validation import normalize_app_env
@@ -56,7 +56,9 @@ class CryptoFoundationService:
                 pass
 
     def _signal_engine(self) -> CryptoSignalEngine | None:
-        if not isinstance(self.provider, ParibuMarketDataProvider):
+        if not is_live_crypto_provider(self.provider) or isinstance(self.provider, RequiredCryptoProvider):
+            return None
+        if not self.provider.has_market_data():
             return None
         if self._engine is None:
             self._engine = CryptoSignalEngine(
@@ -77,7 +79,7 @@ class CryptoFoundationService:
         provenance = getattr(self.provider, "provenance", lambda: {})()
         symbols = list(self.provider.list_symbols()) if settings.crypto_enabled else []
         sample_quotes: list[dict[str, Any]] = []
-        if isinstance(self.provider, ParibuMarketDataProvider) and self.provider.has_market_data():
+        if is_live_crypto_provider(self.provider) and self.provider.has_market_data():
             for sym in symbols[:5]:
                 try:
                     q = self.provider.get_quote(sym)
@@ -110,6 +112,7 @@ class CryptoFoundationService:
             "paribu_enabled": settings.paribu_enabled,
             "crypto_signals_enabled": settings.crypto_signals_enabled,
             "crypto_provider": settings.crypto_provider,
+            "crypto_failover": getattr(settings, "crypto_failover", ""),
             "provider_id": getattr(self.provider, "provider_id", ""),
             "provider_class": type(self.provider).__name__,
             "is_stub": bool(getattr(self.provider, "is_stub", False)),
@@ -228,7 +231,7 @@ class CryptoFoundationService:
     def _row_from_quote(self, symbol: str) -> dict[str, Any]:
         """Quote-only card when signals are off or analysis unavailable."""
         is_fav, pri = self._fav_meta(symbol)
-        if not isinstance(self.provider, ParibuMarketDataProvider):
+        if not is_live_crypto_provider(self.provider):
             return card_from_parts(
                 symbol=normalize_crypto_app_symbol(symbol),
                 price=None,
@@ -305,14 +308,14 @@ class CryptoFoundationService:
         ts = None
         kind = sig.get("data_source_kind")
         provider = sig.get("provider")
-        if isinstance(self.provider, ParibuMarketDataProvider):
+        if is_live_crypto_provider(self.provider):
             try:
                 q = self.provider.get_quote(symbol)
                 price = q.price
                 ts = q.ts
                 kind = q.data_source_kind
                 provider = q.provider
-                stats = self.provider.ticker_stats(symbol)
+                stats = self.provider.ticker_stats(symbol) if hasattr(self.provider, "ticker_stats") else {}
                 change_pct = stats.get("change_pct")
                 volume = stats.get("volume", q.volume)
             except Exception:  # noqa: BLE001
@@ -372,7 +375,7 @@ class CryptoFoundationService:
             fav_syms = [f.symbol for f in self.favorites.list_favorites(market_type="CRYPTO")]
 
         scan_syms: list[str] | None = None
-        if isinstance(self.provider, ParibuMarketDataProvider) and self.provider.has_market_data():
+        if is_live_crypto_provider(self.provider) and self.provider.has_market_data():
             universe = list(self.provider.list_symbols())
             # Favorites first, then rest (capped)
             ordered: list[str] = []
@@ -495,7 +498,7 @@ class CryptoFoundationService:
             tf = normalize_timeframe(timeframe)
         except ValueError:
             tf = "15m"
-        if not isinstance(self.provider, ParibuMarketDataProvider):
+        if not is_live_crypto_provider(self.provider):
             return bars_to_chart([], symbol=sym, timeframe=tf)
         try:
             bars = self.provider.get_bars_tf(sym, tf, lookback=lookback)
@@ -504,8 +507,8 @@ class CryptoFoundationService:
         return bars_to_chart(bars, symbol=sym, timeframe=tf)
 
     def backfill(self, symbol: str, timeframe: str = "15m") -> dict[str, Any]:
-        if not isinstance(self.provider, ParibuMarketDataProvider):
-            return {"ok": False, "note": "live Paribu provider required", "symbol": symbol}
+        if not is_live_crypto_provider(self.provider):
+            return {"ok": False, "note": "live crypto provider required", "symbol": symbol}
         return backfill_symbol(self.provider, symbol, timeframe=timeframe).to_dict()
 
     def markets_catalog(self) -> dict[str, Any]:

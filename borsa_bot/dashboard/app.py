@@ -218,11 +218,11 @@ def crypto_symbols() -> dict:
 @app.get("/api/crypto/quote/{symbol}")
 def crypto_quote(symbol: str) -> dict:
     from crypto.dashboard import live_status_badge
-    from crypto.providers.paribu import ParibuMarketDataProvider
+    from crypto.providers.factory import is_live_crypto_provider
     from crypto.symbols import normalize_crypto_app_symbol
 
-    if not isinstance(crypto_service.provider, ParibuMarketDataProvider):
-        raise HTTPException(503, "Paribu live provider not active")
+    if not is_live_crypto_provider(crypto_service.provider):
+        raise HTTPException(503, "Crypto live provider not active")
     try:
         q = crypto_service.provider.get_quote(normalize_crypto_app_symbol(symbol))
         stats = crypto_service.provider.ticker_stats(normalize_crypto_app_symbol(symbol))

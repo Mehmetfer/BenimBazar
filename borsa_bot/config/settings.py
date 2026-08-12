@@ -106,7 +106,9 @@ class Settings:
     required_history_bars: int = _i("REQUIRED_HISTORY_BARS", 240)
     # CRYPTO / Paribu foundation — default OFF; BIST path unchanged
     crypto_enabled: bool = _b("CRYPTO_ENABLED", False)
-    crypto_provider: str = os.getenv("CRYPTO_PROVIDER", "paribu")
+    # auto = OKX→Gate→Kraken public REST (ccxt-style); paribu optional
+    crypto_provider: str = os.getenv("CRYPTO_PROVIDER", "auto")
+    crypto_failover: str = os.getenv("CRYPTO_FAILOVER", "okx,gate,kraken")
     paribu_enabled: bool = _b("PARIBU_ENABLED", False)
     paribu_api_base: str = os.getenv("PARIBU_API_BASE", "https://api.paribu.com")
     paribu_api_key: str = os.getenv("PARIBU_API_KEY", "")

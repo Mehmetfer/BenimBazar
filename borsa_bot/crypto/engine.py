@@ -14,7 +14,6 @@ from config.settings import settings
 from crypto.analytics import MIN_BARS_FULL, analyze_bars
 from crypto.market import MarketType
 from crypto.predictions import record_crypto_prediction
-from crypto.providers.paribu import ParibuMarketDataProvider
 from crypto.risk_crypto import evaluate_crypto_entry, evaluate_crypto_exit
 from crypto.safety import gate_crypto_provider
 from crypto.signals import CryptoSignalResult, decide_crypto_signal
@@ -67,7 +66,7 @@ def _synthetic_live_bars(
 
 @dataclass
 class CryptoSignalEngine:
-    provider: ParibuMarketDataProvider
+    provider: Any  # Paribu or public CEX (okx/gate/kraken failover)
     ledger: PortfolioLedger | None = None
     risk: RiskEngine | None = None
     predictions: PredictionStore | None = None
