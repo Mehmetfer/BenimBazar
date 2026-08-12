@@ -101,6 +101,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool get _loggedIn => widget.user != null;
 
+  Future<void> _openCreateListing() async {
+    if (!_loggedIn) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CreateListingScreen(user: widget.user!),
+      ),
+    );
+    if (mounted) await _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final name = widget.user?['username']?.toString();
@@ -370,35 +385,33 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          if (!_loggedIn) {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const LoginScreen()),
-            );
-            return;
-          }
-          Navigator.of(context)
-              .push(
-            MaterialPageRoute(
-              builder: (_) => CreateListingScreen(user: widget.user!),
-            ),
-          )
-              .then((_) => _load());
-        },
-        backgroundColor: AppColors.gold,
-        foregroundColor: AppColors.bg,
-        icon: const Icon(Icons.add_a_photo_outlined),
-        label: Text(
-          'Fotoğraflı ilan',
-          style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
-        ),
-      ),
-      bottomNavigationBar: _loggedIn
-          ? SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-                child: Row(
+      // FAB on Flutter web often fails hit-testing under a custom bottom bar.
+      // Primary create CTA lives in the bottom bar (and header) instead.
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.gold,
+                    foregroundColor: AppColors.bg,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: _openCreateListing,
+                  icon: const Icon(Icons.add_a_photo_outlined),
+                  label: Text(
+                    'Fotoğraflı ilan',
+                    style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              if (_loggedIn) ...[
+                const SizedBox(height: 10),
+                Row(
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
@@ -407,11 +420,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           side: const BorderSide(color: AppColors.gold),
                         ),
                         onPressed: () {
-                          Navigator.of(context).push(
+                          Navigator.of(context)
+                              .push(
                             MaterialPageRoute(
-                              builder: (_) => MyListingsScreen(user: widget.user!),
+                              builder: (_) =>
+                                  MyListingsScreen(user: widget.user!),
                             ),
-                          ).then((_) => _load());
+                          )
+                              .then((_) => _load());
                         },
                         icon: const Icon(Icons.photo_library_outlined),
                         label: const Text('İlanlarım'),
@@ -437,9 +453,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
                 ),
-              ),
-            )
-          : null,
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

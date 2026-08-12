@@ -1,7 +1,7 @@
 name: changex
 description: CHANGE X — para yok, sadece takas (Mandal / Dirhem / Madalyon).
 publish_to: 'none'
-version: 0.1.4+6
+version: 0.1.4+7
 
 environment:
   sdk: ^3.8.1
