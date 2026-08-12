@@ -216,6 +216,160 @@
       .crypto-mobile-row .m-conf{font-size:.85rem;color:var(--mute);font-weight:700}
       .tv-chart{height:360px}
     }
+
+    /* CRYPTO theme — gold page, dark readable ink */
+    body.theme-crypto{
+      --bg:#c9a227;
+      --panel:#fff4c4;
+      --ink:#1a1408;
+      --mute:#5c4a1a;
+      --line:rgba(26,20,8,.16);
+      --buy:#0f6b3c;
+      --buy2:#127a45;
+      --sell:#9b1c1c;
+      --hold:#7a5a00;
+      --warn:#8a5a00;
+      --bad:#a01818;
+      --ok:#0d6b3a;
+      --sim:#6b4e00;
+      background:
+        radial-gradient(900px 480px at 10% -10%,rgba(255,236,160,.55),transparent),
+        radial-gradient(700px 400px at 100% 20%,rgba(184,134,11,.35),transparent),
+        linear-gradient(180deg,#e8c547 0%,#d4a017 45%,#c9a227 100%);
+      color:var(--ink);
+      transition:background .35s ease, color .25s ease;
+    }
+    body.theme-crypto .brand{color:#1a1408;text-shadow:0 1px 0 rgba(255,255,255,.25)}
+    body.theme-crypto .sub{color:#4a3a12;font-weight:650}
+    body.theme-crypto .pill{
+      background:rgba(255,248,220,.75);
+      border-color:rgba(26,20,8,.2);
+      color:#1a1408;
+    }
+    body.theme-crypto .market-btn{
+      background:rgba(255,248,220,.45);
+      border-color:rgba(26,20,8,.22);
+      color:#4a3a12;
+    }
+    body.theme-crypto .market-btn.on{
+      background:#1a1408;
+      color:#f5e6a3;
+      border-color:#1a1408;
+    }
+    body.theme-crypto #mktCrypto.on{
+      background:linear-gradient(180deg,#ffe566,#f0c42e);
+      color:#1a1408;
+      border-color:#b8860b;
+    }
+    body.theme-crypto .card{
+      background:rgba(255,248,220,.92);
+      border-color:rgba(26,20,8,.18);
+      color:var(--ink);
+      box-shadow:0 6px 18px rgba(90,60,0,.12);
+    }
+    body.theme-crypto .sym,
+    body.theme-crypto .price,
+    body.theme-crypto h2,
+    body.theme-crypto .why,
+    body.theme-crypto .meta,
+    body.theme-crypto .empty,
+    body.theme-crypto .fc,
+    body.theme-crypto .sysline{color:var(--ink)}
+    body.theme-crypto h2{color:#5c4a1a;font-weight:800}
+    body.theme-crypto .meta,
+    body.theme-crypto .why,
+    body.theme-crypto .empty,
+    body.theme-crypto .fc,
+    body.theme-crypto .k span{color:#5c4a1a}
+    body.theme-crypto .k{
+      background:rgba(201,162,39,.22);
+      border:1px solid rgba(26,20,8,.1);
+    }
+    body.theme-crypto .k b{color:#1a1408}
+    body.theme-crypto .filter{
+      background:rgba(255,248,220,.5);
+      border-color:rgba(26,20,8,.2);
+      color:#4a3a12;
+    }
+    body.theme-crypto .filter.on{
+      background:#1a1408;
+      color:#f5e6a3;
+      border-color:#1a1408;
+    }
+    body.theme-crypto .search input{
+      background:#fff8dc;
+      border-color:rgba(26,20,8,.22);
+      color:#1a1408;
+    }
+    body.theme-crypto .search button{
+      background:#1a1408;
+      color:#f5e6a3;
+    }
+    body.theme-crypto .more,
+    body.theme-crypto .detail-back,
+    body.theme-crypto .tf-btn{
+      border-color:rgba(26,20,8,.22);
+      color:#1a1408;
+      background:rgba(255,248,220,.65);
+    }
+    body.theme-crypto .tf-btn.on{
+      background:#1a1408;
+      color:#f5e6a3;
+      border-color:#1a1408;
+    }
+    body.theme-crypto .banner.sim{
+      background:rgba(255,248,220,.85);
+      border-color:rgba(107,78,0,.35);
+      color:#3d2e0a;
+    }
+    body.theme-crypto .banner.bad{
+      background:rgba(160,24,24,.12);
+      border-color:rgba(160,24,24,.35);
+      color:#6b1010;
+    }
+    body.theme-crypto .banner.warn{
+      background:rgba(138,90,0,.14);
+      border-color:rgba(138,90,0,.35);
+      color:#5c3d00;
+    }
+    body.theme-crypto .banner.ok{
+      background:rgba(15,107,60,.12);
+      border-color:rgba(15,107,60,.3);
+      color:#0a4a2a;
+    }
+    body.theme-crypto .STRONG_BUY{background:rgba(15,107,60,.2);color:#0a4a2a}
+    body.theme-crypto .BUY,.theme-crypto .AL{background:rgba(15,107,60,.14);color:#0d5c34}
+    body.theme-crypto .WAIT,.theme-crypto .WATCH,.theme-crypto .BEKLE,.theme-crypto .HOLD{
+      background:rgba(122,90,0,.16);color:#5c3d00
+    }
+    body.theme-crypto .SELL,.theme-crypto .SAT,.theme-crypto .STRONG_SELL{
+      background:rgba(155,28,28,.16);color:#7a1212
+    }
+    body.theme-crypto .NO_TRADE,.theme-crypto .ALMA,.theme-crypto .NO_DATA{
+      background:rgba(26,20,8,.08);color:#5c4a1a
+    }
+    body.theme-crypto .up{color:#0d6b3a}
+    body.theme-crypto .down{color:#a01818}
+    body.theme-crypto .star{color:#6b5200}
+    body.theme-crypto .star.on{color:#8a6500}
+    body.theme-crypto .live-LIVE{color:#0d6b3a}
+    body.theme-crypto .live-STALE{color:#8a5a00}
+    body.theme-crypto .live-UNAVAILABLE{color:#a01818}
+    body.theme-crypto .nav{
+      background:rgba(255,244,196,.94);
+      border-top-color:rgba(26,20,8,.18);
+    }
+    body.theme-crypto .nav button{color:#6b5200}
+    body.theme-crypto .nav button.on{color:#1a1408}
+    body.theme-crypto .chart-box{
+      background:rgba(255,248,220,.7);
+      border:1px solid rgba(26,20,8,.12);
+    }
+    body.theme-crypto .plan-pre{
+      background:rgba(201,162,39,.18);
+      color:#1a1408;
+    }
+    body.theme-crypto .crypto-mobile-row .m-conf{color:#5c4a1a}
   </style>
   <script src="https://s3.tradingview.com/tv.js" defer></script>
 </head>
@@ -794,6 +948,9 @@
 
   function setMarket(m){
     activeMarket = (m === 'CRYPTO') ? 'CRYPTO' : 'BIST';
+    document.body.classList.toggle('theme-crypto', activeMarket === 'CRYPTO');
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if(themeMeta) themeMeta.setAttribute('content', activeMarket === 'CRYPTO' ? '#c9a227' : '#0e1512');
     document.querySelectorAll('.market-btn').forEach(b=>b.classList.toggle('on', b.dataset.market===activeMarket));
     const bist = document.getElementById('bistShell');
     const crypto = document.getElementById('cryptoShell');
