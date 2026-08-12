@@ -456,75 +456,80 @@ class _ListingCard extends StatelessWidget {
     final owner = Map<String, dynamic>.from(item['owner'] as Map? ?? {});
     final ribbon = resolveListingRibbon(item);
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.bgCard,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.line),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ListingHeroMedia(
-              listing: item,
-              height: 190,
-              borderRadius: 0,
-            ),
-            ListingSpecStrip(listing: item),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item['title']?.toString() ?? '',
-                    style: GoogleFonts.montserrat(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '${item['category']} · ${owner['username'] ?? '?'} · skor ${owner['change_score'] ?? '-'}',
-                    style: GoogleFonts.montserrat(
-                      color: AppColors.muted,
-                      fontSize: 11,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  ValueChip(value: value, dense: true),
-                  if (ribbon != ListingTradeRibbon.none) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      ribbonLabel(ribbon),
-                      style: GoogleFonts.montserrat(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.6,
-                        color: AppColors.gold,
+    // Media outside InkWell so horizontal photo swipe is not stolen by tap target.
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.line),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ListingHeroMedia(
+            listing: item,
+            height: 190,
+            borderRadius: 0,
+          ),
+          InkWell(
+            onTap: onTap,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ListingSpecStrip(listing: item),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item['title']?.toString() ?? '',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                  ] else if ((item['wanted_items']?.toString() ?? '')
-                      .isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'İstiyor: ${item['wanted_items']}',
-                      style: GoogleFonts.montserrat(
-                        fontSize: 12,
-                        color: AppColors.blue,
-                        fontWeight: FontWeight.w600,
+                      const SizedBox(height: 6),
+                      Text(
+                        '${item['category']} · ${owner['username'] ?? '?'} · skor ${owner['change_score'] ?? '-'}',
+                        style: GoogleFonts.montserrat(
+                          color: AppColors.muted,
+                          fontSize: 11,
+                        ),
                       ),
-                    ),
-                  ],
-                ],
-              ),
+                      const SizedBox(height: 10),
+                      ValueChip(value: value, dense: true),
+                      if (ribbon != ListingTradeRibbon.none) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          ribbonLabel(ribbon),
+                          style: GoogleFonts.montserrat(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.6,
+                            color: AppColors.gold,
+                          ),
+                        ),
+                      ] else if ((item['wanted_items']?.toString() ?? '')
+                          .isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'İstiyor: ${item['wanted_items']}',
+                          style: GoogleFonts.montserrat(
+                            fontSize: 12,
+                            color: AppColors.blue,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

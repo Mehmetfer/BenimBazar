@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -71,12 +72,37 @@ class ListingHeroMedia extends StatefulWidget {
 
 class _ListingHeroMediaState extends State<ListingHeroMedia> {
   int _index = 0;
+  late final PageController _page;
+
+  @override
+  void initState() {
+    super.initState();
+    _page = PageController();
+  }
+
+  @override
+  void dispose() {
+    _page.dispose();
+    super.dispose();
+  }
+
+  void _go(int delta, int count) {
+    if (count <= 1) return;
+    final next = (_index + delta).clamp(0, count - 1);
+    if (next == _index) return;
+    _page.animateToPage(
+      next,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final photos = resolvePhotoUrls(widget.listing);
     final ribbon = resolveListingRibbon(widget.listing);
     final hasPhoto = photos.isNotEmpty;
+    final multi = photos.length > 1;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(widget.borderRadius),
@@ -87,70 +113,135 @@ class _ListingHeroMediaState extends State<ListingHeroMedia> {
           fit: StackFit.expand,
           children: [
             if (hasPhoto)
-              PageView.builder(
-                itemCount: photos.length,
-                onPageChanged: (i) => setState(() => _index = i),
-                itemBuilder: (_, i) => Image.network(
-                  photos[i],
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _placeholder(),
+              // Mouse/trackpad swipe on Flutter web + touch
+              ScrollConfiguration(
+                behavior: ScrollConfiguration.of(context).copyWith(
+                  dragDevices: {
+                    PointerDeviceKind.touch,
+                    PointerDeviceKind.mouse,
+                    PointerDeviceKind.trackpad,
+                    PointerDeviceKind.stylus,
+                  },
+                  scrollbars: false,
+                ),
+                child: PageView.builder(
+                  controller: _page,
+                  itemCount: photos.length,
+                  allowImplicitScrolling: true,
+                  physics: const PageScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
+                  onPageChanged: (i) => setState(() => _index = i),
+                  itemBuilder: (_, i) => Image.network(
+                    photos[i],
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: widget.height,
+                    gaplessPlayback: true,
+                    errorBuilder: (_, __, ___) => _placeholder(),
+                  ),
                 ),
               )
             else
               _placeholder(),
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Color(0x66000000)],
+            // Gradient must NOT steal horizontal swipes
+            const IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Color(0x66000000)],
+                  ),
                 ),
               ),
             ),
-            if (widget.showGalleryHint && photos.length > 1)
+            if (widget.showGalleryHint && multi)
               Positioned(
                 top: 12,
                 right: 12,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${_index + 1}/${photos.length}',
-                    style: GoogleFonts.montserrat(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                child: IgnorePointer(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${_index + 1}/${photos.length}',
+                      style: GoogleFonts.montserrat(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
               ),
-            if (photos.length > 1)
+            if (multi) ...[
+              Positioned(
+                left: 4,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: IconButton(
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.black45,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: _index <= 0 ? null : () => _go(-1, photos.length),
+                    icon: const Icon(Icons.chevron_left, size: 28),
+                    tooltip: 'Önceki fotoğraf',
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 4,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: IconButton(
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.black45,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: _index >= photos.length - 1
+                        ? null
+                        : () => _go(1, photos.length),
+                    icon: const Icon(Icons.chevron_right, size: 28),
+                    tooltip: 'Sonraki fotoğraf',
+                  ),
+                ),
+              ),
               Positioned(
                 bottom: 10,
                 left: 0,
                 right: 0,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    for (var i = 0; i < photos.length && i < 8; i++)
-                      Container(
-                        width: 6,
-                        height: 6,
-                        margin: const EdgeInsets.symmetric(horizontal: 3),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: i == _index ? AppColors.gold : Colors.white54,
+                child: IgnorePointer(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      for (var i = 0; i < photos.length && i < 8; i++)
+                        Container(
+                          width: 6,
+                          height: 6,
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color:
+                                i == _index ? AppColors.gold : Colors.white54,
+                          ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
+            ],
             if (ribbon != ListingTradeRibbon.none)
-              Center(child: TradeStatusRibbon(ribbon: ribbon)),
+              IgnorePointer(
+                child: Center(child: TradeStatusRibbon(ribbon: ribbon)),
+              ),
           ],
         ),
       ),
