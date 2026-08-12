@@ -343,3 +343,41 @@ class YahooBistMarketDataProvider:
             live_ready=False,
             note=note,
         )
+
+    def period_returns(self, symbol: str) -> dict[str, float | None]:
+        """Daily / monthly / yearly % from Yahoo daily chart. Missing → None."""
+        sym = normalize_app_symbol(symbol)
+        ysym = to_provider_symbol(sym, "yahoo")
+        out: dict[str, float | None] = {"daily_pct": None, "monthly_pct": None, "yearly_pct": None}
+        if self._rate_limited():
+            q = self._quotes.get(sym)
+            if q is not None and getattr(q, "change_pct", None) is not None:
+                out["daily_pct"] = round(float(q.change_pct), 2)
+            return out
+        try:
+            url = (
+                "https://query1.finance.yahoo.com/v8/finance/chart/"
+                f"{urllib.parse.quote(ysym)}?interval=1d&range=1y"
+            )
+            data = self._get_json(url)
+            result = ((data or {}).get("chart") or {}).get("result") or []
+            if not result:
+                return out
+            q0 = (((result[0].get("indicators") or {}).get("quote") or [{}])[0]) or {}
+            closes = [float(c) for c in (q0.get("close") or []) if c is not None and float(c) > 0]
+            if len(closes) < 2:
+                return out
+            last = closes[-1]
+            prev = closes[-2]
+            out["daily_pct"] = round((last / prev - 1.0) * 100.0, 2)
+            if len(closes) >= 22:
+                out["monthly_pct"] = round((last / closes[-22] - 1.0) * 100.0, 2)
+            if len(closes) >= 2:
+                out["yearly_pct"] = round((last / closes[0] - 1.0) * 100.0, 2)
+            # Prefer live quote change when present
+            q = self._quotes.get(sym)
+            if q is not None and getattr(q, "change_pct", None) is not None:
+                out["daily_pct"] = round(float(q.change_pct), 2)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("period_returns failed for %s: %s", sym, exc)
+        return out

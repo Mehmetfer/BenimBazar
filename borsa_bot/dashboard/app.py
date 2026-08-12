@@ -793,55 +793,30 @@ def test_notification(kind: str = "BUY_SIGNAL", symbol: str = "THYAO") -> dict:
 
 @app.get("/api/symbol/{symbol}")
 def symbol_detail(symbol: str) -> dict:
-    """Detail screen — chart placeholders, plan, forecast, integrity."""
+    """Detail screen — market, signal, scores, returns, KAP link."""
     symbol = symbol.upper()
-    decisions = {d.symbol: d for d in service.scan()}
-    d = decisions.get(symbol)
-    meta = service.provider.source_meta(settings.data_freshness_sec)
-    if not d:
+    try:
+        board = service.symbol_board(symbol)
+    except Exception as exc:  # noqa: BLE001
+        meta = service.provider.source_meta(settings.data_freshness_sec)
         return {
             "ok": False,
             "symbol": symbol,
-            "message": "VERİ YOK" if not service.provider.has_market_data() else "symbol not found",
+            "message": str(exc)[:200],
             "data_source": meta.to_dict(),
             "live_ready": False,
         }
-    ser = service._serialize(d)
-    return {
-        "ok": True,
-        "symbol": symbol,
-        "detail": ser,
-        "ai_trade_plan": ser.get("ai_trade_plan"),
-        "ai_forecast": ser.get("ai_forecast"),
-        "ai_reliability": ser.get("ai_reliability"),
-        "prediction_history": service.predictions.history(symbol, limit=20),
-        "prediction_timeline": service.predictions.timeline(symbol, limit=20),
-        "news": {"available": False, "source": "UNAVAILABLE", "items": [], "note": "Gerçek haber kaynağı yok"},
-        "kap": {"available": False, "source": "UNAVAILABLE", "items": [], "note": "KAP bağlantısı yok"},
-        "data_source": meta.to_dict(),
-        "live_ready": False,
-        "note": "Detay ekranı. Ana sayfada yalnızca karar alanları gösterilir.",
-    }
+    # Keep legacy keys used by Sinyaller detail page
+    board.setdefault("news", {"available": False, "source": "UNAVAILABLE", "items": [], "note": "Gerçek haber kaynağı yok"})
+    board.setdefault("prediction_timeline", service.predictions.timeline(symbol, limit=20))
+    board.setdefault("prediction_history", service.predictions.history(symbol, limit=20))
+    board.setdefault("ai_reliability", (board.get("detail") or {}).get("ai_reliability"))
+    board["live_ready"] = False
+    return board
 
 
 @app.get("/api/trade-plan/{symbol}")
 def trade_plan(symbol: str) -> dict:
-    """Full AI trade plan for one symbol. Plan ≠ order. LIVE default OFF."""
-    decisions = {d.symbol: d for d in service.scan()}
-    d = decisions.get(symbol.upper())
-    if not d:
-        raise HTTPException(404, "symbol not found")
-    ser = service._serialize(d)
-    return {
-        "symbol": symbol.upper(),
-        "decision": ser.get("decision"),
-        "final_decision": ser.get("final_decision"),
-        "signal": ser.get("signal"),
-        "ai_trade_plan": ser.get("ai_trade_plan"),
-        "trade_plan_legacy": ser.get("trade_plan"),
-        "note": "Trade plan is not an order. Requires Risk Engine + approval. No profit guarantee.",
-        "live": False,
-    }
     """Full AI trade plan for one symbol. Plan ≠ order. LIVE default OFF."""
     decisions = {d.symbol: d for d in service.scan()}
     d = decisions.get(symbol.upper())

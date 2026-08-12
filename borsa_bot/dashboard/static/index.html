@@ -165,6 +165,22 @@
     .stock-stat{display:flex;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--line);font-size:.82rem}
     .stock-stat:last-child{border-bottom:none}
     .stock-stat span{color:var(--mute)}
+    .stock-signal-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+    .stock-sig{font-size:.78rem;font-weight:900;padding:6px 10px;border-radius:999px;background:rgba(143,163,150,.14);color:var(--mute)}
+    .stock-sig.STRONG_BUY,.stock-sig.BUY,.stock-sig.AL{background:rgba(46,207,138,.18);color:var(--buy2)}
+    .stock-sig.SELL,.stock-sig.SAT,.stock-sig.STRONG_SELL{background:rgba(255,92,92,.16);color:#ffb4b4}
+    .stock-sig.WAIT,.stock-sig.WAIT_FOR_ENTRY,.stock-sig.BEKLE,.stock-sig.HOLD,.stock-sig.WATCH{background:rgba(230,162,60,.14);color:#ffd79a}
+    .stock-score,.stock-favval{font-size:.78rem;font-weight:800;color:var(--ink)}
+    .stock-section{margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+    .stock-sec-title{font-size:.72rem;font-weight:800;color:var(--mute);margin-bottom:8px;letter-spacing:.03em;text-transform:uppercase}
+    .stock-returns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .stock-ret{text-align:center;background:rgba(0,0,0,.18);border-radius:10px;padding:8px 4px}
+    .stock-ret span{display:block;font-size:.68rem;color:var(--mute)}
+    .stock-ret b{display:block;margin-top:4px;font-size:.95rem}
+    .stock-ret b.up{color:var(--buy2)}
+    .stock-ret b.down{color:#ff6b6b}
+    .stock-kap{font-size:.78rem;color:var(--mute);line-height:1.4}
+    .stock-kap a{color:var(--buy2);font-weight:700;text-decoration:none}
     .stock-close{margin-top:10px;width:100%}
   /* Order sheet */
     .order-sheet{width:100%;max-width:520px;background:#101816;border-radius:18px 18px 0 0;padding:14px 14px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
@@ -651,7 +667,24 @@
           <button type="button" class="pill-trade sell" id="sdSellBtn">SAT</button>
         </div>
       </div>
+      <div class="stock-signal-row" id="sdSignalRow">
+        <span class="stock-sig" id="sdSignal">—</span>
+        <span class="stock-score" id="sdScore">Skor —</span>
+        <span class="stock-favval" id="sdFavVal">Fav —</span>
+      </div>
       <div class="stock-stats" id="sdStats"></div>
+      <div class="stock-section">
+        <div class="stock-sec-title">Kazanç</div>
+        <div class="stock-returns" id="sdReturns">
+          <div class="stock-ret"><span>Günlük</span><b id="sdRetD">—</b></div>
+          <div class="stock-ret"><span>Aylık</span><b id="sdRetM">—</b></div>
+          <div class="stock-ret"><span>Yıllık</span><b id="sdRetY">—</b></div>
+        </div>
+      </div>
+      <div class="stock-section">
+        <div class="stock-sec-title">KAP</div>
+        <div class="stock-kap" id="sdKap">Yükleniyor…</div>
+      </div>
       <button type="button" class="more stock-close" id="sdCloseBtn">Kapat</button>
     </div>
   </div>
@@ -946,6 +979,12 @@
     }
   }
 
+  function fmtRet(v){
+    if(v==null || v==='' || Number.isNaN(Number(v))) return {txt:'—', cls:''};
+    const n = Number(v);
+    return {txt:(n>=0?'+':'')+n.toFixed(2)+'%', cls:n>=0?'up':'down'};
+  }
+
   function openStockDetail(item){
     stockDetailCtx = item;
     const sym = String(item.symbol || item.ticker || '').toUpperCase();
@@ -953,8 +992,7 @@
     const px = Number(item.price||0);
     const ba = bidAsk(px, item);
     const chg = Number(item.change_pct||0);
-    const isFav = item.is_favorite !== false && sym !== 'XU100';
-    // Remember selection for Piyasalar highlight
+    const isFav = item.is_favorite === true || (item.is_favorite !== false && (watchlistCache.quotes||[]).some(f=>(f.symbol||f.ticker)===sym));
     bist100.selected = {
       ...item,
       ticker: sym,
@@ -969,7 +1007,22 @@
     chgEl.textContent = px ? `${chg>=0?'+':''}${chg.toFixed(2)}%` : '—';
     chgEl.className = 'stock-chg ' + (chg>=0?'up':'down');
     document.getElementById('sdMeta').textContent =
-      [item.sector, item.decision_label||item.decision].filter(Boolean).join(' · ') || 'Paper işlem · gerçek para değil';
+      [item.sector, item.decision_label||item.decision].filter(Boolean).join(' · ') || 'Piyasa bilgisi yükleniyor…';
+    const dec0 = String(item.decision_label||item.final_decision||item.decision||'—');
+    const decCode = String(item.final_decision||item.decision||'').toUpperCase();
+    const sigEl = document.getElementById('sdSignal');
+    sigEl.textContent = dec0;
+    sigEl.className = 'stock-sig ' + (decCode||'');
+    const score0 = item.final_score!=null?Number(item.final_score):(item.priority_score!=null?Number(item.priority_score):(item.buy_score??null));
+    document.getElementById('sdScore').textContent = score0!=null ? ('Skor '+Number(score0).toFixed(0)) : 'Skor —';
+    document.getElementById('sdFavVal').textContent = isFav ? 'Fav ★' : 'Fav ☆';
+    document.getElementById('sdRetD').textContent = chg ? ((chg>=0?'+':'')+chg.toFixed(2)+'%') : '—';
+    document.getElementById('sdRetD').className = chg>0?'up':(chg<0?'down':'');
+    document.getElementById('sdRetM').textContent = '—';
+    document.getElementById('sdRetM').className = '';
+    document.getElementById('sdRetY').textContent = '—';
+    document.getElementById('sdRetY').className = '';
+    document.getElementById('sdKap').textContent = 'KAP yükleniyor…';
     const favBtn = document.getElementById('sdFavBtn');
     if(sym === 'XU100'){
       favBtn.style.display = 'none';
@@ -984,10 +1037,9 @@
           const active = !!r.is_favorite;
           favBtn.classList.toggle('on', active);
           favBtn.textContent = active ? '★' : '☆';
+          document.getElementById('sdFavVal').textContent = active ? 'Fav ★' : 'Fav ☆';
           if(stockDetailCtx) stockDetailCtx.is_favorite = active;
-          // Force refresh so new favorites append at end (created_at ASC)
           loadFavorites({silent: false, force: true});
-          // Keep search result stars in sync
           const hit = favSearchCache.find(f=>(f.symbol||f.ticker)===sym);
           if(hit) hit.is_favorite = active;
           if((document.getElementById('favq')?.value||'').trim().length >= 2){
@@ -1002,11 +1054,11 @@
     const posQty = pos ? pos.quantity : (item.position_qty||0);
     document.getElementById('sdStats').innerHTML = `
       <div class="stock-stat"><span>Kod</span><b>${sym||'—'}</b></div>
+      <div class="stock-stat"><span>Sektör</span><b>${item.sector||'—'}</b></div>
       <div class="stock-stat"><span>Alış</span><b>${px?money(ba.bid):'—'}</b></div>
       <div class="stock-stat"><span>Satış</span><b>${px?money(ba.ask):'—'}</b></div>
       <div class="stock-stat"><span>Ö. Kapanış</span><b>${item.prev_close!=null?money(item.prev_close):'—'}</b></div>
-      <div class="stock-stat"><span>Portföy</span><b>${posQty?posQty+' lot':'—'}</b></div>
-      <div class="stock-stat"><span>Skor</span><b>${item.final_score!=null?Number(item.final_score).toFixed(0):(item.buy_score??'—')}</b></div>`;
+      <div class="stock-stat"><span>Portföy</span><b>${posQty?posQty+' lot':'—'}</b></div>`;
     const buyBtn = document.getElementById('sdBuyBtn');
     const sellBtn = document.getElementById('sdSellBtn');
     if(sym === 'XU100' || !px){
@@ -1022,6 +1074,95 @@
     }
     document.getElementById('stockDetailOverlay').classList.remove('hidden');
     document.getElementById('stockDetailOverlay').setAttribute('aria-hidden','false');
+    if(sym && sym !== 'XU100'){
+      enrichStockDetail(sym, name);
+    } else {
+      document.getElementById('sdKap').innerHTML = 'Endeks · KAP şirket bildirimi yok';
+    }
+  }
+
+  async function enrichStockDetail(sym, fallbackName){
+    try{
+      const ctrl = new AbortController();
+      document.getElementById('sdSignal').textContent = 'Hesaplanıyor…';
+      const timer = setTimeout(()=>ctrl.abort(), 45000);
+      const r = await (await fetch('/api/symbol/'+encodeURIComponent(sym), {signal: ctrl.signal})).json();
+      clearTimeout(timer);
+      if(!r || r.ok === false){
+        document.getElementById('sdKap').textContent = (r && r.message) || 'Detay alınamadı';
+        return;
+      }
+      if(stockDetailCtx && String(stockDetailCtx.symbol||stockDetailCtx.ticker||'').toUpperCase() !== sym) return;
+      const d = r.detail || {};
+      const mkt = r.market || {};
+      const sig = r.signal || {};
+      const fav = r.favorite || {};
+      const ret = r.returns || {};
+      const kap = r.kap || {};
+      const name = d.name || fallbackName || sym;
+      const px = Number(d.price!=null?d.price:(stockDetailCtx&&stockDetailCtx.price)||0);
+      const ba = bidAsk(px, d);
+      if(name && name !== sym) document.getElementById('sdName').textContent = name;
+      if(px) document.getElementById('sdPrice').textContent = money(px)+' TL';
+      const chg = Number(ret.daily_pct!=null?ret.daily_pct:(d.change_pct||0));
+      const chgEl = document.getElementById('sdChg');
+      if(d.change_pct!=null || ret.daily_pct!=null){
+        chgEl.textContent = `${chg>=0?'+':''}${chg.toFixed(2)}%`;
+        chgEl.className = 'stock-chg ' + (chg>=0?'up':'down');
+      }
+      document.getElementById('sdMeta').textContent =
+        [mkt.session_label||'', mkt.price_label||'', mkt.sector||d.sector||''].filter(Boolean).join(' · ');
+      const decCode = String(sig.decision||d.final_decision||d.decision||'').toUpperCase();
+      const sigEl = document.getElementById('sdSignal');
+      sigEl.textContent = sig.label || d.decision_label || decCode || '—';
+      sigEl.className = 'stock-sig ' + (decCode||'');
+      const score = sig.score!=null?sig.score:(sig.priority_score!=null?sig.priority_score:sig.buy_score);
+      document.getElementById('sdScore').textContent = score!=null ? ('Skor '+Number(score).toFixed(0)) : 'Skor —';
+      const isFav = !!fav.is_favorite;
+      document.getElementById('sdFavVal').textContent =
+        isFav ? (`Fav ★${fav.priority!=null?(' · '+fav.priority):''}`) : 'Fav ☆';
+      const favBtn = document.getElementById('sdFavBtn');
+      favBtn.classList.toggle('on', isFav);
+      favBtn.textContent = isFav ? '★' : '☆';
+      const rd = fmtRet(ret.daily_pct);
+      const rm = fmtRet(ret.monthly_pct);
+      const ry = fmtRet(ret.yearly_pct);
+      document.getElementById('sdRetD').textContent = rd.txt;
+      document.getElementById('sdRetD').className = rd.cls;
+      document.getElementById('sdRetM').textContent = rm.txt;
+      document.getElementById('sdRetM').className = rm.cls;
+      document.getElementById('sdRetY').textContent = ry.txt;
+      document.getElementById('sdRetY').className = ry.cls;
+      const posQty = (r.position&&r.position.quantity) || 0;
+      document.getElementById('sdStats').innerHTML = `
+        <div class="stock-stat"><span>Kod</span><b>${sym}</b></div>
+        <div class="stock-stat"><span>Sektör</span><b>${mkt.sector||d.sector||'—'}</b></div>
+        <div class="stock-stat"><span>Seans</span><b>${mkt.session_label||'—'}</b></div>
+        <div class="stock-stat"><span>Alış</span><b>${px?money(ba.bid):'—'}</b></div>
+        <div class="stock-stat"><span>Satış</span><b>${px?money(ba.ask):'—'}</b></div>
+        <div class="stock-stat"><span>Ö. Kapanış</span><b>${d.prev_close!=null?money(d.prev_close):(mkt.prev_close!=null?money(mkt.prev_close):'—')}</b></div>
+        <div class="stock-stat"><span>Portföy</span><b>${posQty?posQty+' lot':'—'}</b></div>
+        <div class="stock-stat"><span>AL skoru</span><b>${sig.buy_score!=null?Number(sig.buy_score).toFixed(0):'—'}</b></div>
+        <div class="stock-stat"><span>SAT skoru</span><b>${sig.sell_score!=null?Number(sig.sell_score).toFixed(0):'—'}</b></div>`;
+      const buyBtn = document.getElementById('sdBuyBtn');
+      const sellBtn = document.getElementById('sdSellBtn');
+      if(px){
+        buyBtn.disabled = false;
+        sellBtn.disabled = false;
+        buyBtn.onclick = ()=> openOrderSheet(sym,'BUY',{price:px,name,positionQty:posQty,bid:d.bid,ask:d.ask});
+        sellBtn.onclick = ()=> openOrderSheet(sym,'SELL',{price:px,name,positionQty:posQty,bid:d.bid,ask:d.ask});
+      }
+      const kapUrl = kap.company_url || kap.search_url || 'https://www.kap.org.tr/tr/bildirim-sorgu';
+      document.getElementById('sdKap').innerHTML =
+        `${kap.note||'KAP bildirimleri'}<br>`+
+        `<a href="${kapUrl}" target="_blank" rel="noopener">KAP · ${sym} bildirimleri →</a>`;
+      if(stockDetailCtx){
+        Object.assign(stockDetailCtx, d, {is_favorite: isFav, price: px});
+      }
+    }catch(_e){
+      document.getElementById('sdKap').innerHTML =
+        `KAP detayı alınamadı · <a href="https://www.kap.org.tr/tr/bildirim-sorgu" target="_blank" rel="noopener">kap.org.tr →</a>`;
+    }
   }
 
   function bidAsk(price, item){

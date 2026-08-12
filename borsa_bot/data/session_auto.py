@@ -116,3 +116,9 @@ class SessionAutoBistProvider:
             note=f"BIST CLOSED — Yahoo yok, simüle yedek. {meta.note}",
             price_label=meta.price_label,
         )
+
+    def period_returns(self, symbol: str) -> dict:
+        try:
+            return self._yahoo.period_returns(symbol)
+        except Exception:  # noqa: BLE001
+            return {"daily_pct": None, "monthly_pct": None, "yearly_pct": None}

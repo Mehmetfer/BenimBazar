@@ -1920,6 +1920,193 @@ class TradingService:
         emit_daily_summary(self.alerts, payload)
         return payload
 
+    def _overlay_signal_lite(self, symbol: str, quote) -> dict | None:
+        """Fast display-only AL/SAT/Bekle scores for stock overlay (not an order)."""
+        from indicators.engine import compute_indicators
+        from signals.engine import score_sell, technical_score
+
+        try:
+            bars = self.provider.get_bars(symbol, 240)
+        except Exception:  # noqa: BLE001
+            return None
+        if not bars or len(bars) < 210 or quote is None:
+            return None
+        ind = compute_indicators(bars)
+        if ind is None:
+            return None
+        buy, _reasons = technical_score(ind, float(quote.price))
+        owned = self.ledger.get_position(symbol) is not None
+        sell = score_sell(ind, float(quote.price), float(getattr(quote, "volume", 0) or 0), owned)
+        strong_th = float(getattr(settings, "strong_buy_threshold", 75))
+        buy_th = float(getattr(settings, "buy_score_threshold", 60))
+        sell_th = float(getattr(settings, "sell_score_threshold", 60))
+        if owned and sell >= sell_th + 10:
+            dec, label = "STRONG_SELL", "Güçlü SAT"
+        elif owned and sell >= sell_th:
+            dec, label = "SELL", "SAT"
+        elif buy >= strong_th:
+            dec, label = "STRONG_BUY", "Güçlü AL"
+        elif buy >= buy_th:
+            dec, label = "BUY", "AL"
+        elif sell >= sell_th and buy < 45:
+            dec, label = "SELL", "SAT"
+        elif buy >= 45:
+            dec, label = "WAIT", "Bekle"
+        else:
+            dec, label = "WAIT", "Bekle"
+        return {
+            "decision": dec,
+            "final_decision": dec,
+            "decision_label": label,
+            "buy_score": round(float(buy), 1),
+            "sell_score": round(float(sell), 1),
+            "priority_score": round(float(buy), 1),
+            "signal_source": "overlay_lite",
+        }
+
+    def symbol_board(self, symbol: str) -> dict:
+        """Rich stock detail payload for overlay — quote, signal, scores, returns, KAP link."""
+        from universe.bist100 import get_company
+
+        sym = str(symbol or "").upper().strip()
+        company = get_company(sym)
+        meta = self.provider.source_meta(settings.data_freshness_sec)
+        session = getattr(meta, "market_session", None)
+        session_val = session.value if hasattr(session, "value") else str(session or "UNKNOWN")
+
+        quote = None
+        try:
+            self.tick()
+            quote = self.provider.get_quote(sym)
+        except Exception:  # noqa: BLE001
+            quote = None
+
+        fav_rec = self.favorites.get(sym, market_type="BIST")
+        is_fav = bool(fav_rec and fav_rec.active)
+        pos = self.ledger.get_position(sym)
+
+        returns = {"daily_pct": None, "monthly_pct": None, "yearly_pct": None}
+        try:
+            fn = getattr(self.provider, "period_returns", None)
+            if callable(fn):
+                returns = fn(sym) or returns
+        except Exception:  # noqa: BLE001
+            pass
+        if returns.get("daily_pct") is None and quote is not None and getattr(quote, "change_pct", None) is not None:
+            returns["daily_pct"] = round(float(quote.change_pct), 2)
+
+        # Prefer warm full-scan cache; otherwise fast lite scores (full scan can take minutes).
+        decision = None
+        if self._scan_cache:
+            for d in self._scan_cache:
+                if getattr(d, "symbol", None) == sym:
+                    decision = d
+                    break
+
+        lite = None
+        if decision is None:
+            lite = self._overlay_signal_lite(sym, quote)
+
+        if decision is not None:
+            detail = self._serialize(decision)
+        else:
+            detail = {
+                "symbol": sym,
+                "name": (company.name if company else (getattr(quote, "name", None) or sym)),
+                "sector": (company.sector if company else (getattr(quote, "sector", None) or "")),
+                "price": round(float(quote.price), 4) if quote else None,
+                "bid": round(float(quote.bid), 4) if quote and quote.bid else None,
+                "ask": round(float(quote.ask), 4) if quote and quote.ask else None,
+                "change_pct": returns.get("daily_pct"),
+                "prev_close": None,
+                "decision": (lite or {}).get("decision") or "NO_DATA",
+                "final_decision": (lite or {}).get("final_decision") or "NO_DATA",
+                "decision_label": (lite or {}).get("decision_label") or "VERİ YOK",
+                "buy_score": (lite or {}).get("buy_score"),
+                "sell_score": (lite or {}).get("sell_score"),
+                "priority_score": (lite or {}).get("priority_score"),
+                "is_favorite": is_fav,
+                "watchlist_priority": fav_rec.priority if fav_rec else None,
+                "signal_source": (lite or {}).get("signal_source"),
+            }
+        if is_fav:
+            detail["is_favorite"] = True
+            detail["watchlist_priority"] = fav_rec.priority if fav_rec else detail.get("watchlist_priority")
+
+        dec = str(detail.get("final_decision") or detail.get("decision") or "NO_DATA").upper()
+        label_map = {
+            "STRONG_BUY": "Güçlü AL",
+            "BUY": "AL",
+            "AL": "AL",
+            "WAIT_FOR_ENTRY": "Giriş Bekle",
+            "WAIT": "Bekle",
+            "BEKLE": "Bekle",
+            "HOLD": "Bekle",
+            "WATCH": "İzle",
+            "SELL": "SAT",
+            "SAT": "SAT",
+            "STRONG_SELL": "Güçlü SAT",
+            "NO_TRADE": "İşlem Yok",
+            "ALMA": "İşlem Yok",
+            "NO_DATA": "VERİ YOK",
+        }
+        detail["decision_label"] = label_map.get(dec, detail.get("decision_label") or dec)
+
+        score = detail.get("priority_score")
+        if score is None:
+            score = detail.get("buy_score")
+        if score is None and detail.get("scores"):
+            score = (detail.get("scores") or {}).get("final")
+
+        kap = {
+            "available": False,
+            "source": "KAP",
+            "items": [],
+            "note": "Canlı KAP feed yok — resmi bildirim sayfasına gidin",
+            "search_url": "https://www.kap.org.tr/tr/bildirim-sorgu",
+            "company_url": f"https://www.kap.org.tr/tr/sirket-bilgileri/ozet/{sym}",
+        }
+
+        return {
+            "ok": quote is not None or decision is not None or lite is not None,
+            "symbol": sym,
+            "detail": detail,
+            "market": {
+                "session": session_val,
+                "session_label": "Piyasa açık" if session_val == "OPEN" else "Piyasa kapalı",
+                "price_label": getattr(meta, "price_label", None),
+                "sector": detail.get("sector") or "",
+                "bid": detail.get("bid"),
+                "ask": detail.get("ask"),
+                "prev_close": detail.get("prev_close"),
+                "volume": getattr(quote, "volume", None) if quote else None,
+            },
+            "signal": {
+                "decision": dec,
+                "label": detail.get("decision_label"),
+                "buy_score": detail.get("buy_score"),
+                "sell_score": detail.get("sell_score"),
+                "priority_score": detail.get("priority_score"),
+                "score": score,
+            },
+            "favorite": {
+                "is_favorite": is_fav,
+                "priority": fav_rec.priority if fav_rec else None,
+                "notes": fav_rec.notes if fav_rec else "",
+                "score": score,
+            },
+            "returns": returns,
+            "position": {
+                "quantity": float(pos.quantity) if pos else 0,
+                "avg_cost": float(pos.avg_cost) if pos else None,
+            },
+            "kap": kap,
+            "data_source": meta.to_dict(),
+            "ai_trade_plan": detail.get("ai_trade_plan"),
+            "ai_forecast": detail.get("ai_forecast"),
+            "note": "Sinyal ≠ emir · kazançlar gecikmeli Yahoo hesabı",
+        }
+
     def desk_evaluate(self, symbol: str) -> dict:
         """Institutional desk evaluation for one symbol (committee + pipeline)."""
         from desk.engine import InstitutionalDeskEngine
