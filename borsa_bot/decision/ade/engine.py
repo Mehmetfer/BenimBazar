@@ -200,12 +200,12 @@ class AutonomousDecisionEngine:
         elif is_executable(action) and execute:
             # SAFETY GATE + EXECUTION via SafeExecutionPipeline only
             if self.pipeline is None:
-            # Never touch the shared production paper.db; isolate ADE fills.
-            import tempfile
-            from pathlib import Path
+                # Never touch the shared production paper.db; isolate ADE fills.
+                import tempfile
+                from pathlib import Path
 
-            tmp = Path(tempfile.mkdtemp(prefix="ade_pipeline_"))
-            self.pipeline = SafeExecutionPipeline(mode=self.mode, kill=self.kill, db_dir=tmp)
+                tmp = Path(tempfile.mkdtemp(prefix="ade_pipeline_"))
+                self.pipeline = SafeExecutionPipeline(mode=self.mode, kill=self.kill, db_dir=tmp)
             side = "BUY" if action is DecisionAction.BUY else "SELL"
             if action in {DecisionAction.EXIT, DecisionAction.REDUCE, DecisionAction.SELL}:
                 side = "SELL"

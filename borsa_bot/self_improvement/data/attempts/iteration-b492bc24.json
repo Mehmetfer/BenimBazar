@@ -1,0 +1,16 @@
+{
+  "attempt_id": "iteration-b492bc24",
+  "problem": "Baseline pytest guard missing",
+  "hypothesis": "allowlisted improvement should pass SI tests",
+  "change": "self_improvement/baseline_guard.py,self_improvement/data/README.md",
+  "tests": [
+    "tests/test_si_smoke.py"
+  ],
+  "failure": "fail",
+  "root_cause": "verification failed or baseline regression",
+  "lesson": "SI changes must keep baseline passed count and SI unit tests green",
+  "rollback": true,
+  "alternative": "narrower patch or more tests before apply",
+  "accepted": false,
+  "created_at": "2026-08-12T06:16:26.050494+00:00"
+}

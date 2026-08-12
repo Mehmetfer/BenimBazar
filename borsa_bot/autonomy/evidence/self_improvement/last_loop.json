@@ -1,0 +1,196 @@
+{
+  "reports": [
+    {
+      "iteration_id": "iteration-e4be60a6",
+      "status": "ACCEPTED",
+      "item_id": "IMPROVEMENT-096",
+      "stages": [
+        "OBSERVE",
+        "AUDIT",
+        "IDENTIFY",
+        "FORMULATE",
+        "PLAN",
+        "IMPLEMENT",
+        "RISK",
+        "REVIEW",
+        "STATIC",
+        "UNIT",
+        "REGRESSION",
+        "VERIFY",
+        "ACCEPT",
+        "LEARN"
+      ],
+      "findings_count": 4,
+      "risk": {
+        "score": 5,
+        "band": "LOW",
+        "reasons": [
+          "base change",
+          "includes tests"
+        ],
+        "requires_expanded_suite": false
+      },
+      "review": {
+        "approved": true,
+        "questions": {
+          "necessary": "yes",
+          "simpler_exists": "consider",
+          "regression_risk": "moderate",
+          "race_condition": "review_if_concurrent",
+          "error_handling": "check",
+          "security_impact": "low",
+          "domain_invariants": "preserved",
+          "test_coverage": "ok",
+          "rollback_possible": "yes"
+        },
+        "blockers": [],
+        "notes": [
+          "REVIEWER approve \u2014 IMPLEMENTER change may proceed to VERIFY"
+        ]
+      },
+      "verify": {
+        "ok": true,
+        "passed": 3,
+        "failed": 0,
+        "baseline_passed": 395,
+        "regression": false,
+        "detail": "...                                                                      [100%]\n3 passed in 0.02s\n\nSuccess: no issues found in 15 source files\n",
+        "gates": {
+          "pytest": true,
+          "mypy": true,
+          "baseline": true
+        }
+      },
+      "rollback": false,
+      "lesson_id": "",
+      "waited_for_human": false,
+      "measurable_benefit": "baseline/regression guard or SI health observability",
+      "detail": "accepted within allowlist; safety invariants untouched",
+      "created_at": "2026-08-12T06:16:24.830721+00:00"
+    },
+    {
+      "iteration_id": "stop-1",
+      "status": "STOPPED",
+      "item_id": "",
+      "stages": [
+        "SAFE_STOP"
+      ],
+      "findings_count": 0,
+      "risk": {},
+      "review": {},
+      "verify": {},
+      "rollback": false,
+      "lesson_id": "",
+      "waited_for_human": false,
+      "measurable_benefit": "",
+      "detail": "no_measurable_improvement",
+      "created_at": "2026-08-12T06:16:24.831828+00:00"
+    }
+  ],
+  "scorecard": {
+    "engineering_autonomy": 8.45,
+    "decision_autonomy": 8.5,
+    "self_improvement_level": 9.2,
+    "live_money_autonomy": "NOT VERIFIED",
+    "full_level8_claimed": false,
+    "gates": [
+      {
+        "id": "SI-1",
+        "name": "Self Audit",
+        "status": "PASS",
+        "evidence": [
+          "audit_repository"
+        ]
+      },
+      {
+        "id": "SI-2",
+        "name": "Self Planning",
+        "status": "PASS",
+        "evidence": [
+          "BacklogStore"
+        ]
+      },
+      {
+        "id": "SI-3",
+        "name": "Self Implementation",
+        "status": "PASS",
+        "evidence": [
+          "sandbox apply"
+        ]
+      },
+      {
+        "id": "SI-4",
+        "name": "Self Testing",
+        "status": "PASS",
+        "evidence": [
+          "verify pytest"
+        ]
+      },
+      {
+        "id": "SI-5",
+        "name": "Self Regression",
+        "status": "PASS",
+        "evidence": [
+          "baseline lock"
+        ]
+      },
+      {
+        "id": "SI-6",
+        "name": "Self Recovery",
+        "status": "PASS",
+        "evidence": [
+          "sandbox.rollback"
+        ]
+      },
+      {
+        "id": "SI-7",
+        "name": "Self Learning",
+        "status": "PASS",
+        "evidence": [
+          "AttemptRecord + lessons"
+        ]
+      },
+      {
+        "id": "SI-8",
+        "name": "Self Optimization",
+        "status": "FAIL",
+        "evidence": [
+          "perf evidence required"
+        ]
+      },
+      {
+        "id": "SI-9",
+        "name": "Self Architecture",
+        "status": "FAIL",
+        "evidence": [
+          "proposal+benchmark required"
+        ]
+      },
+      {
+        "id": "SI-10",
+        "name": "Continuous Improvement",
+        "status": "PARTIAL",
+        "evidence": [
+          "loop.next"
+        ]
+      }
+    ],
+    "verdict": "9.2 SELF-IMPROVEMENT PARTIAL/VERIFIED (see gates); LIVE-MONEY NOT VERIFIED",
+    "roadmap": [
+      "8.45 engineering",
+      "8.5 / 9.0 decision autonomy (paper)",
+      "9.2 Self Testing (+ recovery/learning)",
+      "9.4 Self Recovery soak / optimization evidence",
+      "9.6 Self Improvement (architecture proposals proven)",
+      "9.8 Continuous Verified Improvement",
+      "10.0 Controlled Self-Evolving \u2014 separate live + long soak"
+    ],
+    "notes": [
+      "Scores from SI gate evidence only; not inflated.",
+      "SI cannot loosen risk limits / kill switch / LIVE unlock.",
+      "LIVE-MONEY AUTONOMY remains NOT VERIFIED."
+    ]
+  },
+  "waited_for_human": false,
+  "live_money": "NOT VERIFIED"
+}

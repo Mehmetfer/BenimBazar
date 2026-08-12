@@ -16,6 +16,7 @@
 - Pre-trading-safety baseline: **339 passed / 0 failed**
 - Post-trading-safety: **368 passed / 0 failed**
 - Post-ADE final suite: **395 passed / 0 failed**
+- Post-SI final suite: **412 passed / 0 failed**
 - No tests deleted
 
 ## G3 Hard Type Check
@@ -71,3 +72,13 @@ normal paper, provider failure, broker timeout/unknown, duplicate, restart, risk
 - Human never required for signal/symbol/size/timing/approval in paper ADE loop
 - Learning cannot bypass immutable safety limits / kill switch / fail-closed
 - LIVE-MONEY AUTONOMY: NOT VERIFIED
+
+## Self-Improving Software Engine
+
+- Package: `borsa_bot/self_improvement/`
+- Baseline locked at **395 passed** (evolved from historical 339 after trading-safety + ADE)
+- SI level: **9.2/10** (SI-1…SI-7 PASS; SI-8/9 FAIL; SI-10 PARTIAL)
+- Details: `SELF_IMPROVEMENT_REPORT.md`
+- Allowlist-only auto-impl; frozen safety invariants unchanged
+- LIVE-MONEY AUTONOMY: NOT VERIFIED
+

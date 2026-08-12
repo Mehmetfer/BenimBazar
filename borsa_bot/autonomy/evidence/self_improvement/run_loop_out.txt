@@ -1,0 +1,107 @@
+{
+  "engineering_autonomy": 8.45,
+  "decision_autonomy": 8.5,
+  "self_improvement_level": 9.2,
+  "live_money_autonomy": "NOT VERIFIED",
+  "full_level8_claimed": false,
+  "gates": [
+    {
+      "id": "SI-1",
+      "name": "Self Audit",
+      "status": "PASS",
+      "evidence": [
+        "audit_repository"
+      ]
+    },
+    {
+      "id": "SI-2",
+      "name": "Self Planning",
+      "status": "PASS",
+      "evidence": [
+        "BacklogStore"
+      ]
+    },
+    {
+      "id": "SI-3",
+      "name": "Self Implementation",
+      "status": "PASS",
+      "evidence": [
+        "sandbox apply"
+      ]
+    },
+    {
+      "id": "SI-4",
+      "name": "Self Testing",
+      "status": "PASS",
+      "evidence": [
+        "verify pytest"
+      ]
+    },
+    {
+      "id": "SI-5",
+      "name": "Self Regression",
+      "status": "PASS",
+      "evidence": [
+        "baseline lock"
+      ]
+    },
+    {
+      "id": "SI-6",
+      "name": "Self Recovery",
+      "status": "PASS",
+      "evidence": [
+        "sandbox.rollback"
+      ]
+    },
+    {
+      "id": "SI-7",
+      "name": "Self Learning",
+      "status": "PASS",
+      "evidence": [
+        "AttemptRecord + lessons"
+      ]
+    },
+    {
+      "id": "SI-8",
+      "name": "Self Optimization",
+      "status": "FAIL",
+      "evidence": [
+        "perf evidence required"
+      ]
+    },
+    {
+      "id": "SI-9",
+      "name": "Self Architecture",
+      "status": "FAIL",
+      "evidence": [
+        "proposal+benchmark required"
+      ]
+    },
+    {
+      "id": "SI-10",
+      "name": "Continuous Improvement",
+      "status": "PASS",
+      "evidence": [
+        "loop.next"
+      ]
+    }
+  ],
+  "verdict": "9.2 SELF-IMPROVEMENT PARTIAL/VERIFIED (see gates); LIVE-MONEY NOT VERIFIED",
+  "roadmap": [
+    "8.45 engineering",
+    "8.5 / 9.0 decision autonomy (paper)",
+    "9.2 Self Testing (+ recovery/learning)",
+    "9.4 Self Recovery soak / optimization evidence",
+    "9.6 Self Improvement (architecture proposals proven)",
+    "9.8 Continuous Verified Improvement",
+    "10.0 Controlled Self-Evolving \u2014 separate live + long soak"
+  ],
+  "notes": [
+    "Scores from SI gate evidence only; not inflated.",
+    "SI cannot loosen risk limits / kill switch / LIVE unlock.",
+    "LIVE-MONEY AUTONOMY remains NOT VERIFIED."
+  ]
+}
+..............                                                           [100%]
+14 passed in 1.07s
+

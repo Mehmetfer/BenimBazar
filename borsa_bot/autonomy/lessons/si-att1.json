@@ -1,0 +1,14 @@
+{
+  "id": "si-att1",
+  "title": "Execution retry changes require idempotency regression suite",
+  "error_class": "SELF_IMPROVEMENT_FAILURE",
+  "root_cause": "timeout without idempotency",
+  "fix_summary": "self_improvement/x.py",
+  "regression_test": "tests/test_self_improvement.py",
+  "architectural_decision": "Execution retry changes require idempotency regression suite",
+  "created_at": "2026-08-12T06:17:16.920167+00:00",
+  "prevents": [
+    "repeat_same_failed_patch"
+  ],
+  "live_trading_impact": "NONE — lessons never unlock LIVE broker"
+}
