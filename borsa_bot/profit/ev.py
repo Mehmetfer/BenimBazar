@@ -157,14 +157,15 @@ def decide_matrix(
 
     if (
         scores.final >= cfg.strong_buy_threshold
-        and opp.p_win >= 0.62
-        and opp.expected_value > 0.8
-        and scores.risk <= 35
-        and scores.liquidity >= 60
+        and opp.p_win >= 0.55
+        and opp.expected_value > 0.3
+        and scores.risk <= 40
+        and scores.liquidity >= 45
     ):
         return SignalAction.STRONG_BUY
     if (
         scores.final >= cfg.buy_score_threshold
+        and scores.final < cfg.strong_buy_threshold
         and opp.expected_value > 0.0
         and opp.risk_reward >= cfg.min_risk_reward
         and scores.market >= 45
