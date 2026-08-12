@@ -216,6 +216,28 @@
     .tv-head .sym{font-size:1.2rem;font-weight:800}
     .tv-chart{height:460px}
     .tv-chart iframe{width:100%!important;height:100%!important;border:0;display:block}
+    /* Settings — simple first, advanced collapsed */
+    #panel-set h2{margin-bottom:4px}
+    #panel-set > .why.set-lead{margin-bottom:12px}
+    .set-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px}
+    .set-card h3{margin:0 0 6px;font-size:1rem;font-weight:800}
+    .set-card .set-note{margin:0 0 10px;font-size:.8rem;color:var(--mute);line-height:1.35}
+    .set-status{display:flex;flex-direction:column;gap:8px}
+    .set-row{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.88rem}
+    .set-row span{color:var(--mute)}
+    .set-row b{font-weight:800;text-align:right}
+    .set-row b.warn{color:#ffb4b4}
+    .set-row b.ok{color:var(--buy2)}
+    .set-modes{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:4px 0 10px}
+    .set-modes .filter{min-height:44px;border-radius:12px;font-size:.82rem;font-weight:800}
+    .set-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .set-actions .more{flex:1;min-width:120px;min-height:44px}
+    .set-halt{border-color:#c44b4b!important;color:#ffb4b4!important}
+    .set-adv-toggle{width:100%;min-height:48px;border-radius:14px;border:1px dashed var(--line);background:transparent;color:var(--mute);font:inherit;font-weight:700;margin:4px 0 10px}
+    .set-adv-toggle[aria-expanded="true"]{color:var(--ink);border-style:solid}
+    .set-adv[hidden]{display:none!important}
+    .set-adv .set-card h3{font-size:.92rem}
+    .set-adv .meta{font-size:.75rem;line-height:1.4;word-break:break-word}
     @media (max-width:560px){
       .crypto-card .grid{display:none}
       .crypto-card .chg,.crypto-card .meta.desktop-only{display:none}
@@ -465,67 +487,106 @@
   </div>
 
   <div class="panel" id="panel-set">
-    <h2>⚙ Sistem</h2>
-    <div class="card" id="sysHealth" style="cursor:default"></div>
-    <div class="card" style="cursor:default" id="liveMoneyCard">
-      <div class="why"><b>CANLI PARA ALTYAPISI</b> · varsayılan KİLİTLİ</div>
-      <div id="liveMoneyBody" class="meta" style="margin-top:8px">Yükleniyor…</div>
-      <div class="meta" style="margin-top:6px">İleride açılır · şimdi sadece paper · LIVE READY: HAYIR</div>
-    </div>
-    <div class="card" style="cursor:default" id="autonomyCard">
-      <div class="why"><b>OTONOMİ</b> — SIGNAL ≠ ORDER · DESK gate · LIVE kilitli</div>
-      <div class="filters" id="autonomyModes" style="margin-top:8px">
-        <button class="filter" data-amode="PAPER" type="button">PAPER</button>
-        <button class="filter" data-amode="SEMI_AUTO" type="button">SEMI</button>
-        <button class="filter" data-amode="AUTO" type="button">AUTO</button>
-        <button class="filter" data-amode="PAUSED" type="button">PAUSE</button>
-      </div>
-      <div class="filters" id="execModes" style="margin-top:6px">
-        <button class="filter" data-emode="PAPER" type="button">Exec PAPER</button>
-        <button class="filter" data-emode="SHADOW" type="button">SHADOW</button>
-        <button class="filter" data-emode="LIVE" type="button">LIVE*</button>
-      </div>
-      <div id="autonomyMeta" class="meta" style="margin-top:8px">—</div>
-      <div id="autonomyHonesty" class="meta" style="margin-top:6px">—</div>
-      <div id="autonomyDesk" class="meta" style="margin-top:6px">Desk: —</div>
-      <div id="autonomyEvents" class="meta" style="margin-top:6px;max-height:120px;overflow:auto">—</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
-        <button class="more" id="autonomyCycleBtn" type="button">Engine cycle (BIST)</button>
-        <button class="more" id="autonomyHaltBtn" type="button" style="border-color:#c44b4b;color:#ffb4b4">HALT</button>
-        <button class="more" id="autonomyClearHaltBtn" type="button">Halt temizle</button>
+    <h2>Ayarlar</h2>
+    <p class="why set-lead">Paper işlem · gerçek para yok · sinyal otomatik emir değildir</p>
+
+    <div class="set-card" id="sysHealth">
+      <h3>Durum</h3>
+      <div class="set-status" id="setStatusBody">
+        <div class="set-row"><span>Veri</span><b>Yükleniyor…</b></div>
+        <div class="set-row"><span>İşlem</span><b>Paper</b></div>
+        <div class="set-row"><span>Canlı para</span><b class="ok">Kapalı</b></div>
       </div>
     </div>
-    <div class="card" style="cursor:default" id="aiDecisionCard">
-      <div class="why"><b>AI STATUS</b> ● <span id="aiStatusDot">—</span></div>
-      <div id="aiDecisionBody" class="meta" style="margin-top:8px">Yükleniyor…</div>
-      <div class="meta" style="margin-top:6px">confidence ≠ probability · RiskEngine final · broker direct: HAYIR</div>
+
+    <div class="set-card" id="autonomyCard">
+      <h3>Otomatik işlem</h3>
+      <p class="set-note">Bot ne kadar kendi başına karar versin? Canlı emir yolu kilitli.</p>
+      <div class="set-modes" id="autonomyModes">
+        <button class="filter" data-amode="PAPER" type="button">Manuel</button>
+        <button class="filter" data-amode="SEMI_AUTO" type="button">Onaylı</button>
+        <button class="filter" data-amode="AUTO" type="button">Otomatik</button>
+        <button class="filter" data-amode="PAUSED" type="button">Duraklat</button>
+      </div>
+      <div class="set-status" style="margin-bottom:10px">
+        <div class="set-row"><span>Durum</span><b id="setAutoState">—</b></div>
+        <div class="set-row"><span>Son tur</span><b id="setAutoCycle">—</b></div>
+        <div class="set-row"><span>Desk kapısı</span><b id="setDeskGate">—</b></div>
+      </div>
+      <div class="set-actions">
+        <button class="more set-halt" id="autonomyHaltBtn" type="button">Durdur</button>
+        <button class="more" id="autonomyClearHaltBtn" type="button">Devam et</button>
+        <button class="more" id="autonomyCycleBtn" type="button">Bir tur çalıştır</button>
+      </div>
+      <!-- kept for JS compatibility; not shown in simple view -->
+      <div id="autonomyMeta" class="meta" hidden>—</div>
+      <div id="autonomyHonesty" class="meta" hidden>—</div>
+      <div id="autonomyDesk" class="meta" hidden>—</div>
+      <div id="autonomyEvents" class="meta" hidden>—</div>
     </div>
-    <div class="card" style="cursor:default" id="aiCommandCard">
-      <div class="why"><b>AI COMMAND CENTER</b></div>
-      <div id="aiCommandBody" class="meta" style="margin-top:8px">Cycle çalıştırın…</div>
-      <div id="aiActivity" class="meta" style="margin-top:8px;max-height:140px;overflow:auto"></div>
+
+    <button type="button" class="set-adv-toggle" id="setAdvToggle" aria-expanded="false" aria-controls="setAdvanced">Gelişmiş ayarlar ▾</button>
+
+    <div class="set-adv" id="setAdvanced" hidden>
+      <div class="set-card" id="liveMoneyCard">
+        <h3>Canlı para</h3>
+        <p class="set-note">Altyapı hazır · emir yolu kilitli · şimdilik sadece paper</p>
+        <div id="liveMoneyBody" class="meta">Yükleniyor…</div>
+      </div>
+
+      <div class="set-card">
+        <h3>Emir yolu</h3>
+        <p class="set-note">LIVE seçilse bile broker kapalı kalır</p>
+        <div class="filters" id="execModes">
+          <button class="filter" data-emode="PAPER" type="button">Paper</button>
+          <button class="filter" data-emode="SHADOW" type="button">Gölge</button>
+          <button class="filter" data-emode="LIVE" type="button">Canlı*</button>
+        </div>
+        <div id="setAdvAutoMeta" class="meta" style="margin-top:8px">—</div>
+        <div id="setAdvDesk" class="meta" style="margin-top:6px">—</div>
+        <div id="setAdvEvents" class="meta" style="margin-top:6px;max-height:120px;overflow:auto">—</div>
+      </div>
+
+      <div class="set-card" id="aiDecisionCard">
+        <h3>AI özeti</h3>
+        <div class="meta">Durum: <span id="aiStatusDot">—</span></div>
+        <div id="aiDecisionBody" class="meta" style="margin-top:8px">Yükleniyor…</div>
+      </div>
+
+      <div class="set-card" id="aiCommandCard">
+        <h3>Komuta özeti</h3>
+        <div id="aiCommandBody" class="meta" style="margin-top:8px">—</div>
+        <div id="aiActivity" class="meta" style="margin-top:8px;max-height:120px;overflow:auto"></div>
+      </div>
+
+      <div class="set-card" id="aiAutonomyCard">
+        <h3>Öğrenme skoru</h3>
+        <div id="aiAutonomyBody" class="meta" style="margin-top:8px">—</div>
+      </div>
+
+      <div class="set-card" id="level7Card">
+        <h3>Araştırma (L7)</h3>
+        <div id="level7Body" class="meta" style="margin-top:8px">—</div>
+        <div id="level7Diag" class="meta" style="margin-top:6px">—</div>
+        <button class="more" id="level7CycleBtn" type="button" style="margin-top:8px">Araştırma turu</button>
+      </div>
+
+      <div class="set-card" id="level8Card">
+        <h3>Sürekli öğrenme (L8)</h3>
+        <div id="level8Body" class="meta" style="margin-top:8px">—</div>
+        <div id="level8Stats" class="meta" style="margin-top:6px">—</div>
+        <div class="set-actions" style="margin-top:8px">
+          <button class="more" id="level8CycleBtn" type="button">Saatlik tur</button>
+          <button class="more" id="level8AcceptBtn" type="button">Kabul zinciri</button>
+        </div>
+      </div>
+
+      <div class="set-card">
+        <h3>Tahmin performansı</h3>
+        <div id="aiPerf" class="meta" style="margin-top:4px">Yükleniyor…</div>
+      </div>
     </div>
-    <div class="card" style="cursor:default" id="aiAutonomyCard">
-      <div class="why"><b>AI AUTONOMY</b></div>
-      <div id="aiAutonomyBody" class="meta" style="margin-top:8px">—</div>
-    </div>
-    <div class="card" style="cursor:default" id="level7Card">
-      <div class="why"><b>LEVEL 7 — RESEARCH / LAB</b></div>
-      <div id="level7Body" class="meta" style="margin-top:8px">—</div>
-      <div id="level7Diag" class="meta" style="margin-top:6px">—</div>
-      <button class="more" id="level7CycleBtn" type="button" style="margin-top:8px">L7 Research Cycle</button>
-    </div>
-    <div class="card" style="cursor:default" id="level8Card">
-      <div class="why"><b>LEVEL 8 — CONTINUOUS LEARNING</b></div>
-      <div id="level8Body" class="meta" style="margin-top:8px">—</div>
-      <div id="level8Stats" class="meta" style="margin-top:6px">—</div>
-      <button class="more" id="level8CycleBtn" type="button" style="margin-top:8px">L8 Hourly</button>
-      <button class="more" id="level8AcceptBtn" type="button" style="margin-top:8px;margin-left:6px">Acceptance Chain</button>
-    </div>
-    <div class="card" style="cursor:default">
-      <div class="why"><b>AI PERFORMANCE</b> — ana sayfada gösterilmez.</div>
-      <div id="aiPerf" class="why" style="margin-top:8px">Yükleniyor…</div>
-    </div>
+
     <button class="more" id="refresh" type="button">Yenile</button>
   </div>
 
@@ -1340,7 +1401,10 @@
     if(name==='port') loadPortfolio();
     if(name==='fav') loadFavorites({silent: !!document.getElementById('favHome')?.querySelector('.watch-tile')});
     if(name==='mkt') loadBist100();
-    if(name==='set') load({quick:true, quiet:true});
+    if(name==='set'){
+      loadAutonomy();
+      load({quick:true, quiet:true});
+    }
   }
 
   function pnlClass(n){
@@ -2070,18 +2134,21 @@
         dash = await (await fetch('/api/dashboard', { signal: ctrl.signal })).json();
         clearTimeout(timer);
         const sh = (dash.health||{}).system_health||{};
-        document.getElementById('sysHealth').innerHTML = `
-          <div class="why"><b>SYSTEM HEALTH</b></div>
-          <div class="grid" style="margin-top:8px">
-            <div class="k"><span>Market Data</span><b>${sh.market_data||'—'}</b></div>
-            <div class="k"><span>Broker</span><b>${sh.broker||'—'}</b></div>
-            <div class="k"><span>AI</span><b>${sh.ai||'—'}</b></div>
-            <div class="k"><span>Notifications</span><b>${sh.notifications||'—'}</b></div>
-          </div>
-          <div class="meta" style="margin-top:8px">Last update: ${sh.last_update_ago||'—'} · LIVE READY: HAYIR</div>
-          <div class="meta">${(dash.health||{}).philosophy||''}</div>`;
+        const ds = (dash.data_source||daily?.integrity||{});
+        const setBody = document.getElementById('setStatusBody');
+        if(setBody){
+          const md = sh.market_data || ds.status || '—';
+          setBody.innerHTML = `
+            <div class="set-row"><span>Veri</span><b>${md}</b></div>
+            <div class="set-row"><span>İşlem</span><b>Paper</b></div>
+            <div class="set-row"><span>Canlı para</span><b class="ok">Kapalı</b></div>
+            <div class="set-row"><span>Son güncelleme</span><b>${sh.last_update_ago||'—'}</b></div>`;
+        }
         const rep = await (await fetch('/api/predictions/report')).json();
-        document.getElementById('aiPerf').innerHTML = `Grade: ${rep.grade||'—'} · Geçmiş doğruluk: %${rep.historical_accuracy_pct??'—'} · Brier: ${rep.brier_score??'—'} · n=${rep.sample_size||0}<br>${rep.principle||''}`;
+        const perf = document.getElementById('aiPerf');
+        if(perf){
+          perf.innerHTML = `Not: ${rep.grade||'—'} · Doğruluk %${rep.historical_accuracy_pct??'—'} · örnek ${rep.sample_size||0}`;
+        }
         await loadAutonomy();
         bindCards();
       } catch(e) {}
@@ -2090,19 +2157,17 @@
   }
 
   async function loadAutonomy(){
+    const MODE_TR = {PAPER:'Manuel', SEMI_AUTO:'Onaylı', AUTO:'Otomatik', PAUSED:'Duraklatılmış'};
     try{
       const live = await (await fetch('/api/live/status')).json();
       const el = document.getElementById('liveMoneyBody');
       if(el){
-        const f = live.flags||{};
-        el.innerHTML =
-          `<b>${live.verdict||'FOUNDATION_ONLY'}</b> · readiness ${live.live_money_readiness||'NOT VERIFIED'}<br>`+
-          `Adapter: ${(live.adapter&&live.adapter.adapter_name)||'LiveBrokerDisabled'} · enabled=${f.LIVE_BROKER_ENABLED} · confirmed=${f.LIVE_CONFIRMED}<br>`+
-          `DRY_RUN=${f.LIVE_DRY_RUN} · AUTH=${f.AUTH_ENABLED} · ${live.message||''}`;
+        el.textContent = (live.message || 'Canlı para kapalı · sadece paper') +
+          ` · hazırlık: ${live.live_money_readiness||'doğrulanmadı'}`;
       }
     }catch(_e){
       const el = document.getElementById('liveMoneyBody');
-      if(el) el.textContent = 'Live status API yok — paper only';
+      if(el) el.textContent = 'Canlı para kapalı · paper only';
     }
     try{
       const st = await (await fetch('/api/autonomy/status')).json();
@@ -2114,99 +2179,158 @@
       document.querySelectorAll('#execModes .filter').forEach(b=>{
         b.classList.toggle('on', b.dataset.emode===em);
       });
-      const lvl = st.autonomy_level||{};
       const last = st.last_cycle||{};
       const dg = (last.desk_gate&&last.desk_gate.stats)||{};
-      document.getElementById('autonomyMeta').innerHTML =
-        `Trading L${lvl.level??'?'} <b>${lvl.label||''}</b> · ${st.autonomous_status||'—'}`+
-        ` · User <b>${mode}</b> · Exec <b>${em}</b>`+
-        ` · blocked=${st.blocked} · gov ${(st.governor||{}).state||'—'}`+
-        ` · LIVE ${st.live_broker||'DISABLED'}`+
-        (st.halted ? ` · <b style="color:#ff6b6b">HALTED</b> ${st.halt_reason||''}` : '')+
-        `<br>Son cycle: ${last.status||'—'} · orders=${last.orders_submitted??'—'} · desk ${dg.allowed??0}/${dg.evaluated??0} geçti`;
-      const h = st.honesty||{};
-      let honesty = `DESK_GATE_AUTO=${st.desk_gate_auto!==false?'ON':'OFF'} · full_L8_claimed=${h.full_level8_claimed===true} · LIVE READY=HAYIR · SIGNAL≠ORDER`;
-      if(h.live_exec_selected_but_locked){
-        honesty = `⚠ LIVE* seçili ama broker KİLİTLİ — emir yok · ` + honesty;
+      const stateEl = document.getElementById('setAutoState');
+      const cycleEl = document.getElementById('setAutoCycle');
+      const deskEl = document.getElementById('setDeskGate');
+      if(stateEl){
+        if(st.halted){
+          stateEl.textContent = 'Durduruldu';
+          stateEl.className = 'warn';
+        } else if(mode === 'PAUSED'){
+          stateEl.textContent = 'Duraklatılmış';
+          stateEl.className = 'warn';
+        } else if(mode === 'AUTO'){
+          stateEl.textContent = 'Otomatik (paper)';
+          stateEl.className = 'ok';
+        } else if(mode === 'SEMI_AUTO'){
+          stateEl.textContent = 'Onay bekler';
+          stateEl.className = 'ok';
+        } else {
+          stateEl.textContent = 'Manuel';
+          stateEl.className = '';
+        }
       }
-      document.getElementById('autonomyHonesty').textContent = honesty;
+      if(cycleEl){
+        const orders = last.orders_submitted;
+        cycleEl.textContent = last.status
+          ? `${last.status}${orders!=null?(' · '+orders+' emir'):''}`
+          : 'Henüz yok';
+      }
+      if(deskEl){
+        const on = st.desk_gate_auto !== false;
+        deskEl.textContent = on
+          ? `Açık · ${dg.allowed??0}/${dg.evaluated??0} geçti`
+          : 'Kapalı';
+        deskEl.className = on ? 'ok' : '';
+      }
+      const metaHtml =
+        `${MODE_TR[mode]||mode} · emir yolu ${em}`+
+        (st.halted ? ' · DURDURULDU' : '')+
+        `<br>Son tur: ${last.status||'—'} · emir ${last.orders_submitted??'—'} · desk ${dg.allowed??0}/${dg.evaluated??0}`;
+      const meta = document.getElementById('autonomyMeta');
+      if(meta) meta.innerHTML = metaHtml;
+      const advMeta = document.getElementById('setAdvAutoMeta');
+      if(advMeta) advMeta.innerHTML = metaHtml +
+        `<br>Desk kapısı ${st.desk_gate_auto!==false?'açık':'kapalı'} · canlı hazır değil · sinyal ≠ emir`;
+      const honesty = document.getElementById('autonomyHonesty');
+      if(honesty){
+        honesty.textContent = st.halted
+          ? `Durdurma nedeni: ${st.halt_reason||'manuel'}`
+          : 'Paper only · canlı broker kilitli';
+      }
     }catch(e){
-      document.getElementById('autonomyMeta').textContent = 'Autonomy API yok';
+      const meta = document.getElementById('autonomyMeta');
+      if(meta) meta.textContent = 'Otonomi durumu alınamadı';
+      const stateEl = document.getElementById('setAutoState');
+      if(stateEl) stateEl.textContent = 'Bağlantı yok';
     }
     try{
       const br = await (await fetch('/api/desk/briefing')).json();
       const b = br.briefing || br;
-      document.getElementById('autonomyDesk').textContent =
+      const deskTxt =
         `Desk: ${b.market_regime||b.regime||'—'} · risk ${b.risk_posture||b.risk||'—'} · `+
-        `fırsat ${(b.top_opportunities||b.opportunities||[]).length||0} · ${b.note||b.summary||'committee+pipeline'}`;
+        `fırsat ${(b.top_opportunities||b.opportunities||[]).length||0}`;
+      const d1 = document.getElementById('autonomyDesk');
+      const d2 = document.getElementById('setAdvDesk');
+      if(d1) d1.textContent = deskTxt;
+      if(d2) d2.textContent = deskTxt;
     }catch(_e){
-      document.getElementById('autonomyDesk').textContent = 'Desk briefing yok';
+      const d1 = document.getElementById('autonomyDesk');
+      const d2 = document.getElementById('setAdvDesk');
+      if(d1) d1.textContent = 'Desk özeti yok';
+      if(d2) d2.textContent = 'Desk özeti yok';
     }
     try{
       const ev = await (await fetch('/api/autonomy/events?limit=12')).json();
       const rows = (ev.events||ev||[]).slice(-10).reverse();
-      document.getElementById('autonomyEvents').innerHTML = rows.length
+      const html = rows.length
         ? rows.map(e=>{
             const ts = (e.ts||e.created_at||'').toString().slice(11,19);
             const sym = e.symbol ? ` ${e.symbol}` : '';
             const why = (e.payload&& (e.payload.reason||e.payload.desk_reason)) || '';
             return `${ts} <b>${e.event_type||e.type||'?'}</b>${sym}${why?(' · '+why):''}`;
           }).join('<br>')
-        : 'Henüz autonomy event yok — cycle çalıştırın';
+        : 'Henüz olay yok — bir tur çalıştırın';
+      const e1 = document.getElementById('autonomyEvents');
+      const e2 = document.getElementById('setAdvEvents');
+      if(e1) e1.innerHTML = html;
+      if(e2) e2.innerHTML = html;
     }catch(_e){
-      document.getElementById('autonomyEvents').textContent = 'Events API yok';
+      const e1 = document.getElementById('autonomyEvents');
+      const e2 = document.getElementById('setAdvEvents');
+      if(e1) e1.textContent = 'Olay listesi yok';
+      if(e2) e2.textContent = 'Olay listesi yok';
     }
     try{
       const ai = await (await fetch('/api/ai/status')).json();
       const last = (ai.last_cycle||{});
       const card = last.top_card||{};
-      document.getElementById('aiStatusDot').textContent = ai.ai_status||last.ai_status||'IDLE';
-      document.getElementById('aiDecisionBody').innerHTML =
-        `<b>${card.symbol||'—'}</b> · ${card.ai_decision||'NO_TRADE'} · conf ${card.confidence??'—'} (${card.confidence_label||'score≠P'})<br>`+
-        `EV ${card.expected_value??'—'} · risk ${card.risk_pct??'—'} · RR ${card.risk_reward??'—'} · regime ${card.regime||'—'} · ${card.strategy||''}<br>`+
-        `Bull: ${(card.bull_case||[]).slice(0,3).join(', ')||'—'}<br>`+
-        `Bear: ${(card.bear_case||[]).slice(0,3).join(', ')||'—'}<br>`+
-        `Critic: ${(card.critic||[]).slice(0,2).join(' · ')||'—'}<br>`+
-        `Quality ${(card.quality||{}).total??'—'} · Gov ${(card.governor||{}).verdict||'—'} · risk_bypass=NO`;
+      const dot = document.getElementById('aiStatusDot');
+      if(dot) dot.textContent = ai.ai_status||last.ai_status||'IDLE';
+      const body = document.getElementById('aiDecisionBody');
+      if(body){
+        body.innerHTML =
+          `<b>${card.symbol||'—'}</b> · ${card.ai_decision||'NO_TRADE'} · güven ${card.confidence??'—'}<br>`+
+          `Rejim ${card.regime||'—'} · ${card.strategy||'—'}`;
+      }
       const cc = await (await fetch('/api/ai/command-center')).json();
       const c = cc.command_center||{};
-      const tops = (c.top||[]).map((t,i)=>`#${i+1} ${t.symbol||'—'} ${t.action||'—'} Q${t.quality??'—'}`).join('<br>');
-      document.getElementById('aiCommandBody').innerHTML =
-        `Market: <b>${c.market||'—'}</b> · Data: ${c.data||'—'}<br>`+
-        `Scanned: ${c.symbols_scanned??'—'} · Opportunities: ${c.opportunities??'—'} · Strong: ${c.strong_setups??0}<br>`+
-        `Governor: ${c.governor||'—'} · Health: ${c.health_score??'—'} · Fallback: ${c.fallback||ai.fallback||'QUANT'}<br>`+
-        (tops||'Top: —');
-      document.getElementById('aiActivity').innerHTML = (cc.activity||[]).slice(-8).map(e=>`${(e.ts||'').slice(11,19)} ${e.message}`).join('<br>')||'';
+      const tops = (c.top||[]).slice(0,3).map((t,i)=>`#${i+1} ${t.symbol||'—'} ${t.action||'—'}`).join(' · ');
+      const cmd = document.getElementById('aiCommandBody');
+      if(cmd){
+        cmd.innerHTML =
+          `Piyasa <b>${c.market||'—'}</b> · tarama ${c.symbols_scanned??'—'} · fırsat ${c.opportunities??'—'}<br>`+
+          (tops||'Öneri yok');
+      }
+      const act = document.getElementById('aiActivity');
+      if(act){
+        act.innerHTML = (cc.activity||[]).slice(-6).map(e=>`${(e.ts||'').slice(11,19)} ${e.message}`).join('<br>')||'';
+      }
       const aut = cc.autonomy||{};
-      document.getElementById('aiAutonomyBody').innerHTML =
-        `Level ${aut.autonomy_level??'?'} ${aut.autonomy_label||''} · TOTAL <b>${aut.total_autonomy??'—'}</b><br>`+
-        `Market ${aut.market_understanding??'—'} · Discovery ${aut.opportunity_discovery??'—'} · Reasoning ${aut.reasoning??'—'}<br>`+
-        `Risk ${aut.risk_awareness??'—'} · Pred ${aut.prediction_accuracy??'—'} · Adapt ${aut.adaptability??'—'} · Self ${aut.self_evaluation??'—'}`;
+      const autEl = document.getElementById('aiAutonomyBody');
+      if(autEl){
+        autEl.textContent =
+          `Toplam ${aut.total_autonomy??'—'} · piyasa ${aut.market_understanding??'—'} · risk ${aut.risk_awareness??'—'}`;
+      }
       const l7 = await (await fetch('/api/level7/status')).json();
       const sc = (l7.scorecard||(l7.last_cycle||{}).scorecard)||{};
-      const arena = l7.champion||{};
-      document.getElementById('level7Body').innerHTML =
-        `Score <b>${sc.level7_autonomy_score??'—'}</b> · maturity L${sc.operational_maturity_level??'?'} ${sc.maturity_label||''}<br>`+
-        `Research ${sc.research_intelligence??'—'} · Decision ${sc.decision_intelligence??'—'} · Risk ${sc.risk_intelligence??'—'}<br>`+
-        `Learning ${sc.learning_intelligence??'—'} · SelfDiag ${sc.self_diagnostic_score??'—'} · Data ${sc.data_integrity??'—'} · Exec ${sc.execution_safety??'—'}<br>`+
-        `Q open ${l7.research_open??0} · Hyp ${l7.hypotheses??0} · Exp ${l7.experiments??0}<br>`+
-        `Champion: ${((arena.champion||{}).name)||'—'} ${((arena.champion||{}).version)||''} · Challengers ${(arena.challengers||[]).length}<br>`+
-        `<span class="meta">full_level7_claimed=false · auto_promote=NO · LIVE locked</span>`;
+      const l7b = document.getElementById('level7Body');
+      if(l7b){
+        l7b.textContent =
+          `Skor ${sc.level7_autonomy_score??'—'} · açık soru ${l7.research_open??0} · hipotez ${l7.hypotheses??0}`;
+      }
       const dg = await (await fetch('/api/level7/diagnostics')).json();
-      const bad = ((dg.diagnostics||{}).what_am_i_doing_badly||[]).slice(0,3).join(' · ')||'—';
-      document.getElementById('level7Diag').textContent = 'Self-diag: '+bad;
+      const bad = ((dg.diagnostics||{}).what_am_i_doing_badly||[]).slice(0,2).join(' · ')||'—';
+      const l7d = document.getElementById('level7Diag');
+      if(l7d) l7d.textContent = 'Zayıf yan: '+bad;
       const l8 = await (await fetch('/api/level8/status')).json();
       const sc8 = (l8.scorecard||(l8.last_cycle||{}).scorecard)||{};
       const st8 = sc8.stats||{};
-      document.getElementById('level8Body').innerHTML =
-        `CL Score <b>${sc8.continuous_learning_score??'—'}</b> · ${sc8.maturity_label||''}<br>`+
-        `Research ${sc8.research_score??'—'} · SelfDiag ${sc8.self_diagnostic_score??'—'} · ModelAdapt ${sc8.model_adaptation_score??'—'}<br>`+
-        `StrategyAdapt ${sc8.strategy_adaptation_score??'—'} · Data ${sc8.data_integrity??'—'} · RiskSafety ${sc8.risk_safety??'—'}<br>`+
-        `<span class="meta">full_level8_claimed=false · auto_promote=NO · risk_limits=DENIED</span>`;
-      document.getElementById('level8Stats').textContent =
-        `Exp ${st8.total_experiments??0} · ValidHyp ${st8.validated_hypotheses??0} · Rejected ${st8.rejected_hypotheses??0} · Challengers ${st8.active_challengers??0} · PromoCand ${st8.promotion_candidates??0} · Drifts ${st8.detected_drifts??0} · Patterns ${st8.learned_patterns??0} · RootCauses ${st8.root_causes??0}`;
+      const l8b = document.getElementById('level8Body');
+      if(l8b){
+        l8b.textContent =
+          `Skor ${sc8.continuous_learning_score??'—'} · ${sc8.maturity_label||'lab'}`;
+      }
+      const l8s = document.getElementById('level8Stats');
+      if(l8s){
+        l8s.textContent =
+          `Deney ${st8.total_experiments??0} · geçerli ${st8.validated_hypotheses??0} · red ${st8.rejected_hypotheses??0}`;
+      }
     }catch(e){
-      document.getElementById('aiDecisionBody').textContent = 'AI API yok';
+      const body = document.getElementById('aiDecisionBody');
+      if(body) body.textContent = 'AI özeti alınamadı';
     }
   }
 
@@ -2231,17 +2355,32 @@
     await fetch('/api/autonomy/execution-mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({execution_mode:b.dataset.emode})});
     await loadAutonomy();
   });
+  const setAdvToggle = document.getElementById('setAdvToggle');
+  if(setAdvToggle){
+    setAdvToggle.onclick = ()=>{
+      const panel = document.getElementById('setAdvanced');
+      const open = panel.hasAttribute('hidden');
+      if(open) panel.removeAttribute('hidden');
+      else panel.setAttribute('hidden','');
+      setAdvToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      setAdvToggle.textContent = open ? 'Gelişmiş ayarlar ▴' : 'Gelişmiş ayarlar ▾';
+    };
+  }
   document.getElementById('autonomyCycleBtn').onclick=async()=>{
-    document.getElementById('autonomyMeta').textContent = 'Engine cycle…';
+    const cycleEl = document.getElementById('setAutoCycle');
+    if(cycleEl) cycleEl.textContent = 'Çalışıyor…';
+    document.getElementById('autonomyMeta').textContent = 'Tur çalışıyor…';
     const r = await (await fetch('/api/autonomy/cycle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({market:'BIST',force:true,use_engine:true})})).json();
     const f = r.filter_stats||{};
     const dg = (r.desk_gate&&r.desk_gate.stats)||{};
+    const summary = `${r.status||'—'} · emir ${r.orders_submitted??0} · desk ${dg.allowed??0}/${dg.evaluated??0}`;
+    if(cycleEl) cycleEl.textContent = summary;
     document.getElementById('autonomyMeta').textContent =
-      `${r.status} · exec=${r.execution_mode} · UNIVERSE=${f.UNIVERSE??'—'} DEEP=${f.DEEP_ANALYSIS??r.symbols_scanned??'—'} orders=${r.orders_submitted??0} shadow=${(r.shadow_intents||[]).length} · desk ${dg.allowed??0}/${dg.evaluated??0} · LIVE=${r.live_broker||'DISABLED'}`;
+      `${summary} · tarama ${f.DEEP_ANALYSIS??r.symbols_scanned??'—'}`;
     await loadAutonomy();
   };
   document.getElementById('autonomyHaltBtn').onclick=async()=>{
-    if(!confirm('Otonomi HALT? Yeni AUTO girişler durur.')) return;
+    if(!confirm('Otomatik işlem dursun mu? Yeni girişler durur.')) return;
     await fetch('/api/autonomy/halt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'MANUAL_UI_HALT'})});
     await loadAutonomy();
   };
