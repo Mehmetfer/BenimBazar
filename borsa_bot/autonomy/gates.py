@@ -97,29 +97,8 @@ def run_gates(
     else:
         results.append(GateResult("G2_lint", lint_ok, "ast-parse ok (ruff not required)"))
 
-    # Gate 3 — type check (best-effort: skip if mypy missing; record honesty)
-    mypy = subprocess.run(
-        [sys.executable, "-m", "mypy", "--version"],
-        capture_output=True,
-        text=True,
-    )
-    if mypy.returncode == 0:
-        tc = subprocess.run(
-            [sys.executable, "-m", "mypy", "autonomy", "--ignore-missing-imports"],
-            cwd=str(ROOT),
-            capture_output=True,
-            text=True,
-            env={**__import__("os").environ, "PYTHONPATH": str(ROOT)},
-        )
-        results.append(GateResult("G3_typecheck", tc.returncode == 0, (tc.stdout or "")[-1500:]))
-    else:
-        results.append(
-            GateResult(
-                "G3_typecheck",
-                True,
-                "mypy not installed — gate recorded as SKIP/soft-pass (honest: not fully typed-checked)",
-            )
-        )
+    # Gate 3 — HARD typecheck (scoped critical modules). Soft-pass forbidden.
+    results.append(run_g3_typecheck())
 
     # Gate 4 — unit
     unit = unit_nodes or [
@@ -180,3 +159,53 @@ def run_gates(
 
 def _rename(g: GateResult, name: str) -> GateResult:
     return GateResult(name=name, ok=g.ok, detail=g.detail)
+
+
+G3_TARGETS = [
+    "autonomy",
+    "crypto/providers/factory.py",
+    "crypto/safety.py",
+    "crypto/reliability.py",
+    "execution/safety.py",
+    "autonomous/gates.py",
+    "autonomous/governors.py",
+]
+
+
+def run_g3_typecheck() -> GateResult:
+    """HARD gate: mypy must be installed and scoped critical modules must pass."""
+    mypy = subprocess.run(
+        [sys.executable, "-m", "mypy", "--version"],
+        capture_output=True,
+        text=True,
+    )
+    if mypy.returncode != 0:
+        return GateResult(
+            "G3_typecheck",
+            False,
+            "HARD FAIL: mypy not installed — soft-pass forbidden",
+        )
+    cfg = ROOT / "mypy.ini"
+    cmd = [
+        sys.executable,
+        "-m",
+        "mypy",
+        *G3_TARGETS,
+        "--config-file",
+        str(cfg) if cfg.is_file() else "mypy.ini",
+    ]
+    tc = subprocess.run(
+        cmd,
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+        env={**__import__("os").environ, "PYTHONPATH": str(ROOT)},
+    )
+    detail = ((tc.stdout or "") + "\n" + (tc.stderr or ""))[-2000:]
+    if tc.returncode != 0:
+        return GateResult("G3_typecheck", False, f"HARD FAIL mypy:\n{detail}")
+    return GateResult(
+        "G3_typecheck",
+        True,
+        f"mypy PASS scoped targets={G3_TARGETS}\n{detail}",
+    )

@@ -139,7 +139,7 @@ def test_scorecard_does_not_claim_8_without_levels():
         live_locked=True,
     )
     assert card.overall < 8.0
-    assert card.verdict == "OTONOMİ 8+'A ULAŞMADI"
+    assert card.verdict == "AUTONOMY 8+ NOT VERIFIED"
 
 
 def test_crypto_chart_fail_closed_unknown_symbol():

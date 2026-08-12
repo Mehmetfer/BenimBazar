@@ -224,7 +224,20 @@ def gate_provider_instance(provider: Any, env: AppEnvironment) -> MarketDataGate
             MarketDataGateCode.NON_LIVE_FEED,
             f"{kind.value} ≠ LIVE — not tradeable as live market-data",
         )
-    if kind not in _VERIFIED_KINDS and kind != DataSourceKind.REQUIRED:
+    # REQUIRED = not configured — never allow PRODUCTION signals
+    if kind == DataSourceKind.REQUIRED:
+        return _reject(
+            env,
+            MarketDataGateCode.NO_MARKET_DATA,
+            f"REQUIRED provider_id={pid} — market data not configured; NO TRADE",
+        )
+    if not getattr(provider, "has_market_data", lambda: False)():
+        return _reject(
+            env,
+            MarketDataGateCode.NO_MARKET_DATA,
+            f"provider_id={pid} has_market_data=False — NO TRADE",
+        )
+    if kind not in _VERIFIED_KINDS:
         return _reject(
             env,
             MarketDataGateCode.UNKNOWN_SOURCE,

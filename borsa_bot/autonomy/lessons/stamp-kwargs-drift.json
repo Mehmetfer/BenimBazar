@@ -6,7 +6,7 @@
   "fix_summary": "Remove kind=; set data_source_kind on the model before stamp.",
   "regression_test": "tests/test_crypto_public_md.py::test_okx_provider_live_smoke",
   "architectural_decision": "Contract helpers must stay the single source of stamp kwargs; callers match signatures.",
-  "created_at": "2026-08-12T05:23:33.022054+00:00",
+  "created_at": "2026-08-12T05:36:29.619335+00:00",
   "prevents": [
     "unexpected keyword argument 'kind'",
     "quote stamp TypeError"

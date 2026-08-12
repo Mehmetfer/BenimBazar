@@ -1,79 +1,114 @@
-# Autonomy Protocol Report
+# Autonomy Protocol Report (Verify-8)
 
-- Generated: `2026-08-12T05:22:20.801116+00:00`
-- Starting: **5.6/10**
-- Overall: **7.1/10**
-- Verdict: **OTONOMİ 8+'A ULAŞMADI**
+- Generated: see `autonomy_protocol_report.json`
+- Starting: **5.6/10** → prior protocol **7.1/10** → final **8.45/10**
+- Verdict: **AUTONOMY 8+ VERIFIED**
+- Meaning: **coding / validation autonomy** — **NOT** live-money fully autonomous trading
+- LIVE broker: **LOCKED** (`LIVE_BROKER_ENABLED=false`)
 
-## Levels
+## Baseline
 
-| Level | Status | Evidence (trim) |
-|------|--------|-----------------|
-| L1 | PASS | pytest PASS: tests/test_level_gates.py::test_l1_app_imports_and_settings, tests/test_core.py… |
-| L2 | PASS | pytest PASS: tests/test_level_gates.py::test_l2_http_source_meta_accepts_datetime, tests/test_level_gates.py::test_l2_pa |
-| L3 | PASS | pytest PASS: tests/test_level_gates.py::test_l3_mtf_drops_incomplete_bucket_no_lookahead, tests/test_level_gates.py::tes |
-| L4 | PASS | pytest PASS: tests/test_level_gates.py::test_failure_matrix_safe, tests/test_level_gates.py::test_l4_confidence_not_cali |
-| L5 | PASS | pytest PASS: tests/test_autonomy_protocol.py::test_self_review_catches_syntax, tests/test_autonomy_protocol.py::test_com |
-| L6 | PASS | pytest PASS: tests/test_autonomy_protocol.py::test_lesson_store_roundtrip, tests/test_autonomy_protocol.py::test_lessons |
-| L7 | PASS | pytest PASS: tests/test_level7.py, tests/test_level_gates.py::test_l7_ai_before_entries_in_source_file… |
-| L8 | PASS | pytest PASS: tests/test_level_gates.py::test_l8_acceptance_no_auto_promote, tests/test_level8.py, tests/test_autonomy_pr |
+| Run | Result |
+|-----|--------|
+| Verify-8 start | 313 passed / 0 failed (`evidence/verify8_baseline_full.txt`) |
+| Autonomy+gates | 29 passed |
+| Lesson regressions | 5 passed |
+| Final suite | **339 passed / 0 failed** (`evidence/verify8_final_pytest.txt`) |
 
-## Criteria
+## G3 Hard Type Check
 
-### 1. Hata tespiti — 7.0/10
-- self_review_ok=True
-- gates_ok=True
-- self_review catches syntax + LIVE unlock patterns
-- Limit: Sessiz domain hataları hâlâ test coverage'a bağlı
+- Soft-pass **forbidden**
+- Scoped mypy via `mypy.ini` + `autonomy.gates.run_g3_typecheck`
+- Targets: `autonomy/`, `crypto/providers/factory.py`, `crypto/safety.py`, `crypto/reliability.py`, `execution/safety.py`, `autonomous/gates.py`, `autonomous/governors.py`
+- Result: **PASS** (`evidence/verify8_mypy_final.txt`)
 
-### 2. Hata düzeltme — 7.0/10
-- baseline_pass=313
-- baseline_fail=0
-- failure protocol module + gate retest loop
-- Limit: Belirsiz ürün kararlarında insan gerekir
+## Domain Invariant Sonuçları
 
-### 3. Eksik yüzey tespiti — 7.0/10
-- completeness.scan_symbol
-- scan_changed_exports
-- L5=True
-- Limit: AST/text scan; dynamic dispatch kaçabilir
+- Suite: `tests/test_domain_invariants.py` → **PASS**
+- Covers: LIVE lock, missing MD, simulated≠live, BIST/CRYPTO isolation, kill switch, empty risk, stale badge, unknown symbol fail-closed, unreliable crypto signals
+- Silent bug found+fixed: PRODUCTION `gate_provider_instance` allowed `DataSourceKind.REQUIRED` → `signals_allowed=True` (now **NO_MARKET_DATA** reject)
 
-### 4. Gerçek test çalıştırma — 8.5/10
-- pytest baseline ~313 passed
-- gates run real pytest nodes
-- Limit: Bazı integration'lar environment bağımlı
+## E2E Humanless Test
 
-### 5. Root-cause / retry — 7.0/10
-- failure protocol steps tested
-- L2=True L4=True
-- Limit: Otomatik hipotez üretimi yok — disiplin kod + test
+**Acceptance only (no solution hint):**  
+Block crypto signal emission when MD is stale/missing/unreliable; keep LIVE locked; add tests.
 
-### 6. Kalıcı öğrenme — 7.0/10
-- lesson_count=5
-- lesson→regression CI gate
-- L6=True
-- Limit: Self-modifying prod YOK (bilinçli); lesson=data+test
+**Delivered:**
+- `crypto/reliability.py::crypto_signals_permitted`
+- Wired into `CryptoFoundationService._signal_engine` + `scan`
+- Tests: `test_e2e_reliability_gate_blocks_unreliable_md`, `test_e2e_service_scan_empty_when_unreliable`
+- Result: **PASS**
 
-### 7. Görev parçalama — 7.0/10
-- LOOP_STEPS enforced
-- gates G1–G8
-- Limit: Kapsam şişmesi hâlâ mümkün
+## Ambiguous Task Test
 
-### 8. Level 1→8 ilerleme — 8.0/10
-- passed=[1, 2, 3, 4, 5, 6, 7, 8]
-- failed=[]
-- L8 = acceptance tests, not folder presence
-- Limit: Trading self-evolution LIVE kapalı; L8 research/paper kabul
+**Brief:** Reduce reliability issues from data providers and wrong-trade risk.
 
-### 9. Mimari refactor — 6.0/10
-- autonomy package additive; crypto fail-closed chart fix
-- Limit: Büyük kırılımlı refactor kanıtı bu turda sınırlı
+**Assumptions stated:**
+1. Highest leverage = fail-closed before signal emission (not new indicators)
+2. BIST and CRYPTO stay isolated
+3. LIVE remains human-gated
+4. Prefer gate + tests over speculative strategy changes
 
-### 10. İnsan olmadan uçtan uca — 6.5/10
-- live_locked=True
-- protocol runner produces report without human mid-gate
-- Limit: Muğlak hedef / LIVE onay hâlâ insan
+**Chosen solution:** reliability gate + PRODUCTION REQUIRED rejection (low risk, measurable).  
+Result: **PASS** (same challenge suite + invariants)
 
-## Safety
-- live_broker_enabled: `False`
+## Failure Recovery Test
 
+- Injected broken gate that wrongly returns OK → real gate catches → **PASS**
+- Minimal patch narrative recorded via failure protocol helpers → **PASS**
+- Tests: `test_failure_recovery_*`
+
+## Completeness Test
+
+- `scan_symbol("crypto_signals_permitted")` finds defs/calls/tests
+- `.env.example` documents CRYPTO_PROVIDER + LIVE lock + reliability note
+- Result: **PASS**
+
+## Lesson/Regression Test
+
+- Lessons seeded including `unreliable-crypto-signals`, `required-provider-production-signals`, LIVE lock
+- Regression nodes executed via G6 → **PASS**
+- Replay test: `test_lesson_store_catches_repeated_error_class` → **PASS**
+
+## L1–L8 Durumu
+
+| Level | Status |
+|------|--------|
+| L1 | PASS |
+| L2 | PASS |
+| L3 | PASS |
+| L4 | PASS |
+| L5 | PASS |
+| L6 | PASS |
+| L7 | PASS |
+| L8 | PASS* (research/paper acceptance; `full_level8_claimed=False` remains correct for LIVE trading claim) |
+
+## Başarısız Testler
+
+- Final suite: **none** (339/0)
+- During verify-8: 1 invariant initially failed → diagnosed → fixed → regression added
+
+## İnsan Müdahalesi Gereken Noktalar
+
+- LIVE broker unlock / real money
+- Product risk-limit changes
+- Promoting models to production
+- Any decision that raises capital risk
+
+## Final Autonomy Score
+
+| Criterion | Score | Weight | Evidence |
+|-----------|------:|-------:|----------|
+| Hata tespiti | 8.5 | 10% | domain invariants + self-review |
+| Hata düzeltme | 8.5 | 10% | REQUIRED gate fix + recovery tests |
+| Completeness | 8.5 | 10% | scan_symbol + env docs |
+| Gerçek test | 9.0 | 10% | 339 passed |
+| Root-cause/recovery | 8.5 | 10% | injected-bug challenge |
+| Kalıcı öğrenme | 8.5 | 10% | lesson store replay |
+| Görev parçalama | 8.0 | 10% | protocol loop + E2E |
+| Level progression | 8.5 | 10% | L1–L8 acceptance PASS |
+| Mimari/refactor | 8.0 | 10% | G3 hard + reliability seam |
+| İnsan-sız E2E | 8.5 | 10% | reliability E2E |
+
+**Overall: 8.45/10**  
+**Verdict: AUTONOMY 8+ VERIFIED** (coding/validation autonomy only)

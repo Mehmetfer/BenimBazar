@@ -1,0 +1,10 @@
+..F...................................                                   [100%]
+=================================== FAILURES ===================================
+_____________ test_inv_missing_provider_blocks_signals_production ______________
+tests/test_domain_invariants.py:40: in test_inv_missing_provider_blocks_signals_production
+    assert blocked.signals_allowed is False
+E   AssertionError: assert True is False
+E    +  where True = MarketDataGateResult(ok=True, code=<MarketDataGateCode.OK: 'OK'>, signals_allowed=True, note='provider_id=live_required kind=REQUIRED', environment='PRODUCTION').signals_allowed
+=========================== short test summary info ============================
+FAILED tests/test_domain_invariants.py::test_inv_missing_provider_blocks_signals_production
+1 failed, 37 passed in 2.97s

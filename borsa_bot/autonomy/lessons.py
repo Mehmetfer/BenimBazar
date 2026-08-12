@@ -133,5 +133,15 @@ def seed_known_lessons() -> list[Path]:
             architectural_decision="research → test → paper → shadow only; LIVE requires human.",
             prevents=["LIVE_BROKER_ENABLED auto true", "broker safety bypass"],
         ),
+        Lesson(
+            id="required-provider-production-signals",
+            title="REQUIRED provider allowed PRODUCTION signals_allowed=True",
+            error_class="SilentDomainError",
+            root_cause="gate_provider_instance exempted DataSourceKind.REQUIRED from rejection",
+            fix_summary="Reject REQUIRED and has_market_data=False in PRODUCTION gate",
+            regression_test="tests/test_domain_invariants.py::test_inv_missing_provider_blocks_signals_production",
+            architectural_decision="Not-configured MD is NO_MARKET_DATA — never signals_allowed in PRODUCTION",
+            prevents=["signals_allowed on live_required provider"],
+        ),
     ]
     return [save_lesson(s) for s in seeds]

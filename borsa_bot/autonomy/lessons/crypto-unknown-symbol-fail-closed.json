@@ -6,7 +6,7 @@
   "fix_summary": "chart() catches both get_bars_tf and get_bars; returns empty chart with note.",
   "regression_test": "tests/test_crypto_ui.py::test_crypto_detail_and_chart_api",
   "architectural_decision": "NO_MARKET_DATA must fail closed to empty payload, never uncaught 500 on detail UI.",
-  "created_at": "2026-08-12T05:23:33.022065+00:00",
+  "created_at": "2026-08-12T05:36:29.619348+00:00",
   "prevents": [
     "NO_MARKET_DATA uncaught in /api/crypto/detail"
   ],

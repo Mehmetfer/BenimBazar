@@ -1,0 +1,7 @@
+autonomy/gates.py:174: error: Argument 1 to "self_review" has incompatible type
+"list[str]"; expected "list[str | Path]"  [arg-type]
+        rev = self_review(norm or ["autonomy/lessons.py"], related_tests=N...
+                          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+autonomy/gates.py:174: note: "list" is invariant -- see https://mypy.readthedocs.io/en/stable/common_issues.html#variance
+autonomy/gates.py:174: note: Consider using "Sequence" instead, which is covariant
+Found 1 error in 1 file (checked 15 source files)

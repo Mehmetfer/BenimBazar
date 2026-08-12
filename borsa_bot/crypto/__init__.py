@@ -6,10 +6,12 @@ Default: CRYPTO_ENABLED=false → BIST behavior unchanged.
 
 from crypto.market import MarketType
 from crypto.providers.factory import create_crypto_provider
+from crypto.reliability import crypto_signals_permitted
 from crypto.service import CryptoFoundationService
 
 __all__ = [
     "MarketType",
     "create_crypto_provider",
+    "crypto_signals_permitted",
     "CryptoFoundationService",
 ]

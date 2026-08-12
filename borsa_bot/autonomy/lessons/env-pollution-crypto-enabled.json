@@ -6,7 +6,7 @@
   "fix_summary": "Keep .env default CRYPTO_ENABLED=false; enable via process env at server start only.",
   "regression_test": "tests/test_crypto_foundation.py::test_default_crypto_disabled",
   "architectural_decision": "Dev toggles for demos must not mutate committed defaults or permanent .env test assumptions.",
-  "created_at": "2026-08-12T05:23:33.022063+00:00",
+  "created_at": "2026-08-12T05:36:29.619346+00:00",
   "prevents": [
     "crypto_enabled True while tests expect False"
   ],

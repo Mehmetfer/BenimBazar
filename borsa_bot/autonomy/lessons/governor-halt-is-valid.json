@@ -6,7 +6,7 @@
   "fix_summary": "Accept NORMAL|CAUTION|REDUCED_RISK|TRADING_HALT as valid governor states.",
   "regression_test": "tests/test_master_v2.py::test_engine_status_exposes_level_and_governor",
   "architectural_decision": "Fail-closed governor states are success for safety tests.",
-  "created_at": "2026-08-12T05:23:33.022066+00:00",
+  "created_at": "2026-08-12T05:36:29.619350+00:00",
   "prevents": [
     "assert state == NORMAL while halt is correct"
   ],

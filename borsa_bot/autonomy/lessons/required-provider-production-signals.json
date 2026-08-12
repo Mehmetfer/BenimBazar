@@ -1,0 +1,14 @@
+{
+  "id": "required-provider-production-signals",
+  "title": "REQUIRED provider allowed PRODUCTION signals_allowed=True",
+  "error_class": "SilentDomainError",
+  "root_cause": "gate_provider_instance exempted DataSourceKind.REQUIRED from rejection",
+  "fix_summary": "Reject REQUIRED and has_market_data=False in PRODUCTION gate",
+  "regression_test": "tests/test_domain_invariants.py::test_inv_missing_provider_blocks_signals_production",
+  "architectural_decision": "Not-configured MD is NO_MARKET_DATA — never signals_allowed in PRODUCTION",
+  "created_at": "2026-08-12T05:36:29.619353+00:00",
+  "prevents": [
+    "signals_allowed on live_required provider"
+  ],
+  "live_trading_impact": "NONE — lessons never unlock LIVE broker"
+}

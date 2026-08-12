@@ -22,6 +22,7 @@ from crypto.engine import CryptoSignalEngine
 from crypto.market import MarketType
 from crypto.providers.factory import create_crypto_provider, is_live_crypto_provider
 from crypto.providers.paribu import RequiredCryptoProvider
+from crypto.reliability import crypto_signals_permitted
 from crypto.safety import gate_crypto_provider
 from crypto.symbols import normalize_crypto_app_symbol, to_display_symbol
 from data.validation import normalize_app_env
@@ -59,6 +60,14 @@ class CryptoFoundationService:
         if not is_live_crypto_provider(self.provider) or isinstance(self.provider, RequiredCryptoProvider):
             return None
         if not self.provider.has_market_data():
+            return None
+        permitted, _reason = crypto_signals_permitted(
+            self.provider,
+            crypto_enabled=settings.crypto_enabled,
+            signals_enabled=settings.crypto_signals_enabled,
+            max_age_sec=float(settings.data_freshness_sec),
+        )
+        if not permitted:
             return None
         if self._engine is None:
             self._engine = CryptoSignalEngine(
@@ -204,7 +213,15 @@ class CryptoFoundationService:
         }
 
     def scan(self, symbols: list[str] | None = None) -> list[dict[str, Any]]:
-        """Crypto signal scan — empty unless CRYPTO_SIGNALS_ENABLED + live MD."""
+        """Crypto signal scan — empty unless CRYPTO_SIGNALS_ENABLED + reliable live MD."""
+        permitted, _reason = crypto_signals_permitted(
+            self.provider,
+            crypto_enabled=settings.crypto_enabled,
+            signals_enabled=settings.crypto_signals_enabled,
+            max_age_sec=float(settings.data_freshness_sec),
+        )
+        if not permitted:
+            return []
         eng = self._signal_engine()
         if eng is None:
             return []
