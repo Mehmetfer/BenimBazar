@@ -91,11 +91,11 @@ class _ListingHeroMediaState extends State<ListingHeroMedia> {
     if (count <= 1) return;
     final next = (_index + delta).clamp(0, count - 1);
     if (next == _index) return;
-    _page.animateToPage(
-      next,
-      duration: const Duration(milliseconds: 240),
-      curve: Curves.easeOutCubic,
-    );
+    setState(() => _index = next);
+    if (!_page.hasClients) return;
+    // jumpToPage is more reliable on Flutter web than animateToPage for
+    // synthetic / sparse pointer events from automation tools.
+    _page.jumpToPage(next);
   }
 
   @override
@@ -182,36 +182,53 @@ class _ListingHeroMediaState extends State<ListingHeroMedia> {
               ),
             if (multi) ...[
               Positioned(
-                left: 4,
+                left: 0,
                 top: 0,
                 bottom: 0,
                 child: Center(
-                  child: IconButton(
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.black45,
-                      foregroundColor: Colors.white,
+                  child: Semantics(
+                    button: true,
+                    label: 'Önceki fotoğraf',
+                    child: IconButton(
+                      constraints: const BoxConstraints(
+                        minWidth: 48,
+                        minHeight: 48,
+                      ),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.black45,
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed:
+                          _index <= 0 ? null : () => _go(-1, photos.length),
+                      icon: const Icon(Icons.chevron_left, size: 28),
+                      tooltip: 'Önceki fotoğraf',
                     ),
-                    onPressed: _index <= 0 ? null : () => _go(-1, photos.length),
-                    icon: const Icon(Icons.chevron_left, size: 28),
-                    tooltip: 'Önceki fotoğraf',
                   ),
                 ),
               ),
               Positioned(
-                right: 4,
+                right: 0,
                 top: 0,
                 bottom: 0,
                 child: Center(
-                  child: IconButton(
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.black45,
-                      foregroundColor: Colors.white,
+                  child: Semantics(
+                    button: true,
+                    label: 'Sonraki fotoğraf',
+                    child: IconButton(
+                      constraints: const BoxConstraints(
+                        minWidth: 48,
+                        minHeight: 48,
+                      ),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.black45,
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed: _index >= photos.length - 1
+                          ? null
+                          : () => _go(1, photos.length),
+                      icon: const Icon(Icons.chevron_right, size: 28),
+                      tooltip: 'Sonraki fotoğraf',
                     ),
-                    onPressed: _index >= photos.length - 1
-                        ? null
-                        : () => _go(1, photos.length),
-                    icon: const Icon(Icons.chevron_right, size: 28),
-                    tooltip: 'Sonraki fotoğraf',
                   ),
                 ),
               ),
