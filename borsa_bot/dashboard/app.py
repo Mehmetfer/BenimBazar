@@ -22,6 +22,7 @@ from autonomous.engine import get_autonomous_engine
 from autonomous.execution_modes import parse_execution_mode
 from autonomous.explain import explain_decision
 from autonomous.mode_store import mode_store
+from autonomous.modes import parse_user_mode
 from auth import Role, auth_store
 from alerts.status import channel_status_report
 from data.providers import classify_provider

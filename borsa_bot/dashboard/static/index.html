@@ -1403,7 +1403,8 @@
     if(name==='mkt') loadBist100();
     if(name==='set'){
       loadAutonomy();
-      load({quick:true, quiet:true});
+      // Settings: skip heavy /api/dashboard (often >8s) — autonomy + light daily only
+      loadSettingsLight();
     }
   }
 
@@ -2128,32 +2129,29 @@
     if(document.getElementById('panel-port')?.classList.contains('on')) loadPortfolio();
     // Do NOT reload favorites from here — separate quiet poll owns Ekranım
     if(document.getElementById('panel-set')?.classList.contains('on')){
-      try {
-        const ctrl = new AbortController();
-        const timer = setTimeout(()=>ctrl.abort(), 8000);
-        dash = await (await fetch('/api/dashboard', { signal: ctrl.signal })).json();
-        clearTimeout(timer);
-        const sh = (dash.health||{}).system_health||{};
-        const ds = (dash.data_source||daily?.integrity||{});
-        const setBody = document.getElementById('setStatusBody');
-        if(setBody){
-          const md = sh.market_data || ds.status || '—';
-          setBody.innerHTML = `
-            <div class="set-row"><span>Veri</span><b>${md}</b></div>
-            <div class="set-row"><span>İşlem</span><b>Paper</b></div>
-            <div class="set-row"><span>Canlı para</span><b class="ok">Kapalı</b></div>
-            <div class="set-row"><span>Son güncelleme</span><b>${sh.last_update_ago||'—'}</b></div>`;
-        }
-        const rep = await (await fetch('/api/predictions/report')).json();
-        const perf = document.getElementById('aiPerf');
-        if(perf){
-          perf.innerHTML = `Not: ${rep.grade||'—'} · Doğruluk %${rep.historical_accuracy_pct??'—'} · örnek ${rep.sample_size||0}`;
-        }
-        await loadAutonomy();
-        bindCards();
-      } catch(e) {}
+      await loadSettingsLight();
+      await loadAutonomy();
     }
     dailyLoadInFlight = false;
+  }
+
+  async function loadSettingsLight(){
+    // Avoid /api/dashboard here — it often exceeds 8–15s and leaves Durum stuck on "Yükleniyor…"
+    try{
+      const ctrl = new AbortController();
+      const timer = setTimeout(()=>ctrl.abort(), 6000);
+      const rep = await (await fetch('/api/predictions/report', { signal: ctrl.signal })).json();
+      clearTimeout(timer);
+      const perf = document.getElementById('aiPerf');
+      if(perf){
+        perf.innerHTML = `Not: ${rep.grade||'—'} · Doğruluk %${rep.historical_accuracy_pct??'—'} · örnek ${rep.sample_size||0}`;
+      }
+    }catch(_e){
+      const perf = document.getElementById('aiPerf');
+      if(perf && (!perf.textContent || perf.textContent.indexOf('Yükleniyor')>=0)){
+        perf.textContent = 'Performans özeti alınamadı';
+      }
+    }
   }
 
   async function loadAutonomy(){
@@ -2171,14 +2169,40 @@
     }
     try{
       const st = await (await fetch('/api/autonomy/status')).json();
-      const mode = st.user_trading_mode||'PAPER';
-      const em = st.execution_mode||'PAPER';
+      let mode = st.user_trading_mode||'PAPER';
+      let em = st.execution_mode||'PAPER';
+      // LIVE seçili ama broker kilitli → turlar BLOCKED görünür; paper'a çek
+      if(em === 'LIVE' && st.live_broker === 'DISABLED'){
+        try{
+          await fetch('/api/autonomy/execution-mode',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({execution_mode:'PAPER'})
+          });
+          em = 'PAPER';
+          st.execution_mode = 'PAPER';
+        }catch(_fix){}
+      }
       document.querySelectorAll('#autonomyModes .filter').forEach(b=>{
         b.classList.toggle('on', b.dataset.amode===mode);
       });
       document.querySelectorAll('#execModes .filter').forEach(b=>{
         b.classList.toggle('on', b.dataset.emode===em);
       });
+      const health = st.health || {};
+      const checks = health.checks || {};
+      const setBody = document.getElementById('setStatusBody');
+      if(setBody){
+        const md = (checks.data_provider && (checks.data_provider.kind || checks.data_provider.ok))
+          ? ((checks.data_provider.kind || 'OK') + (checks.data_provider.fresh === false ? ' · gecikmeli' : ''))
+          : (health.ok === false ? 'Sorunlu' : 'Hazır');
+        const mkt = (checks.market_status && checks.market_status.status) || '—';
+        setBody.innerHTML = `
+          <div class="set-row"><span>Veri</span><b>${md}</b></div>
+          <div class="set-row"><span>Piyasa</span><b>${mkt}</b></div>
+          <div class="set-row"><span>İşlem</span><b>Paper</b></div>
+          <div class="set-row"><span>Canlı para</span><b class="ok">Kapalı</b></div>`;
+      }
       const last = st.last_cycle||{};
       const dg = (last.desk_gate&&last.desk_gate.stats)||{};
       const stateEl = document.getElementById('setAutoState');
@@ -2348,11 +2372,36 @@
     b.classList.add('on'); cFilter=b.dataset.cf; renderCryptoHome();
   });
   document.querySelectorAll('#autonomyModes .filter').forEach(b=>b.onclick=async()=>{
-    await fetch('/api/autonomy/mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:b.dataset.amode})});
+    const stateEl = document.getElementById('setAutoState');
+    if(stateEl){ stateEl.textContent = 'Kaydediliyor…'; stateEl.className = ''; }
+    try{
+      const res = await fetch('/api/autonomy/mode',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({mode:b.dataset.amode})
+      });
+      if(!res.ok){
+        const t = await res.text();
+        throw new Error(t || ('HTTP '+res.status));
+      }
+    }catch(err){
+      if(stateEl){ stateEl.textContent = 'Mod değişmedi'; stateEl.className = 'warn'; }
+      alert('Mod değiştirilemedi. Sayfayı yenileyip tekrar deneyin.');
+      console.warn('autonomy mode', err);
+    }
     await loadAutonomy();
   });
   document.querySelectorAll('#execModes .filter').forEach(b=>b.onclick=async()=>{
-    await fetch('/api/autonomy/execution-mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({execution_mode:b.dataset.emode})});
+    try{
+      const res = await fetch('/api/autonomy/execution-mode',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({execution_mode:b.dataset.emode})
+      });
+      if(!res.ok) throw new Error('HTTP '+res.status);
+    }catch(_e){
+      alert('Emir yolu değiştirilemedi');
+    }
     await loadAutonomy();
   });
   const setAdvToggle = document.getElementById('setAdvToggle');
@@ -2409,7 +2458,16 @@
     await loadAutonomy();
   };
   document.getElementById('moreBtn').onclick=()=>{showAll=true; renderHome();};
-  document.getElementById('refresh').onclick=load;
+  document.getElementById('refresh').onclick=async()=>{
+    if(document.getElementById('panel-set')?.classList.contains('on')){
+      await loadSettingsLight();
+      await loadAutonomy();
+      // Light daily refresh without flashing timeout over settings
+      load({quick:true, quiet:true});
+      return;
+    }
+    load();
+  };
   document.getElementById('cryptoRefresh').onclick=loadCrypto;
   document.getElementById('backBtn').onclick=()=>setNav(lastPanel);
   document.getElementById('cBackBtn').onclick=()=>setCryptoNav(lastCryptoPanel);
