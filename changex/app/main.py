@@ -30,6 +30,21 @@ from .moderation import (
     run_ai_premoderation,
     user_status_message,
 )
+from .matching import (
+    CHANGE_CHAIN_ENABLED,
+    WantValidationError,
+    get_compatibility,
+    get_user_preferences,
+    is_chain_candidate,
+    is_public_matchable,
+    matchability_report,
+    normalize_offer_fields,
+    public_preferences_view,
+    set_user_preferences,
+    validate_structured_want,
+)
+from .matching.wants import validate_value_tolerance
+from .domain_status import TradePreference
 from .moderation.cache import cache_get, cache_set, invalidate_listing, reset_cache
 from .observability import safe_log_fields
 from .recovery import recover_stale_reservations
@@ -183,9 +198,24 @@ class ListingCreateIn(BaseModel):
     subcategory: str = ""
     condition: str = "good"
     location: str = ""
+    location_city: str = ""
+    location_district: str = ""
+    location_country: str = ""
+    brand: str = ""
+    model_name: str = ""
+    attributes: dict[str, Any] = {}
     items: list[ListingItemIn] = Field(min_length=1)
     accept_categories: list[str] = []
-    wanted_items: str = ""
+    wanted_items: str = ""  # free-text — kept for backward compatibility
+    wanted_categories: list[str] = []
+    wanted_subcategories: list[str] = []
+    wanted_brands: list[str] = []
+    wanted_locations: list[str] = []
+    wanted_value_min: ValueIn | None = None
+    wanted_value_max: ValueIn | None = None
+    value_gap_tolerance: int = 0
+    chain_opt_in: bool = False
+    trade_preference: str = "DIRECT_ONLY"
     min_value: ValueIn | None = None
     max_value: ValueIn | None = None
     photo_urls: list[str] = []
@@ -202,8 +232,30 @@ class ListingUpdateIn(BaseModel):
     photo_urls: list[str] | None = None
     min_value: ValueIn | None = None
     max_value: ValueIn | None = None
+    brand: str | None = None
+    model_name: str | None = None
+    attributes: dict[str, Any] | None = None
+    wanted_categories: list[str] | None = None
+    wanted_subcategories: list[str] | None = None
+    wanted_brands: list[str] | None = None
+    wanted_locations: list[str] | None = None
+    wanted_value_min: ValueIn | None = None
+    wanted_value_max: ValueIn | None = None
+    value_gap_tolerance: int | None = None
+    chain_opt_in: bool | None = None
+    trade_preference: str | None = None
+    location_city: str | None = None
+    location_district: str | None = None
+    location_country: str | None = None
     # Ignored / rejected if present — users cannot self-approve
     status: str | None = None
+    moderation_status: str | None = None
+
+
+class MatchingPreferencesIn(BaseModel):
+    chain_opt_in: bool | None = None
+    trade_preference: str | None = None
+    max_chain_length: int | None = None
 
 
 class ModerationDecisionIn(BaseModel):
@@ -494,6 +546,40 @@ def create_listing(
         raise HTTPException(400, detail={"code": "ZERO_VALUE", "message": "Takas değeri sıfır olamaz"})
     min_v = _parse_value(body.min_value) if body.min_value else ChangeValue.zero()
     max_v = _parse_value(body.max_value) if body.max_value else total
+    try:
+        want = validate_structured_want(
+            wanted_categories=body.wanted_categories,
+            wanted_subcategories=body.wanted_subcategories,
+            wanted_brands=body.wanted_brands,
+            wanted_locations=body.wanted_locations,
+            wanted_value_min=(
+                _parse_value(body.wanted_value_min).mandal_units if body.wanted_value_min else 0
+            ),
+            wanted_value_max=(
+                _parse_value(body.wanted_value_max).mandal_units if body.wanted_value_max else 0
+            ),
+        )
+        gap_tol = validate_value_tolerance(body.value_gap_tolerance)
+        offer_norm = normalize_offer_fields(
+            category=body.category,
+            subcategory=body.subcategory,
+            brand=body.brand,
+            model_name=body.model_name,
+            condition=body.condition,
+            location=body.location,
+            location_city=body.location_city,
+            location_district=body.location_district,
+            location_country=body.location_country,
+            mandal_units=total.mandal_units,
+            attributes=body.attributes,
+        )
+    except WantValidationError as exc:
+        raise HTTPException(400, detail={"code": exc.code, "message": exc.message}) from exc
+    pref = (body.trade_preference or TradePreference.DIRECT_ONLY.value).upper()
+    if pref not in {TradePreference.DIRECT_ONLY.value, TradePreference.CHAIN_ALLOWED.value}:
+        raise HTTPException(
+            400, detail={"code": "INVALID_PREFERENCE", "message": "trade_preference geçersiz"}
+        )
     now = time.time()
     cid = _cid(request)
     with db.connect() as conn:
@@ -504,17 +590,22 @@ def create_listing(
                   owner_id, title, description, category, subcategory, condition,
                   location, mandal_units, accept_categories, wanted_items,
                   min_mandal_units, max_mandal_units, photo_urls, status, version,
-                  moderation_version, created_at, updated_at, moderation_updated_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                  moderation_version, created_at, updated_at, moderation_updated_at,
+                  moderation_status, inventory_status, chain_opt_in, trade_preference,
+                  brand, model_name, attributes,
+                  wanted_categories, wanted_subcategories, wanted_brands, wanted_locations,
+                  wanted_value_min, wanted_value_max, value_gap_tolerance,
+                  location_city, location_district, location_country
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     user["id"],
                     body.title.strip(),
                     body.description.strip(),
-                    body.category.strip(),
-                    body.subcategory.strip(),
-                    body.condition,
-                    body.location.strip(),
+                    offer_norm["category"],
+                    offer_norm["subcategory"],
+                    offer_norm["condition"],
+                    offer_norm["location"],
                     total.mandal_units,
                     db.dumps(body.accept_categories),
                     body.wanted_items.strip(),
@@ -527,6 +618,23 @@ def create_listing(
                     now,
                     now,
                     now,
+                    "PENDING_MODERATION",
+                    "AVAILABLE",
+                    1 if body.chain_opt_in else 0,
+                    pref,
+                    offer_norm["brand"],
+                    offer_norm["model_name"],
+                    db.dumps(offer_norm["attributes"]),
+                    db.dumps(want["wanted_categories"]),
+                    db.dumps(want["wanted_subcategories"]),
+                    db.dumps(want["wanted_brands"]),
+                    db.dumps(want["wanted_locations"]),
+                    want["wanted_value_min"],
+                    want["wanted_value_max"],
+                    gap_tol,
+                    offer_norm["location_city"],
+                    offer_norm["location_district"],
+                    offer_norm["location_country"],
                 ),
             )
             lid = int(cur.lastrowid)
@@ -545,6 +653,8 @@ def create_listing(
             )
             run_ai_premoderation(conn, listing_id=lid, correlation_id=cid)
             row = conn.execute("SELECT * FROM trade_listings WHERE id = ?", (lid,)).fetchone()
+            db.sync_dual_status(conn, lid, legacy_status=str(row["status"]))
+            row = conn.execute("SELECT * FROM trade_listings WHERE id = ?", (lid,)).fetchone()
             out = _listing_public(conn, dict(row), include_moderation=True)
             out["user_message"] = user_status_message(out["status"])
             return out
@@ -557,7 +667,7 @@ def update_listing(
     request: Request,
     user: Annotated[dict, Depends(require_user)],
 ) -> dict:
-    if body.status is not None:
+    if body.status is not None or body.moderation_status is not None:
         raise HTTPException(
             403,
             detail={
@@ -1100,6 +1210,23 @@ def _listing_public(conn, row: dict, include_moderation: bool = False) -> dict:
         "mandal_units": units,
         "accept_categories": db.loads(row["accept_categories"] or "[]", []),
         "wanted_items": row["wanted_items"],
+        "wanted_categories": db.loads(row.get("wanted_categories") or "[]", []),
+        "wanted_subcategories": db.loads(row.get("wanted_subcategories") or "[]", []),
+        "wanted_brands": db.loads(row.get("wanted_brands") or "[]", []),
+        "wanted_locations": db.loads(row.get("wanted_locations") or "[]", []),
+        "wanted_value_min": int(row.get("wanted_value_min") or 0),
+        "wanted_value_max": int(row.get("wanted_value_max") or 0),
+        "value_gap_tolerance": int(row.get("value_gap_tolerance") or 0),
+        "brand": row.get("brand") or "",
+        "model_name": row.get("model_name") or "",
+        "attributes": db.loads(row.get("attributes") or "{}", {}),
+        "chain_opt_in": bool(int(row.get("chain_opt_in") or 0)),
+        "trade_preference": row.get("trade_preference") or "DIRECT_ONLY",
+        "moderation_status": row.get("moderation_status"),
+        "inventory_status": row.get("inventory_status"),
+        "location_city": row.get("location_city") or "",
+        "location_district": row.get("location_district") or "",
+        "location_country": row.get("location_country") or "",
         "min_value": ChangeValue.from_mandal_units(
             int(row.get("min_mandal_units") or row.get("min_value_mandal") or 0)
         ).serialize(),
@@ -1139,29 +1266,119 @@ def _listing_public(conn, row: dict, include_moderation: bool = False) -> dict:
     return out
 
 
-# Change Chain gate stub — unapproved listings must never enter matching
+# Change Chain gate — feature-flagged; algorithm NOT implemented in Exchange Graph V1
 @app.post("/api/change-chain/match")
 def change_chain_match_stub(
     body: OfferCreateIn,
     user: Annotated[dict, Depends(require_user)],
 ) -> dict:
+    if not CHANGE_CHAIN_ENABLED:
+        raise HTTPException(
+            501,
+            detail={
+                "code": "CHANGE_CHAIN_DISABLED",
+                "message": "Change Chain feature flag kapalı",
+                "feature_flag": "CHANGE_CHAIN_ENABLED=false",
+            },
+        )
     with db.connect() as conn:
         for lid in list(body.requested_listing_ids) + list(body.offered_listing_ids):
             row = conn.execute("SELECT * FROM trade_listings WHERE id = ?", (lid,)).fetchone()
             if not row:
                 raise HTTPException(404, detail={"code": "LISTING_NOT_FOUND", "message": "Listing yok"})
-            if normalize_listing_status(row["status"]) not in PUBLIC_LISTING:
+            d = dict(row)
+            if not is_public_matchable(d):
                 raise HTTPException(
                     409,
                     detail={
                         "code": "LISTING_NOT_APPROVED",
-                        "message": "Onaysız listing Change Chain'e giremez",
+                        "message": "Onaysız veya müsait olmayan listing Change Chain'e giremez",
+                    },
+                )
+            if not is_chain_candidate(d):
+                raise HTTPException(
+                    409,
+                    detail={
+                        "code": "NOT_CHAIN_CANDIDATE",
+                        "message": "Listing chain opt-in / preference koşullarını karşılamıyor",
                     },
                 )
     raise HTTPException(
         501,
-        detail={"code": "CHANGE_CHAIN_NOT_IMPLEMENTED", "message": "Change Chain henüz yok"},
+        detail={"code": "CHANGE_CHAIN_NOT_IMPLEMENTED", "message": "Change Chain algoritması henüz yok"},
     )
+
+
+@app.get("/api/matching/preferences")
+def get_matching_preferences(user: Annotated[dict, Depends(require_user)]) -> dict:
+    with db.connect() as conn:
+        prefs = get_user_preferences(conn, int(user["id"]))
+        view = public_preferences_view(prefs)
+        # Privacy: never attach email/phone/username secrets beyond preference flags
+        assert "password" not in view
+        assert "email" not in view
+        assert "phone" not in view
+        return {
+            "preferences": view,
+            "feature_flags": {
+                "CHANGE_CHAIN_ENABLED": CHANGE_CHAIN_ENABLED,
+            },
+            "compatibility_policy": get_compatibility().policy_version,
+        }
+
+
+@app.patch("/api/matching/preferences")
+def patch_matching_preferences(
+    body: MatchingPreferencesIn,
+    request: Request,
+    user: Annotated[dict, Depends(require_user)],
+) -> dict:
+    try:
+        with db.connect() as conn:
+            with db.immediate_tx(conn):
+                prefs = set_user_preferences(
+                    conn,
+                    int(user["id"]),
+                    chain_opt_in=body.chain_opt_in,
+                    trade_preference=body.trade_preference,
+                    max_chain_length=body.max_chain_length,
+                )
+                db.audit(
+                    conn,
+                    actor_id=user["id"],
+                    action="matching.preferences.update",
+                    entity="user",
+                    entity_id=user["id"],
+                    detail=db.dumps(public_preferences_view(prefs)),
+                    correlation_id=_cid(request),
+                )
+            return {
+                "preferences": public_preferences_view(prefs),
+                "feature_flags": {"CHANGE_CHAIN_ENABLED": CHANGE_CHAIN_ENABLED},
+            }
+    except ValueError as exc:
+        raise HTTPException(
+            400, detail={"code": "INVALID_PREFERENCE", "message": str(exc)}
+        ) from exc
+
+
+@app.get("/api/listings/{listing_id}/matchability")
+def listing_matchability(
+    listing_id: int,
+    user: Annotated[dict, Depends(require_user)],
+) -> dict:
+    with db.connect() as conn:
+        row = conn.execute("SELECT * FROM trade_listings WHERE id = ?", (listing_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, detail={"code": "LISTING_NOT_FOUND", "message": "Bulunamadı"})
+        d = dict(row)
+        if int(d["owner_id"]) != user["id"] and user.get("role") not in {
+            UserRole.ADMIN.value,
+            UserRole.SUPERADMIN.value,
+        }:
+            raise HTTPException(403, detail={"code": "FORBIDDEN", "message": "Yetkisiz"})
+        prefs = get_user_preferences(conn, int(d["owner_id"]))
+        return matchability_report(d, user_pref=prefs.get("trade_preference"))
 
 
 

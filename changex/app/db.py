@@ -429,6 +429,140 @@ def _migrate(conn: sqlite3.Connection) -> None:
         if "correlation_id" not in audit_cols:
             conn.execute("ALTER TABLE audit_logs ADD COLUMN correlation_id TEXT")
 
+    # --- Exchange Graph V1: dual status + structured want/offer + chain opt-in ---
+    cols = _table_cols(conn, "trade_listings")
+    if cols:
+        for col, decl in [
+            ("moderation_status", "TEXT"),
+            ("inventory_status", "TEXT"),
+            ("chain_opt_in", "INTEGER NOT NULL DEFAULT 0"),
+            ("trade_preference", "TEXT NOT NULL DEFAULT 'DIRECT_ONLY'"),
+            ("brand", "TEXT NOT NULL DEFAULT ''"),
+            ("model_name", "TEXT NOT NULL DEFAULT ''"),
+            ("attributes", "TEXT NOT NULL DEFAULT '{}'"),
+            ("wanted_categories", "TEXT NOT NULL DEFAULT '[]'"),
+            ("wanted_subcategories", "TEXT NOT NULL DEFAULT '[]'"),
+            ("wanted_brands", "TEXT NOT NULL DEFAULT '[]'"),
+            ("wanted_locations", "TEXT NOT NULL DEFAULT '[]'"),
+            ("wanted_value_min", "INTEGER NOT NULL DEFAULT 0"),
+            ("wanted_value_max", "INTEGER NOT NULL DEFAULT 0"),
+            ("value_gap_tolerance", "INTEGER NOT NULL DEFAULT 0"),
+            ("location_city", "TEXT NOT NULL DEFAULT ''"),
+            ("location_district", "TEXT NOT NULL DEFAULT ''"),
+            ("location_country", "TEXT NOT NULL DEFAULT ''"),
+        ]:
+            if col not in cols:
+                try:
+                    conn.execute(f"ALTER TABLE trade_listings ADD COLUMN {col} {decl}")
+                except sqlite3.OperationalError:
+                    pass
+        # Backfill dual status from legacy status (idempotent)
+        _backfill_dual_status(conn)
+        # Planned indexes for future graph queries (cheap, selective)
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_listings_matchability
+            ON trade_listings(moderation_status, inventory_status, chain_opt_in, category)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_listings_value_cat
+            ON trade_listings(category, mandal_units)
+            """
+        )
+
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS matching_preferences (
+          user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+          chain_opt_in INTEGER NOT NULL DEFAULT 0,
+          trade_preference TEXT NOT NULL DEFAULT 'DIRECT_ONLY',
+          max_chain_length INTEGER,
+          updated_at REAL
+        );
+
+        CREATE TABLE IF NOT EXISTS category_compatibility (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          policy_version TEXT NOT NULL,
+          source_category TEXT NOT NULL,
+          target_category TEXT NOT NULL,
+          weight REAL NOT NULL DEFAULT 1.0,
+          note TEXT NOT NULL DEFAULT '',
+          UNIQUE(policy_version, source_category, target_category)
+        );
+        """
+    )
+
+
+def _backfill_dual_status(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        "SELECT id, status, moderation_status, inventory_status FROM trade_listings"
+    ).fetchall()
+    from .domain_status import split_from_legacy_status
+
+    for r in rows:
+        if r["moderation_status"] and r["inventory_status"]:
+            continue
+        mod, inv = split_from_legacy_status(str(r["status"] or ""))
+        conn.execute(
+            """
+            UPDATE trade_listings
+            SET moderation_status = COALESCE(moderation_status, ?),
+                inventory_status = COALESCE(inventory_status, ?)
+            WHERE id = ?
+            """,
+            (mod.value, inv.value, r["id"]),
+        )
+
+
+def sync_dual_status(
+    conn: sqlite3.Connection,
+    listing_id: int,
+    *,
+    legacy_status: str | None = None,
+    moderation_status: str | None = None,
+    inventory_status: str | None = None,
+) -> None:
+    """Keep legacy `status` and dual columns consistent after transitions."""
+    from .domain_status import (
+        InventoryStatus,
+        ModerationStatus,
+        legacy_status_from_split,
+        split_from_legacy_status,
+    )
+
+    row = conn.execute("SELECT * FROM trade_listings WHERE id = ?", (listing_id,)).fetchone()
+    if not row:
+        return
+    d = dict(row)
+    if moderation_status is None or inventory_status is None:
+        if legacy_status is not None:
+            mod, inv = split_from_legacy_status(legacy_status)
+        else:
+            mod = ModerationStatus(
+                str(d.get("moderation_status") or split_from_legacy_status(d["status"])[0].value)
+            )
+            inv = InventoryStatus(
+                str(d.get("inventory_status") or split_from_legacy_status(d["status"])[1].value)
+            )
+        if moderation_status is not None:
+            mod = ModerationStatus(moderation_status)
+        if inventory_status is not None:
+            inv = InventoryStatus(inventory_status)
+    else:
+        mod = ModerationStatus(moderation_status)
+        inv = InventoryStatus(inventory_status)
+    projected = legacy_status if legacy_status is not None else legacy_status_from_split(mod, inv)
+    conn.execute(
+        """
+        UPDATE trade_listings
+        SET status = ?, moderation_status = ?, inventory_status = ?
+        WHERE id = ?
+        """,
+        (projected, mod.value, inv.value, listing_id),
+    )
+
 
 def hash_password(password: str, salt: str | None = None) -> str:
     salt = salt or secrets.token_hex(8)

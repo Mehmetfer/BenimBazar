@@ -211,8 +211,9 @@ def test_change_chain_blocks_unapproved(client):
         headers=auth(b["token"]),
         json={"requested_listing_ids": [pending["id"]], "offered_listing_ids": [ok["id"]]},
     )
-    assert r.status_code == 409
-    assert r.json()["detail"]["code"] == "LISTING_NOT_APPROVED"
+    # Feature flag off → disabled before algorithm; unapproved still never matchable
+    assert r.status_code == 501
+    assert r.json()["detail"]["code"] == "CHANGE_CHAIN_DISABLED"
 
 
 def test_moderation_action_creates_audit(client):

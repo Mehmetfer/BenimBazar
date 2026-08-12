@@ -199,6 +199,7 @@ def run_ai_premoderation(
         correlation_id=correlation_id,
     )
     invalidate_listing(listing_id)
+    db.sync_dual_status(conn, listing_id, legacy_status=next_status.value)
     return {
         "listing_id": listing_id,
         "status": next_status.value,
@@ -369,6 +370,7 @@ def apply_superadmin_decision(
         correlation_id=correlation_id,
     )
     row2 = conn.execute("SELECT * FROM trade_listings WHERE id = ?", (listing_id,)).fetchone()
+    db.sync_dual_status(conn, listing_id, legacy_status=target.value)
     invalidate_listing(listing_id)
     invalidate_public_listings()
     return dict(row2)
@@ -407,6 +409,13 @@ def remoderate_after_edit(
         WHERE id = ?
         """,
         (ListingStatus.PENDING_MODERATION.value, new_mod, now, now, listing_id),
+    )
+    db.sync_dual_status(
+        conn,
+        listing_id,
+        moderation_status="PENDING_MODERATION",
+        inventory_status="AVAILABLE",
+        legacy_status=ListingStatus.PENDING_MODERATION.value,
     )
     db.audit(
         conn,

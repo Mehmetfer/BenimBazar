@@ -260,6 +260,13 @@ def accept_offer(
             )
             if cur.rowcount != 1:
                 raise DomainError("CONFLICT", f"Listing {lid} için yarış çakışması", 409)
+            db.sync_dual_status(
+                conn,
+                int(lid),
+                moderation_status="APPROVED",
+                inventory_status="RESERVED",
+                legacy_status=ListingStatus.RESERVED.value,
+            )
             db.audit(
                 conn,
                 actor_id=actor_id,
@@ -437,6 +444,13 @@ def cancel_offer(
                         ListingStatus.RESERVED.value,
                     ),
                 )
+                db.sync_dual_status(
+                    conn,
+                    int(lid),
+                    moderation_status="APPROVED",
+                    inventory_status="AVAILABLE",
+                    legacy_status=RELEASE_TO_APPROVED.value,
+                )
                 db.audit(
                     conn,
                     actor_id=actor_id,
@@ -568,6 +582,13 @@ def _transfer_listing(conn, listing_id: int, *, new_owner: int, correlation_id: 
     )
     if cur.rowcount != 1:
         raise DomainError("CONFLICT", f"Listing {listing_id} transfer çakışması", 409)
+    db.sync_dual_status(
+        conn,
+        listing_id,
+        moderation_status="APPROVED",
+        inventory_status="TRADED",
+        legacy_status=ListingStatus.TRADED.value,
+    )
     db.audit(
         conn,
         actor_id=new_owner,
