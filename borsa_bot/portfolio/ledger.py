@@ -20,6 +20,7 @@ class Position:
     avg_cost: float
     stop_price: float | None = None
     target_price: float | None = None
+    protect_meta: str | None = None
 
 
 class PortfolioLedger:
@@ -220,6 +221,26 @@ class PortfolioLedger:
         if peak <= 0:
             return 0.0
         return max(0.0, (peak - self.equity()) / peak * 100)
+
+    def get_protect_meta(self, symbol: str) -> dict:
+        import json
+
+        pos = self.get_position(symbol)
+        if not pos or not pos.protect_meta:
+            return {}
+        try:
+            return json.loads(pos.protect_meta)
+        except json.JSONDecodeError:
+            return {}
+
+    def set_protect_meta(self, symbol: str, meta: dict) -> None:
+        import json
+
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE positions SET protect_meta=? WHERE symbol=?",
+                (json.dumps(meta), symbol),
+            )
 
     def weekly_loss_pct(self) -> float:
         """Approx weekly PnL % from last 7d sells + MTM vs starting; MVP uses total_pnl proxy scaled."""

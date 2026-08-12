@@ -95,6 +95,11 @@ def migrate_paper_db(conn: sqlite3.Connection) -> dict:
     )
     added += ensure_columns(
         conn,
+        "positions",
+        [("protect_meta", "TEXT DEFAULT NULL")],
+    )
+    added += ensure_columns(
+        conn,
         "trades",
         [("data_source_kind", "TEXT DEFAULT 'UNKNOWN'")],
     )

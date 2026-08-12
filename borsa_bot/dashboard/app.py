@@ -489,6 +489,33 @@ def paper_diagnostics() -> dict:
     return body
 
 
+@app.get("/api/desk/briefing")
+def desk_briefing() -> dict:
+    """Institutional desk daily briefing — regime, risk, opportunities, portfolio."""
+    briefing = service.desk_briefing()
+    briefing["ok"] = True
+    return briefing
+
+
+@app.get("/api/desk/evaluate/{symbol}")
+def desk_evaluate(symbol: str) -> dict:
+    """Master Trading Committee + pipeline evaluation for one symbol."""
+    sym = symbol.strip().upper()
+    if not sym:
+        raise HTTPException(status_code=400, detail="symbol required")
+    result = service.desk_evaluate(sym)
+    result["ok"] = True
+    return result
+
+
+@app.get("/api/desk/scan")
+def desk_scan(limit: int = 20) -> dict:
+    """Run institutional pipeline on top scan opportunities."""
+    lim = max(1, min(50, int(limit)))
+    rows = service.desk_scan(limit=lim)
+    return {"ok": True, "count": len(rows), "results": rows}
+
+
 @app.post("/api/paper/wallet/init")
 def paper_wallet_init() -> dict:
     """Reset BIST paper wallet to STARTING_CASH (default 100k). Does not unlock live money."""

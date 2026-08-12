@@ -1528,6 +1528,12 @@ class TradingService:
         return {"ok": False, "message": "side BUY veya SELL olmalı"}
 
     def monitor_exits(self) -> list[dict]:
+        """Trailing stops, partial TPs, then stop/target exits."""
+        from autonomous.monitor import monitor_and_exit
+
+        return monitor_and_exit(self, execution_mode="PAPER")
+
+    def _monitor_exits_core(self) -> list[dict]:
         """Check stop/target vs marks; on hit execute paper sell then emit EXECUTION alerts."""
         out: list[dict] = []
         self.tick()
@@ -1701,3 +1707,24 @@ class TradingService:
         }
         emit_daily_summary(self.alerts, payload)
         return payload
+
+    def desk_evaluate(self, symbol: str) -> dict:
+        """Institutional desk evaluation for one symbol (committee + pipeline)."""
+        from desk.engine import InstitutionalDeskEngine
+
+        engine = InstitutionalDeskEngine(self)
+        return engine.evaluate_symbol(symbol).to_dict()
+
+    def desk_briefing(self) -> dict:
+        """Professional daily briefing — regime, risk, opportunities."""
+        from desk.engine import InstitutionalDeskEngine
+
+        engine = InstitutionalDeskEngine(self)
+        return engine.briefing()
+
+    def desk_scan(self, *, limit: int = 20) -> list[dict]:
+        """Run full desk pipeline on top scan rows."""
+        from desk.engine import InstitutionalDeskEngine
+
+        engine = InstitutionalDeskEngine(self)
+        return engine.evaluate_scan(limit=limit)
