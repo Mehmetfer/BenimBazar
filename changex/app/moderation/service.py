@@ -18,7 +18,8 @@ from ..states import (
     listing_transition,
     normalize_listing_status,
 )
-from .provider import ModerationAssessment, get_provider
+from .provider import ModerationAssessment, get_provider, validate_assessment
+from .cache import invalidate_listing, invalidate_public_listings
 
 
 class ModerationError(Exception):
@@ -67,14 +68,15 @@ def run_ai_premoderation(
     photos = db.loads(listing.get("photo_urls"), [])
     provider = get_provider()
     try:
-        assessment = provider.moderate_listing(
+        raw = provider.analyze_listing(
             title=listing.get("title") or "",
             description=listing.get("description") or "",
             category=listing.get("category") or "",
             wanted_items=listing.get("wanted_items") or "",
             photo_urls=photos,
         )
-    except Exception as exc:  # noqa: BLE001 — fail closed
+        assessment = validate_assessment(raw)
+    except Exception as exc:  # noqa: BLE001 — fail closed (timeout/unavailable/etc.)
         assessment = ModerationAssessment(
             result=AiModerationResult.UNAVAILABLE,
             confidence=0.0,
@@ -87,10 +89,15 @@ def run_ai_premoderation(
     now = time.time()
     if assessment.result == AiModerationResult.UNAVAILABLE or assessment.confidence is None:
         next_status = ListingStatus.MODERATION_UNAVAILABLE
+        # Prefer ADMIN_REVIEW synonym path when policy wants queue visibility
         listing_transition(current, next_status)
         risk = RiskLevel.HIGH.value
         priority = 70
-    elif assessment.result == AiModerationResult.BLOCKED and "CSAM" in assessment.categories:
+    elif assessment.result == AiModerationResult.BLOCKED and (
+        "CHILD_SAFETY" in assessment.categories
+        or "CSAM" in assessment.categories
+        or "HUMAN_TRAFFICKING" in assessment.categories
+    ):
         # Hard safety: reject + escalate record; still auditable
         next_status = ListingStatus.REJECTED
         listing_transition(current, next_status)
@@ -191,6 +198,7 @@ def run_ai_premoderation(
         ),
         correlation_id=correlation_id,
     )
+    invalidate_listing(listing_id)
     return {
         "listing_id": listing_id,
         "status": next_status.value,
@@ -225,7 +233,7 @@ def apply_superadmin_decision(
         ModerationDecision.APPROVE: ListingStatus.APPROVED,
         ModerationDecision.REJECT: ListingStatus.REJECTED,
         ModerationDecision.REQUEST_EDIT: ListingStatus.EDIT_REQUIRED,
-        ModerationDecision.ESCALATE: ListingStatus.ADMIN_REVIEW,
+        ModerationDecision.ESCALATE: ListingStatus.ESCALATED,
         ModerationDecision.SUSPEND_USER: ListingStatus.SUSPENDED,
     }
     target = target_map[decision]
@@ -234,6 +242,7 @@ def apply_superadmin_decision(
         if previous not in {
             ListingStatus.ADMIN_REVIEW,
             ListingStatus.MODERATION_UNAVAILABLE,
+            ListingStatus.ESCALATED,
         }:
             raise ModerationError(
                 "INVALID_STATE",
@@ -252,15 +261,11 @@ def apply_superadmin_decision(
             (listing_id, mod_version),
         )
     elif decision == ModerationDecision.ESCALATE:
-        target = ListingStatus.ADMIN_REVIEW
-        conn.execute(
-            """
-            UPDATE trade_listings
-            SET risk_level = ?, moderation_priority = 100, updated_at = ?, moderation_updated_at = ?
-            WHERE id = ? AND version = ?
-            """,
-            (RiskLevel.CRITICAL.value, time.time(), time.time(), listing_id, version),
-        )
+        try:
+            listing_transition(previous, ListingStatus.ESCALATED)
+        except InvalidTransition as exc:
+            raise ModerationError("CONFLICT", str(exc), 409) from exc
+
     else:
         try:
             listing_transition(previous, target)
@@ -268,7 +273,28 @@ def apply_superadmin_decision(
             raise ModerationError("CONFLICT", str(exc), 409) from exc
 
     now = time.time()
-    if decision != ModerationDecision.ESCALATE:
+    if decision == ModerationDecision.ESCALATE:
+        cur = conn.execute(
+            """
+            UPDATE trade_listings
+            SET status = ?, risk_level = ?, moderation_priority = 100,
+                updated_at = ?, moderation_updated_at = ?, moderation_reason = ?,
+                version = version + 1
+            WHERE id = ? AND version = ?
+            """,
+            (
+                ListingStatus.ESCALATED.value,
+                RiskLevel.CRITICAL.value,
+                now,
+                now,
+                reason[:500],
+                listing_id,
+                version,
+            ),
+        )
+        if cur.rowcount != 1:
+            raise ModerationError("CONFLICT", "Eşzamanlı moderasyon kararı çakışması", 409)
+    else:
         cur = conn.execute(
             """
             UPDATE trade_listings
@@ -291,17 +317,6 @@ def apply_superadmin_decision(
                 listing_id,
                 version,
             ),
-        )
-        if cur.rowcount != 1:
-            raise ModerationError("CONFLICT", "Eşzamanlı moderasyon kararı çakışması", 409)
-    else:
-        # bump version for concurrency safety on escalate
-        cur = conn.execute(
-            """
-            UPDATE trade_listings SET version = version + 1, moderation_reason = ?
-            WHERE id = ? AND version = ?
-            """,
-            (reason[:500], listing_id, version),
         )
         if cur.rowcount != 1:
             raise ModerationError("CONFLICT", "Eşzamanlı moderasyon kararı çakışması", 409)
@@ -354,6 +369,8 @@ def apply_superadmin_decision(
         correlation_id=correlation_id,
     )
     row2 = conn.execute("SELECT * FROM trade_listings WHERE id = ?", (listing_id,)).fetchone()
+    invalidate_listing(listing_id)
+    invalidate_public_listings()
     return dict(row2)
 
 
@@ -413,7 +430,8 @@ def user_status_message(status: str) -> str:
         ListingStatus.APPROVED: "Takasa açıldı.",
         ListingStatus.ACTIVE: "Takasa açıldı.",
         ListingStatus.REJECTED: "İçeriğiniz Change X kurallarına uygun bulunmadı.",
-        ListingStatus.EDIT_REQUIRED: "İçeriğinizde düzeltme isteniyor.",
+        ListingStatus.EDIT_REQUIRED: "İçeriğinizde düzenleme gerekiyor.",
+        ListingStatus.ESCALATED: "İçeriğiniz incelemeye gönderildi.",
         ListingStatus.SUSPENDED: "İçeriğiniz askıya alındı.",
         ListingStatus.RESERVED: "Takas rezervinde.",
         ListingStatus.TRADED: "Takas tamamlandı.",

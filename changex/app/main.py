@@ -30,6 +30,7 @@ from .moderation import (
     run_ai_premoderation,
     user_status_message,
 )
+from .moderation.cache import cache_get, cache_set, invalidate_listing, reset_cache
 from .observability import safe_log_fields
 from .recovery import recover_stale_reservations
 from .states import (
@@ -196,7 +197,11 @@ class ListingUpdateIn(BaseModel):
     wanted_items: str | None = None
     location: str | None = None
     category: str | None = None
+    subcategory: str | None = None
+    accept_categories: list[str] | None = None
     photo_urls: list[str] | None = None
+    min_value: ValueIn | None = None
+    max_value: ValueIn | None = None
     # Ignored / rejected if present — users cannot self-approve
     status: str | None = None
 
@@ -396,7 +401,18 @@ def list_listings(
     category: str | None = None,
     user: Annotated[dict | None, Depends(current_user)] = None,
 ) -> dict:
-    # Public feed: APPROVED only (ACTIVE legacy treated as approved via SQL IN)
+    # Public feed: APPROVED only — served via short-lived cache that invalidates on moderation
+    cache_key = f"public:listings:{category or ''}:{q or ''}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        # Hard filter: never leak non-approved even if cache stale/buggy
+        safe = [
+            x
+            for x in cached.get("listings", [])
+            if str(x.get("status", "")).upper() in {"APPROVED", "ACTIVE"}
+        ]
+        return {"listings": safe, "viewer": user["username"] if user else None, "cache": True}
+
     sql = "SELECT * FROM trade_listings WHERE status IN ('APPROVED', 'ACTIVE')"
     args: list[Any] = []
     if category and category not in {"Lobi", "TÜM TAKASLAR", "Tumu", "Tümü"}:
@@ -410,7 +426,9 @@ def list_listings(
     with db.connect() as conn:
         rows = conn.execute(sql, args).fetchall()
         items = [_listing_public(conn, dict(r)) for r in rows]
-    return {"listings": items, "viewer": user["username"] if user else None}
+    payload = {"listings": items}
+    cache_set(cache_key, payload)
+    return {"listings": items, "viewer": user["username"] if user else None, "cache": False}
 
 
 @app.get("/api/listings/mine")
@@ -553,6 +571,7 @@ def update_listing(
             row = conn.execute("SELECT * FROM trade_listings WHERE id = ?", (listing_id,)).fetchone()
             if not row:
                 raise HTTPException(404, detail={"code": "LISTING_NOT_FOUND", "message": "Bulunamadı"})
+            row = dict(row)
             if int(row["owner_id"]) != user["id"] and user.get("role") not in {
                 UserRole.ADMIN.value,
                 UserRole.SUPERADMIN.value,
@@ -571,7 +590,21 @@ def update_listing(
             wanted = body.wanted_items if body.wanted_items is not None else row["wanted_items"]
             location = body.location if body.location is not None else row["location"]
             category = body.category.strip() if body.category is not None else row["category"]
+            subcategory = (
+                body.subcategory.strip() if body.subcategory is not None else row["subcategory"]
+            )
             photos = body.photo_urls if body.photo_urls is not None else db.loads(row["photo_urls"], [])
+            accept_cats = (
+                body.accept_categories
+                if body.accept_categories is not None
+                else db.loads(row["accept_categories"], [])
+            )
+            min_units = int(row.get("min_mandal_units") or 0)
+            max_units = int(row.get("max_mandal_units") or 0)
+            if body.min_value is not None:
+                min_units = _parse_value(body.min_value).mandal_units
+            if body.max_value is not None:
+                max_units = _parse_value(body.max_value).mandal_units
 
             critical = False
             if body.title is not None and title != row["title"]:
@@ -580,9 +613,17 @@ def update_listing(
                 critical = True
             if body.category is not None and category != row["category"]:
                 critical = True
+            if body.subcategory is not None and subcategory != row["subcategory"]:
+                critical = True
             if body.wanted_items is not None and wanted != row["wanted_items"]:
                 critical = True
             if body.photo_urls is not None and photos != db.loads(row["photo_urls"], []):
+                critical = True
+            if body.accept_categories is not None and accept_cats != db.loads(
+                row["accept_categories"], []
+            ):
+                critical = True
+            if body.min_value is not None or body.max_value is not None:
                 critical = True
 
             if critical:
@@ -590,7 +631,8 @@ def update_listing(
                     """
                     UPDATE trade_listings
                     SET title=?, description=?, wanted_items=?, location=?, category=?,
-                        photo_urls=?, updated_at=?
+                        subcategory=?, accept_categories=?, photo_urls=?,
+                        min_mandal_units=?, max_mandal_units=?, updated_at=?
                     WHERE id=?
                     """,
                     (
@@ -599,7 +641,11 @@ def update_listing(
                         wanted,
                         location,
                         category,
+                        subcategory,
+                        db.dumps(accept_cats),
                         db.dumps(photos),
+                        min_units,
+                        max_units,
                         time.time(),
                         listing_id,
                     ),
@@ -607,13 +653,15 @@ def update_listing(
                 remoderate_after_edit(
                     conn, listing_id=listing_id, actor_id=user["id"], correlation_id=cid
                 )
+                invalidate_listing(listing_id)
             else:
                 # Safe metadata (location only) without remotion
                 conn.execute(
                     """
                     UPDATE trade_listings
                     SET title=?, description=?, wanted_items=?, location=?, category=?,
-                        photo_urls=?, updated_at=?, version=version+1
+                        subcategory=?, accept_categories=?, photo_urls=?,
+                        updated_at=?, version=version+1
                     WHERE id=? AND version=?
                     """,
                     (
@@ -622,6 +670,8 @@ def update_listing(
                         wanted,
                         location,
                         category,
+                        subcategory,
+                        db.dumps(accept_cats),
                         db.dumps(photos),
                         time.time(),
                         listing_id,
@@ -849,7 +899,7 @@ def moderation_queue(user: Annotated[dict, Depends(require_superadmin)]) -> dict
         rows = conn.execute(
             """
             SELECT * FROM trade_listings
-            WHERE status IN ('PENDING_MODERATION','AI_REVIEW','ADMIN_REVIEW','MODERATION_UNAVAILABLE','EDIT_REQUIRED')
+            WHERE status IN ('PENDING_MODERATION','AI_REVIEW','ADMIN_REVIEW','MODERATION_UNAVAILABLE','EDIT_REQUIRED','ESCALATED')
             ORDER BY moderation_priority DESC, created_at ASC
             LIMIT 200
             """

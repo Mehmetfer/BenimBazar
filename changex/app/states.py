@@ -18,6 +18,7 @@ class ListingStatus(str, Enum):
     ACTIVE = "ACTIVE"
     REJECTED = "REJECTED"
     EDIT_REQUIRED = "EDIT_REQUIRED"
+    ESCALATED = "ESCALATED"
     SUSPENDED = "SUSPENDED"
     RESERVED = "RESERVED"
     TRADED = "TRADED"
@@ -124,7 +125,15 @@ LISTING_TRANSITIONS: dict[ListingStatus, set[ListingStatus]] = {
         ListingStatus.APPROVED,
         ListingStatus.REJECTED,
         ListingStatus.EDIT_REQUIRED,
+        ListingStatus.ESCALATED,
         ListingStatus.SUSPENDED,
+    },
+    ListingStatus.ESCALATED: {
+        ListingStatus.APPROVED,
+        ListingStatus.REJECTED,
+        ListingStatus.EDIT_REQUIRED,
+        ListingStatus.SUSPENDED,
+        ListingStatus.ADMIN_REVIEW,
     },
     ListingStatus.MODERATION_UNAVAILABLE: {
         ListingStatus.ADMIN_REVIEW,

@@ -283,3 +283,89 @@ def test_concurrent_admin_decisions_safe(client):
         ).fetchone()["c"]
     assert st in {"APPROVED", "REJECTED"}
     assert decisions >= 1
+
+
+def test_superadmin_request_edit(client):
+    a = register(client, "ts_edit_req")
+    sa = register(client, "ts_edit_sa")
+    promote_superadmin(sa["user"]["id"])
+    listing = make_listing(client, a["token"], "NeedsEdit", approve=False)
+    r = client.post(
+        f"/api/admin/moderation/{listing['id']}/decision",
+        headers=auth(sa["token"]),
+        json={"decision": "REQUEST_EDIT", "reason": "foto net değil"},
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] == "EDIT_REQUIRED"
+    assert "düzenleme" in r.json()["user_message"].lower()
+
+
+def test_suspended_user_cannot_act(client):
+    a = register(client, "ts_sus_a")
+    sa = register(client, "ts_sus_sa")
+    promote_superadmin(sa["user"]["id"])
+    listing = make_listing(client, a["token"], "SuspendMe", approve=False)
+    r = client.post(
+        f"/api/admin/moderation/{listing['id']}/decision",
+        headers=auth(sa["token"]),
+        json={"decision": "SUSPEND_USER", "reason": "abuse"},
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] == "SUSPENDED"
+    # Suspended owner cannot create new listings
+    r2 = client.post(
+        "/api/listings",
+        headers=auth(a["token"]),
+        json={
+            "title": "AfterSuspend",
+            "category": "Ev",
+            "items": [{"name": "x", "value": {"madalyon": 1, "dirhem": 0, "mandal": 0}}],
+        },
+    )
+    assert r2.status_code == 403
+    assert r2.json()["detail"]["code"] == "USER_SUSPENDED"
+
+
+def test_search_cache_cannot_expose_unapproved(client):
+    from changex.app.moderation.cache import cache_set, reset_cache
+
+    a = register(client, "ts_cache")
+    pending = make_listing(client, a["token"], "CacheLeak", approve=False)
+    # Poison cache with unapproved listing (simulating bug/stale write)
+    cache_set(
+        "public:listings::",
+        {"listings": [{"id": pending["id"], "status": "PENDING_MODERATION", "title": "leak"}]},
+    )
+    feed = client.get("/api/listings").json()["listings"]
+    assert pending["id"] not in {x["id"] for x in feed}
+    assert all(str(x.get("status")).upper() in {"APPROVED", "ACTIVE"} for x in feed)
+    reset_cache()
+
+
+def test_ai_timeout_no_publication(client):
+    from changex.app.moderation import TimeoutModerationProvider, set_provider
+
+    set_provider(TimeoutModerationProvider())
+    a = register(client, "ts_timeout")
+    listing = make_listing(client, a["token"], "TimeoutItem", approve=False)
+    assert listing["status"] == "MODERATION_UNAVAILABLE"
+    assert listing["id"] not in {x["id"] for x in client.get("/api/listings").json()["listings"]}
+
+
+def test_ai_malformed_response_safe_failure(client):
+    from changex.app.moderation import MalformedModerationProvider, set_provider
+
+    set_provider(MalformedModerationProvider())
+    a = register(client, "ts_malform")
+    listing = make_listing(client, a["token"], "MalformedItem", approve=False)
+    assert listing["status"] == "MODERATION_UNAVAILABLE"
+    assert listing["id"] not in {x["id"] for x in client.get("/api/listings").json()["listings"]}
+
+
+def test_invalid_listing_transitions(client):
+    from changex.app.states import ListingStatus, InvalidTransition, listing_transition
+
+    with pytest.raises(InvalidTransition):
+        listing_transition(ListingStatus.REJECTED, ListingStatus.APPROVED)
+    with pytest.raises(InvalidTransition):
+        listing_transition(ListingStatus.TRADED, ListingStatus.PENDING_MODERATION)

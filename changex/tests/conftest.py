@@ -25,9 +25,11 @@ def tmp_db(monkeypatch):
 @pytest.fixture()
 def client(tmp_db, monkeypatch):
     from changex.app import main as main_mod
+    from changex.app.moderation.cache import reset_cache
 
     monkeypatch.setattr(main_mod, "_RATE", {})
     main_mod.REQUEST_LOGS.clear()
+    reset_cache()
     from changex.app.main import app
 
     with TestClient(app) as c:
