@@ -8,6 +8,7 @@ import 'dart:typed_data';
 import 'package:changex/main.dart';
 import 'package:changex/screens/create_listing_screen.dart';
 import 'package:changex/screens/edit_listing_screen.dart';
+import 'package:changex/screens/home_screen.dart';
 import 'package:changex/screens/listing_detail_screen.dart';
 import 'package:changex/screens/login_screen.dart';
 import 'package:changex/screens/my_listings_screen.dart';
@@ -215,6 +216,22 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('home shows bottom-bar Fotoğraflı ilan create CTA', (tester) async {
+    await pumpApp(
+      tester,
+      HomeScreen(user: {'id': 1, 'username': 'tester', 'role': 'user'}),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Fotoğraflı ilan'), findsOneWidget);
+    expect(find.text('İlanlarım'), findsOneWidget);
+    await tester.tap(find.text('Fotoğraflı ilan'));
+    await tester.pumpAndSettle();
+    expect(find.text('Yeni takas ilanı'), findsOneWidget);
+    expect(find.text('Galeriden'), findsOneWidget);
+    expect(find.text('Kamera'), findsOneWidget);
   });
 
   testWidgets('create listing previews real fixture bytes before upload', (tester) async {
