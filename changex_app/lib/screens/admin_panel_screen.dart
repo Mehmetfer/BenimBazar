@@ -29,6 +29,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   List<dynamic> _audit = [];
   List<dynamic> _supportTickets = [];
   List<dynamic> _messageReports = [];
+  List<dynamic> _listingHits = [];
   Map<String, dynamic>? _health;
   bool _loading = true;
   String? _error;
@@ -55,6 +56,64 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   bool get _canAssignRoles => widget.user['role'] == 'superadmin';
   bool get _canViewAudit =>
       widget.user['role'] == 'admin' || widget.user['role'] == 'superadmin';
+  bool get _canDeleteAnyListing =>
+      widget.user['role'] == 'admin' || widget.user['role'] == 'superadmin';
+
+  Future<void> _searchListings() async {
+    try {
+      final hits = await api.adminListings(q: _listingSearch.text.trim());
+      if (!mounted) return;
+      setState(() => _listingHits = hits);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${hits.length} sonuç')),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Arama başarısız: ${e.message}')),
+      );
+    }
+  }
+
+  Future<void> _adminCancelListing(int id) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'İlanı sil',
+          style: GoogleFonts.montserrat(fontWeight: FontWeight.w800),
+        ),
+        content: const Text(
+          'Bu ilan soft-delete ile yayından kaldırılacak. Emin misiniz?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await api.cancelListing(id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('İlan silindi')),
+      );
+      await _searchListings();
+      await _refreshAll(silent: true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    }
+  }
 
   Future<void> _refreshAll({bool silent = false}) async {
     if (!silent) {
@@ -473,23 +532,71 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
               labelText: 'İlan ara (başlık)',
               suffixIcon: IconButton(
                 icon: const Icon(Icons.search, color: AppColors.gold),
-                onPressed: () async {
-                  try {
-                    final hits = await api.adminListings(q: _listingSearch.text.trim());
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('${hits.length} sonuç')),
-                    );
-                  } on ApiException catch (e) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Arama başarısız: ${e.message}')),
-                    );
-                  }
-                },
+                onPressed: _searchListings,
               ),
             ),
+            onSubmitted: (_) => _searchListings(),
           ),
+          if (_listingHits.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Arama sonuçları (${_listingHits.length})',
+              style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            ..._listingHits.take(20).map((raw) {
+              final item = Map<String, dynamic>.from(raw as Map);
+              final id = _asInt(item['id']);
+              final status = item['status']?.toString() ?? '';
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.bgElevated,
+                  border: Border.all(color: AppColors.line),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item['title']?.toString() ?? '#$id',
+                            style: GoogleFonts.montserrat(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                          Text(
+                            '#$id · $status · ${item['category'] ?? ''}',
+                            style: GoogleFonts.montserrat(
+                              color: AppColors.muted,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_canDeleteAnyListing &&
+                        status.toUpperCase() != 'CANCELLED' &&
+                        status.toUpperCase() != 'TRADED' &&
+                        status.toUpperCase() != 'RESERVED')
+                      TextButton(
+                        onPressed: () => _adminCancelListing(id),
+                        child: Text(
+                          'SİL',
+                          style: GoogleFonts.montserrat(
+                            color: AppColors.danger,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }),
+          ],
           const SizedBox(height: 12),
           Text(
             'Son aktiviteler',

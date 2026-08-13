@@ -1493,6 +1493,7 @@ def cancel_listing(
                 UserRole.ADMIN.value,
                 UserRole.SUPERADMIN.value,
             }
+            # Moderators use moderation DELETE on queue; cancel is owner/admin/superadmin only.
             if not is_owner and not is_staff:
                 raise HTTPException(
                     403, detail={"code": "FORBIDDEN", "message": "Bu kaydı silemezsin"}

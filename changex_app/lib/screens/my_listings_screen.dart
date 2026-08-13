@@ -226,6 +226,52 @@ class _MyListingCard extends StatelessWidget {
   final Map<String, dynamic> user;
   final VoidCallback onChanged;
 
+  Future<void> _confirmDelete(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'İlanı sil',
+          style: GoogleFonts.montserrat(fontWeight: FontWeight.w800),
+        ),
+        content: const Text(
+          'İlan yayından kaldırılır. Takas edilmiş / rezerve ilanlar silinemez.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    try {
+      final id = item['id'];
+      final lid = id is int ? id : (id as num).toInt();
+      await api.cancelListing(lid);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('İlan silindi')),
+      );
+      onChanged();
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Silinemedi')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = resolveListingUxState(item);
@@ -333,22 +379,39 @@ class _MyListingCard extends StatelessWidget {
                       ),
                     ),
                   ],
-                  if (listingUxEditable(state)) ...[
+                  if (listingUxEditable(state) || listingUxDeletable(state)) ...[
                     const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        final ok = await Navigator.of(context).push<bool>(
-                          MaterialPageRoute(
-                            builder: (_) => EditListingScreen(
-                              user: user,
-                              listing: item,
-                            ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (listingUxEditable(state))
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              final ok = await Navigator.of(context).push<bool>(
+                                MaterialPageRoute(
+                                  builder: (_) => EditListingScreen(
+                                    user: user,
+                                    listing: item,
+                                  ),
+                                ),
+                              );
+                              if (ok == true) onChanged();
+                            },
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            label: const Text('Düzenle / Fotoğraf'),
                           ),
-                        );
-                        if (ok == true) onChanged();
-                      },
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      label: const Text('Düzenle / Fotoğraf'),
+                        if (listingUxDeletable(state))
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.danger,
+                              side: const BorderSide(color: AppColors.danger),
+                            ),
+                            onPressed: () => _confirmDelete(context),
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                            label: const Text('Sil'),
+                          ),
+                      ],
                     ),
                   ],
                 ],

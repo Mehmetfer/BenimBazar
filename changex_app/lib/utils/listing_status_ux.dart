@@ -141,6 +141,18 @@ bool listingUxEditable(ListingUxState state) {
   }
 }
 
+/// Owner (or staff via cancel API) may soft-delete unless already closed/traded.
+bool listingUxDeletable(ListingUxState state) {
+  switch (state) {
+    case ListingUxState.traded:
+    case ListingUxState.deleted:
+    case ListingUxState.reserved:
+      return false;
+    default:
+      return true;
+  }
+}
+
 /// Filter buckets for My Listings tabs.
 enum MyListingsFilter { all, pending, live, closed }
 

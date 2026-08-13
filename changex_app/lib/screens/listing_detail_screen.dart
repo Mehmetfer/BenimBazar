@@ -171,6 +171,60 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     return role == 'admin' || role == 'superadmin' || role == 'moderator';
   }
 
+  bool get _canForceDelete {
+    final role = widget.user?['role']?.toString();
+    return role == 'admin' || role == 'superadmin';
+  }
+
+  Future<void> _deleteListing() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'İlanı sil',
+          style: GoogleFonts.montserrat(fontWeight: FontWeight.w800),
+        ),
+        content: Text(
+          _isOwner
+              ? 'İlanınız yayından kaldırılacak. Devam edilsin mi?'
+              : 'Bu ilanı (yönetici) soft-delete ile yayından kaldıracaksınız.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await api.cancelListing(_asInt(widget.listing['id']));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('İlan silindi')),
+      );
+      Navigator.of(context).pop(true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Silinemedi')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _loadApprovedMine() async {
     setState(() => _loadingMine = true);
     try {
@@ -285,6 +339,22 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       },
                       icon: const Icon(Icons.edit_outlined),
                       label: const Text('Düzenle / Fotoğraf ekle'),
+                    ),
+                  ],
+                  if ((_isOwner || _canForceDelete) &&
+                      listingUxDeletable(resolveListingUxState(widget.listing))) ...[
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.danger,
+                        side: const BorderSide(color: AppColors.danger),
+                        minimumSize: const Size(48, 48),
+                      ),
+                      onPressed: _busy ? null : _deleteListing,
+                      icon: const Icon(Icons.delete_outline),
+                      label: Text(
+                        _isOwner ? 'İlanımı sil' : 'İlanı sil (yönetici)',
+                      ),
                     ),
                   ],
                   const SizedBox(height: 18),

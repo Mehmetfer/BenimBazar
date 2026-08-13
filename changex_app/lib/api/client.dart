@@ -173,6 +173,15 @@ class ChangeXApi {
     return (data['listings'] as List?) ?? [];
   }
 
+  /// Soft-delete listing (CANCELLED). Owner or admin/superadmin.
+  Future<Map<String, dynamic>> cancelListing(int listingId) async {
+    final res = await http.post(
+      Uri.parse('$_root/api/listings/$listingId/cancel'),
+      headers: await _headers(auth: true),
+    );
+    return _decode(res);
+  }
+
   Future<Map<String, dynamic>> createOffer(Map<String, dynamic> body) async {
     final res = await http.post(
       Uri.parse('$_root/api/trades/offer'),

@@ -226,6 +226,11 @@ void main() {
     );
     expect(listingUxEditable(ListingUxState.deleted), isFalse);
     expect(listingUxEditable(ListingUxState.pending), isTrue);
+    expect(listingUxDeletable(ListingUxState.approved), isTrue);
+    expect(listingUxDeletable(ListingUxState.pending), isTrue);
+    expect(listingUxDeletable(ListingUxState.traded), isFalse);
+    expect(listingUxDeletable(ListingUxState.deleted), isFalse);
+    expect(listingUxDeletable(ListingUxState.reserved), isFalse);
   });
 
   testWidgets('owner pending detail shows moderation panel not offer CTA', (
