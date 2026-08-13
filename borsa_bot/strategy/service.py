@@ -6,6 +6,9 @@ from datetime import date
 from ai.quality import assess_signal_quality, classify_volatility_regime
 from analytics.paper_feedback import PaperDecisionFeedback
 from ai.calibration import CalibrationMonitor
+from decision.feedback import DecisionFeedbackLoop
+from decision.pipeline import F6PaperLoop
+from decision.replay import DecisionReplayStore
 from alerts import AlertManager
 from alerts.bridge import (
     emit_daily_summary,
@@ -101,6 +104,14 @@ class TradingService:
         # Paper decision feedback: calibration + post_trade + strategy retirement
         self.calibration = CalibrationMonitor()
         self.paper_feedback = PaperDecisionFeedback(calibration=self.calibration)
+        # Night-2 F6 intelligent decision loop (paper/simulation only — LIVE forbidden)
+        self.f6_feedback = DecisionFeedbackLoop()
+        self.f6_replay = DecisionReplayStore()
+        self.f6_loop = F6PaperLoop(
+            feedback=self.f6_feedback,
+            replay=self.f6_replay,
+            strategy="ensemble",
+        )
         self.multi = MultiHorizonOrchestrator(
             self.provider, equity=settings.starting_cash, calibration=self.calibration
         )
@@ -199,6 +210,13 @@ class TradingService:
             "strategy_ranking_example": example_ranking_report(),
             "strategy_ranking_example_note": "DEAD_ILLUSTRATIVE — use paper_decision_feedback.strategies",
             "paper_decision_feedback": self.paper_feedback.report(),
+            "f6_decision_loop": {
+                "enabled": True,
+                "live_trading": False,
+                "calibration": self.calibration.report(),
+                "feedback": self.f6_feedback.report(),
+                "note": "OBSERVE→REGIME→SIGNAL→RISK→DECISION→PAPER→FEEDBACK (no LIVE)",
+            },
             "data_source": meta.to_dict(),
             "system_health": {
                 "market_data": "CONNECTED" if meta.connected and has_data else "DISCONNECTED",
@@ -215,6 +233,16 @@ class TradingService:
                 "push_on": self.alerts.settings_store.get().push_on,
             },
         }
+
+    def f6_paper_decide(self, symbol: str, *, requested_size: float = 10.0) -> dict:
+        """Run one F6 paper decision cycle (never LIVE broker execution)."""
+        cycle = self.f6_loop.run_cycle(
+            provider=self.provider,
+            ledger=self.ledger,
+            symbol=symbol,
+            requested_size=requested_size,
+        )
+        return cycle.to_dict()
 
     def tick(self) -> None:
         self.provider.tick()
@@ -327,6 +355,11 @@ class TradingService:
                 mtf=mtf,
             )
             ai_conf = self.paper_feedback.adjust_confidence(ai_conf)
+            # Night-2: calibration status is evidence for the decision path (not LIVE)
+            cal_status = self.calibration.status().value
+            if cal_status == "OVERCONFIDENT":
+                ai_conf = max(5.0, ai_conf * 0.85)
+                ai_notes = f"{ai_notes};calibration={cal_status}" if ai_notes else f"calibration={cal_status}"
             safety = 80 - mtf_penalty
             if news_block:
                 safety -= 30
@@ -445,6 +478,9 @@ class TradingService:
             )
             # Paper calibration haircut — only after closed trades have recorded outcomes
             ai_conf = self.paper_feedback.adjust_confidence(ai_conf)
+            cal_status = self.calibration.status().value
+            if cal_status == "OVERCONFIDENT":
+                ai_conf = max(5.0, ai_conf * 0.85)
             bundle.ai_confidence = ai_conf
             # Re-gate BUY if confidence fell below threshold after haircut
             if (
