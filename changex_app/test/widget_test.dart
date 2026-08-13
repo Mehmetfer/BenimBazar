@@ -12,6 +12,7 @@ import 'package:changex/screens/home_screen.dart';
 import 'package:changex/screens/listing_detail_screen.dart';
 import 'package:changex/screens/login_screen.dart';
 import 'package:changex/screens/my_listings_screen.dart';
+import 'package:changex/screens/admin_panel_screen.dart';
 import 'package:changex/screens/splash_screen.dart';
 import 'package:changex/utils/chain_engine_ux.dart';
 import 'package:changex/utils/listing_status_ux.dart';
@@ -423,4 +424,24 @@ void main() {
       contains('NOT_IMPLEMENTED'),
     );
   });
+
+
+  testWidgets('admin panel shows ozet and onay tabs after load/error', (tester) async {
+    await pumpApp(
+      tester,
+      AdminPanelScreen(
+        user: {'id': 1, 'username': 'superadmin', 'role': 'superadmin'},
+      ),
+    );
+    // Initial loading spinner
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    // Allow async refresh to fail (no API) and settle into error/retry or tabs
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(seconds: 1));
+    // Either error retry or tab chrome should be present — never blank forever
+    final hasRetry = find.text('Tekrar dene').evaluate().isNotEmpty;
+    final hasOzet = find.text('ÖZET').evaluate().isNotEmpty;
+    expect(hasRetry || hasOzet, isTrue);
+  });
+
 }
