@@ -13,6 +13,7 @@ import 'package:changex/screens/listing_detail_screen.dart';
 import 'package:changex/screens/login_screen.dart';
 import 'package:changex/screens/my_listings_screen.dart';
 import 'package:changex/screens/splash_screen.dart';
+import 'package:changex/utils/chain_engine_ux.dart';
 import 'package:changex/utils/listing_status_ux.dart';
 import 'package:changex/utils/photo_pick.dart';
 import 'package:changex/widgets/listing_media.dart';
@@ -397,5 +398,29 @@ void main() {
     expect(find.text('1/2'), findsOneWidget);
     expect(find.byType(Image), findsWidgets);
     expect(tester.takeException(), isNull);
+  });
+
+  test('chain engine UX keeps settlement NOT_IMPLEMENTED honest', () {
+    expect(ChainEngineUx.settlementStatus, 'NOT_IMPLEMENTED');
+    expect(
+      ChainEngineUx.featureDisabledMessage(),
+      contains('NOT_IMPLEMENTED'),
+    );
+    expect(
+      ChainEngineUx.takasLabel(
+        chainOptIn: true,
+        tradePreference: 'CHAIN_ALLOWED',
+        chainEngineEnabled: false,
+      ),
+      contains('MOTOR KAPALI'),
+    );
+    expect(
+      ChainEngineUx.takasAttributeValue(
+        chainOptIn: true,
+        tradePreference: 'CHAIN_ALLOWED',
+        chainEngineEnabled: true,
+      ),
+      contains('NOT_IMPLEMENTED'),
+    );
   });
 }

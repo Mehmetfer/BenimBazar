@@ -12,7 +12,9 @@ from ..domain_status import InventoryStatus, ModerationStatus
 from .config import CHANGE_CHAIN_PROPOSAL_TTL_SECONDS, CHAIN_ENGINE_VERSION
 from .cycles import ChainCycle
 from .explain import explain_cycle
+from .integrity import GraphIntegrityError, revalidate_stored_edges
 from .matchability import is_chain_candidate
+from .settlement import attach_proposal_boundary
 
 
 class ChainProposalStatus(str, Enum):
@@ -63,6 +65,10 @@ def persist_proposal(
     nodes_by_id: dict[int, dict[str, Any]],
     ttl_seconds: int | None = None,
 ) -> dict[str, Any]:
+    existing = find_open_proposal_for_cycle(conn, cycle.listing_ids)
+    if existing is not None:
+        return existing
+
     ttl = ttl_seconds if ttl_seconds is not None else CHANGE_CHAIN_PROPOSAL_TTL_SECONDS
     now = _now()
     chain_id = str(uuid.uuid4())
@@ -109,6 +115,44 @@ def persist_proposal(
     return proposal_public(conn, proposal_id)
 
 
+def _canonical_listing_key(listing_ids: list[int]) -> tuple[int, ...]:
+    ids = [int(x) for x in listing_ids]
+    if not ids:
+        return tuple()
+    min_i = min(range(len(ids)), key=lambda i: ids[i])
+    rotated = ids[min_i:] + ids[:min_i]
+    return tuple(rotated)
+
+
+def find_open_proposal_for_cycle(conn, listing_ids: list[int]) -> dict[str, Any] | None:
+    """Reuse non-terminal consent-in-progress proposal for the same cycle."""
+    key = _canonical_listing_key(listing_ids)
+    if not key:
+        return None
+    open_statuses = {
+        ChainProposalStatus.PROPOSED.value,
+        ChainProposalStatus.PARTIALLY_ACCEPTED.value,
+    }
+    rows = conn.execute(
+        """
+        SELECT * FROM chain_proposals
+        WHERE status IN (?, ?)
+        ORDER BY created_at DESC
+        """,
+        (
+            ChainProposalStatus.PROPOSED.value,
+            ChainProposalStatus.PARTIALLY_ACCEPTED.value,
+        ),
+    ).fetchall()
+    for row in rows:
+        d = dict(row)
+        d = _expire_if_needed(conn, d)
+        if d["status"] not in open_statuses:
+            continue
+        if _canonical_listing_key(db.loads(d["listing_ids"], [])) == key:
+            return _row_to_public(conn, d)
+    return None
+
 def proposal_public(conn, proposal_id: int) -> dict[str, Any]:
     row = conn.execute("SELECT * FROM chain_proposals WHERE id = ?", (proposal_id,)).fetchone()
     if not row:
@@ -138,7 +182,7 @@ def _row_to_public(conn, row: dict[str, Any]) -> dict[str, Any]:
         }
         for p in parts
     ]
-    return {
+    return attach_proposal_boundary({
         "id": row["id"],
         "chain_id": row["chain_id"],
         "listing_ids": db.loads(row["listing_ids"], []),
@@ -157,9 +201,9 @@ def _row_to_public(conn, row: dict[str, Any]) -> dict[str, Any]:
         "created_by": row["created_by"],
         "engine_version": row.get("engine_version") or CHAIN_ENGINE_VERSION,
         "participants": participants,
-        "settlement": "NOT_IMPLEMENTED",
-        "ownership_transferred": False,
-    }
+        "graph_edge_materialized": False,
+        "consent_only": True,
+    })
 
 
 def list_proposals_for_user(conn, user_id: int) -> list[dict[str, Any]]:
@@ -281,6 +325,14 @@ def accept_proposal(
 
     listing_ids = db.loads(row["listing_ids"], [])
     validate_listings_still_eligible(conn, listing_ids)
+    try:
+        revalidate_stored_edges(conn, db.loads(row["edges_json"], []))
+    except GraphIntegrityError as exc:
+        raise ChainProposalError(
+            "STALE_EDGE",
+            exc.message,
+            409,
+        ) from exc
 
     # Idempotent consent: already accepted by this participant
     if part["consent"] == ChainConsent.ACCEPTED.value:
@@ -332,10 +384,12 @@ def accept_proposal(
         "UPDATE chain_proposals SET status = ?, updated_at = ? WHERE id = ?",
         (new_status, now, proposal_id),
     )
-    # CRITICAL: do NOT transfer ownership / call AssetLock
+    # CRITICAL: do NOT transfer ownership / call AssetLock / settle
     result = proposal_public(conn, proposal_id)
     assert result["ownership_transferred"] is False
     assert result["settlement"] == "NOT_IMPLEMENTED"
+    assert result["engine_phase"] == "PROPOSAL_ONLY"
+    assert result.get("consent_only") is True
     if idempotency_key:
         _idempotent_put(conn, idempotency_key, actor_id, action, "chain_proposal", proposal_id, result)
     return result

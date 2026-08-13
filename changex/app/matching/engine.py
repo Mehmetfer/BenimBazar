@@ -14,8 +14,10 @@ from .config import (
 from .cycles import ChainCycle, aggregate_chain_score, find_cycles
 from .explain import explain_cycle
 from .graph import build_edges, load_chain_nodes, prune_candidates_for_seed
+from .integrity import GraphIntegrityError
 from .pair_score import DeterministicScoreProvider
 from .proposals import persist_proposal
+from .settlement import attach_proposal_boundary, feature_disabled_payload
 
 
 class ChainEngineError(Exception):
@@ -28,9 +30,10 @@ class ChainEngineError(Exception):
 
 def ensure_chain_enabled() -> None:
     if not change_chain_enabled():
+        payload = feature_disabled_payload()
         raise ChainEngineError(
-            "CHANGE_CHAIN_DISABLED",
-            "Change Chain feature flag kapalı",
+            payload["code"],
+            payload["message"],
             501,
         )
 
@@ -96,7 +99,11 @@ def run_chain_match(
         nodes.append(seed)
 
     scorer = DeterministicScoreProvider(get_compatibility())
-    edges, adj = build_edges(nodes, scorer=scorer)
+    try:
+        edges, adj = build_edges(nodes, scorer=scorer)
+        integrity = {"ok": True, "node_count": len(nodes), "edge_count": len(edges)}
+    except GraphIntegrityError as exc:
+        raise ChainEngineError(exc.code, exc.message, 409) from exc
     nodes_by_id = {int(n["id"]): n for n in nodes}
 
     cycles = find_cycles(
@@ -119,18 +126,21 @@ def run_chain_match(
                 persist_proposal(conn, c, created_by=actor_id, nodes_by_id=nodes_by_id)
             )
 
-    return {
-        "engine_version": CHAIN_ENGINE_VERSION,
-        "seed_listing_id": seed_listing_id,
-        "candidate_node_count": len(nodes),
-        "edge_count": len(edges),
-        "cycle_count": len(cycles),
-        "max_length": max_len,
-        "cycles": [_cycle_public(c) for c in cycles],
-        "proposals": proposals,
-        "settlement": "NOT_IMPLEMENTED",
-        "asset_lock": "NOT_IMPLEMENTED",
-    }
+    return attach_proposal_boundary(
+        {
+            "engine_version": CHAIN_ENGINE_VERSION,
+            "seed_listing_id": seed_listing_id,
+            "candidate_node_count": len(nodes),
+            "edge_count": len(edges),
+            "cycle_count": len(cycles),
+            "max_length": max_len,
+            "cycles": [_cycle_public(c) for c in cycles],
+            "proposals": proposals,
+            "graph_integrity": integrity,
+            "consent_only": True,
+            "graph_edge_materialized": False,
+        }
+    )
 
 
 def _cycle_public(c: ChainCycle) -> dict[str, Any]:

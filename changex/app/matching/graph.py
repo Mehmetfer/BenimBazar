@@ -8,6 +8,12 @@ from .. import db
 from ..domain_status import InventoryStatus, ModerationStatus, TradePreference
 from .compatibility import CategoryCompatibility, get_compatibility
 from .edges import GraphEdge
+from .integrity import (
+    assert_graph_integrity,
+    dedupe_edges,
+    filter_valid_nodes,
+    rebuild_adjacency,
+)
 from .matchability import is_chain_candidate
 from .pair_score import DeterministicScoreProvider, can_form_edge
 from .preferences import get_user_preferences
@@ -73,7 +79,8 @@ def load_chain_nodes(conn, *, limit: int | None = None) -> list[dict[str, Any]]:
             # Listing can still opt in independently; do not block if listing opted in
             pass
         nodes.append(d)
-    return nodes
+    valid, _invalid = filter_valid_nodes(nodes)
+    return valid
 
 
 def prune_candidates_for_seed(
@@ -116,12 +123,13 @@ def build_edges(
     *,
     scorer: DeterministicScoreProvider | None = None,
     compat: CategoryCompatibility | None = None,
+    enforce_integrity: bool = True,
 ) -> tuple[list[GraphEdge], dict[int, list[GraphEdge]]]:
     """On-demand candidate generation with category-index pruning (not full n²)."""
     scorer = scorer or DeterministicScoreProvider(compat)
     compat = compat or get_compatibility()
+    nodes, _invalid = filter_valid_nodes(nodes)
     edges: list[GraphEdge] = []
-    adj: dict[int, list[GraphEdge]] = {int(n["id"]): [] for n in nodes}
 
     # Index HAVE listings by lowercased category for pruning
     by_category: dict[str, list[dict[str, Any]]] = {}
@@ -176,7 +184,11 @@ def build_edges(
                 reason=reason,
             )
             edges.append(edge)
-            adj[int(src["id"])].append(edge)
+
+    edges, _dropped = dedupe_edges(edges)
+    adj = rebuild_adjacency(edges, [int(n["id"]) for n in nodes])
+    if enforce_integrity:
+        assert_graph_integrity(nodes, edges)
     return edges, adj
 
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../theme/app_theme.dart';
+import '../utils/chain_engine_ux.dart';
 import '../utils/url_utils.dart';
 
 /// Listing trade-status ribbon (Letgo/Instagram-style overlay).
@@ -373,9 +374,15 @@ class TradeStatusRibbon extends StatelessWidget {
 
 /// Spec strip under hero — Letgo-style quick facts (no emoji clutter).
 class ListingSpecStrip extends StatelessWidget {
-  const ListingSpecStrip({super.key, required this.listing});
+  const ListingSpecStrip({
+    super.key,
+    required this.listing,
+    this.chainEngineEnabled = false,
+  });
 
   final Map<String, dynamic> listing;
+  /// From GET /api/change-chain/status — default false (production flag off).
+  final bool chainEngineEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -387,12 +394,11 @@ class ListingSpecStrip extends StatelessWidget {
     final preference = (listing['trade_preference']?.toString() ?? 'DIRECT_ONLY')
         .toUpperCase();
     final chainOpt = listing['chain_opt_in'] == true;
-    final takasLabel = chainOpt && preference == 'CHAIN_ALLOWED'
-        ? 'ZİNCİR AÇIK'
-        : preference == 'DIRECT_ONLY'
-            ? 'DOĞRUDAN'
-            : 'TAKAS';
-
+    final takasLabel = ChainEngineUx.takasLabel(
+      chainOptIn: chainOpt,
+      tradePreference: preference,
+      chainEngineEnabled: chainEngineEnabled,
+    );
     final cells = <(IconData, String)>[
       (Icons.category_outlined, listing['category']?.toString() ?? '—'),
       if (brand.isNotEmpty) (Icons.sell_outlined, brand),
@@ -439,9 +445,14 @@ class ListingSpecStrip extends StatelessWidget {
 
 /// Structured attribute rows (MARKA, KONUM, TAKAS…) without emoji bullets.
 class ListingAttributeList extends StatelessWidget {
-  const ListingAttributeList({super.key, required this.listing});
+  const ListingAttributeList({
+    super.key,
+    required this.listing,
+    this.chainEngineEnabled = false,
+  });
 
   final Map<String, dynamic> listing;
+  final bool chainEngineEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -461,12 +472,13 @@ class ListingAttributeList extends StatelessWidget {
       takasValue = 'İNCELEMEDE';
     } else if (ribbon == ListingTradeRibbon.closed) {
       takasValue = 'TAKASA KAPALI';
-    } else if (chainOpt && preference == 'CHAIN_ALLOWED') {
-      takasValue = 'EVET · ZİNCİR AÇIK';
     } else {
-      takasValue = 'EVET · DOĞRUDAN';
+      takasValue = ChainEngineUx.takasAttributeValue(
+        chainOptIn: chainOpt,
+        tradePreference: preference,
+        chainEngineEnabled: chainEngineEnabled,
+      );
     }
-
     final rows = <(String, String)>[
       if ((listing['brand']?.toString() ?? '').isNotEmpty)
         ('MARKA / MODEL', '${listing['brand']} ${listing['model_name'] ?? ''}'.trim()),
@@ -519,6 +531,46 @@ class ListingAttributeList extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Explains proposal-only vs settlement NOT_IMPLEMENTED (and flag OFF).
+class ChainEngineNotice extends StatelessWidget {
+  const ChainEngineNotice({
+    super.key,
+    required this.chainEngineEnabled,
+    this.compact = false,
+  });
+
+  final bool chainEngineEnabled;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = chainEngineEnabled
+        ? ChainEngineUx.proposalOnlyMessage()
+        : ChainEngineUx.featureDisabledMessage();
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8, bottom: 4),
+      padding: EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: compact ? 8 : 12,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F0E8),
+        border: Border.all(color: const Color(0xFFD9D2C3)),
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.montserrat(
+          fontSize: compact ? 11 : 12,
+          height: 1.35,
+          fontWeight: FontWeight.w500,
+          color: AppColors.ink,
+        ),
+      ),
     );
   }
 }

@@ -278,6 +278,22 @@ class ChangeXApi {
     return (data['assignments'] as List?) ?? [];
   }
 
+  Future<Map<String, dynamic>> changeChainStatus() async {
+    final res = await http.get(
+      Uri.parse('$_root/api/change-chain/status'),
+      headers: await _headers(auth: false),
+    );
+    return _decode(res);
+  }
+
+  Future<Map<String, dynamic>> matchingPreferences() async {
+    final res = await http.get(
+      Uri.parse('$_root/api/matching/preferences'),
+      headers: await _headers(auth: true),
+    );
+    return _decode(res);
+  }
+
   Map<String, dynamic> _decode(http.Response res) {
     Map<String, dynamic> body;
     try {
@@ -292,7 +308,9 @@ class ChangeXApi {
       final detail = body['detail'];
       String message;
       if (detail is Map) {
-        message = detail['message']?.toString() ?? detail.toString();
+        message = detail['user_message']?.toString() ??
+            detail['message']?.toString() ??
+            detail.toString();
       } else {
         message = detail?.toString() ?? 'İstek başarısız (${res.statusCode})';
       }

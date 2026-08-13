@@ -88,13 +88,30 @@ def matchability_report(row: dict[str, Any], *, user_pref: str | None = None) ->
         pref = user_pref.upper()
     if pref == TradePreference.DIRECT_ONLY.value:
         reasons.append("DIRECT_ONLY")
+    enabled = change_chain_enabled()
+    if enabled:
+        user_message = (
+            "İlan zincir adayı olabilir. Öneri/onay aşaması açık; "
+            "settlement / Asset Lock NOT_IMPLEMENTED."
+            if chain_ok
+            else "İlan şu an zincir adayı değil."
+        )
+    else:
+        user_message = (
+            "Çoklu takas zinciri kapalı (CHANGE_CHAIN_ENABLED=false). "
+            "Settlement / Asset Lock da NOT_IMPLEMENTED."
+        )
     return {
         "listing_id": row.get("id"),
         "moderation_status": mod.value,
         "inventory_status": inv.value,
         "public_matchable": public_ok,
         "chain_candidate": chain_ok,
-        "chain_feature_enabled": change_chain_enabled(),
+        "chain_feature_enabled": enabled,
         "reasons": reasons if not chain_ok else [],
         "moderation_version": row.get("moderation_version"),
+        "engine_phase": "PROPOSAL_ONLY",
+        "settlement": "NOT_IMPLEMENTED",
+        "asset_lock": "NOT_IMPLEMENTED",
+        "user_message": user_message,
     }

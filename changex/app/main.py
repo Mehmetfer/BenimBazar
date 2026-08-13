@@ -55,6 +55,11 @@ from .matching.proposals import (
     proposal_public,
     reject_proposal,
 )
+from .matching.settlement import (
+    attempt_settlement,
+    feature_disabled_payload,
+    settlement_capability,
+)
 from .matching.wants import validate_value_tolerance
 from .domain_status import TradePreference
 from .moderation.cache import cache_get, cache_set, invalidate_listing, reset_cache
@@ -1935,6 +1940,31 @@ def _listing_public(conn, row: dict, include_moderation: bool = False) -> dict:
 
 
 # Change Chain Proposal Engine V1 — feature-flagged; no Asset Lock settlement
+def _chain_disabled_http() -> HTTPException:
+    return HTTPException(501, detail=feature_disabled_payload())
+
+
+@app.get("/api/change-chain/status")
+def change_chain_status(user: Annotated[dict | None, Depends(current_user)] = None) -> dict:
+    """Always available — explains flag OFF and settlement NOT_IMPLEMENTED clearly."""
+    enabled = matching_config.change_chain_enabled()
+    cap = settlement_capability()
+    if enabled:
+        user_message = (
+            "Zincir önerisi (proposal) ve onay (consent) açık. "
+            "Asset Lock / settlement NOT_IMPLEMENTED — mülkiyet transferi yok."
+        )
+    else:
+        user_message = feature_disabled_payload()["user_message"]
+    return {
+        "feature_flag": "CHANGE_CHAIN_ENABLED",
+        "enabled": enabled,
+        "engine_version": matching_config.CHAIN_ENGINE_VERSION,
+        **cap,
+        "user_message": user_message,
+    }
+
+
 @app.post("/api/change-chain/match")
 def change_chain_match(
     body: ChainMatchIn,
@@ -1942,14 +1972,7 @@ def change_chain_match(
     user: Annotated[dict, Depends(require_user)],
 ) -> dict:
     if not matching_config.change_chain_enabled():
-        raise HTTPException(
-            501,
-            detail={
-                "code": "CHANGE_CHAIN_DISABLED",
-                "message": "Change Chain feature flag kapalı",
-                "feature_flag": "CHANGE_CHAIN_ENABLED=false",
-            },
-        )
+        raise _chain_disabled_http()
     seed_id = body.listing_id
     if seed_id is None:
         # Prefer caller's offered listing as seed when using legacy shape
@@ -1981,6 +2004,7 @@ def change_chain_match(
                             "seed": seed_id,
                             "cycles": result.get("cycle_count"),
                             "proposals": len(result.get("proposals") or []),
+                            "settlement": "NOT_IMPLEMENTED",
                         }
                     ),
                     correlation_id=_cid(request),
@@ -1995,16 +2019,14 @@ def change_chain_match(
 @app.get("/api/change-chain/proposals")
 def change_chain_proposals_list(user: Annotated[dict, Depends(require_user)]) -> dict:
     if not matching_config.change_chain_enabled():
-        raise HTTPException(
-            501,
-            detail={
-                "code": "CHANGE_CHAIN_DISABLED",
-                "message": "Change Chain feature flag kapalı",
-            },
-        )
+        raise _chain_disabled_http()
     with db.connect() as conn:
         items = list_proposals_for_user(conn, int(user["id"]))
-        return {"proposals": items, "count": len(items)}
+        return {
+            "proposals": items,
+            "count": len(items),
+            **settlement_capability(),
+        }
 
 
 @app.get("/api/change-chain/proposals/{proposal_id}")
@@ -2013,13 +2035,7 @@ def change_chain_proposal_detail(
     user: Annotated[dict, Depends(require_user)],
 ) -> dict:
     if not matching_config.change_chain_enabled():
-        raise HTTPException(
-            501,
-            detail={
-                "code": "CHANGE_CHAIN_DISABLED",
-                "message": "Change Chain feature flag kapalı",
-            },
-        )
+        raise _chain_disabled_http()
     try:
         with db.connect() as conn:
             prop = proposal_public(conn, proposal_id)
@@ -2043,13 +2059,7 @@ def change_chain_proposal_accept(
     user: Annotated[dict, Depends(require_user)],
 ) -> dict:
     if not matching_config.change_chain_enabled():
-        raise HTTPException(
-            501,
-            detail={
-                "code": "CHANGE_CHAIN_DISABLED",
-                "message": "Change Chain feature flag kapalı",
-            },
-        )
+        raise _chain_disabled_http()
     try:
         with db.connect() as conn:
             with db.immediate_tx(conn):
@@ -2067,7 +2077,13 @@ def change_chain_proposal_accept(
                     action="chain.accept",
                     entity="chain_proposal",
                     entity_id=proposal_id,
-                    detail=db.dumps({"status": result.get("status"), "settlement": "NOT_IMPLEMENTED"}),
+                    detail=db.dumps(
+                        {
+                            "status": result.get("status"),
+                            "settlement": "NOT_IMPLEMENTED",
+                            "engine_phase": "PROPOSAL_ONLY",
+                        }
+                    ),
                     correlation_id=_cid(request),
                 )
                 return result
@@ -2085,13 +2101,7 @@ def change_chain_proposal_reject(
     user: Annotated[dict, Depends(require_user)],
 ) -> dict:
     if not matching_config.change_chain_enabled():
-        raise HTTPException(
-            501,
-            detail={
-                "code": "CHANGE_CHAIN_DISABLED",
-                "message": "Change Chain feature flag kapalı",
-            },
-        )
+        raise _chain_disabled_http()
     try:
         with db.connect() as conn:
             with db.immediate_tx(conn):
@@ -2119,6 +2129,49 @@ def change_chain_proposal_reject(
         ) from exc
 
 
+@app.post("/api/change-chain/proposals/{proposal_id}/settle")
+def change_chain_proposal_settle(
+    proposal_id: int,
+    request: Request,
+    user: Annotated[dict, Depends(require_user)],
+) -> dict:
+    """
+    Explicit settlement boundary — always NOT_IMPLEMENTED in Chain Engine V1.
+    ACCEPTED consent must never be confused with completed ownership transfer.
+    """
+    if not matching_config.change_chain_enabled():
+        raise _chain_disabled_http()
+    try:
+        with db.connect() as conn:
+            prop = proposal_public(conn, proposal_id)
+            if int(user["id"]) not in {int(x) for x in prop["owner_ids"]}:
+                if user.get("role") not in {UserRole.ADMIN.value, UserRole.SUPERADMIN.value}:
+                    raise HTTPException(
+                        403, detail={"code": "FORBIDDEN", "message": "Yetkisiz"}
+                    )
+            result = attempt_settlement(str(prop["chain_id"]), list(prop["listing_ids"]))
+            db.audit(
+                conn,
+                actor_id=user["id"],
+                action="chain.settle_attempt",
+                entity="chain_proposal",
+                entity_id=proposal_id,
+                detail=db.dumps(
+                    {
+                        "code": result.get("code"),
+                        "settlement": "NOT_IMPLEMENTED",
+                        "proposal_status": prop.get("status"),
+                    }
+                ),
+                correlation_id=_cid(request),
+            )
+            raise HTTPException(501, detail=result)
+    except ChainProposalError as exc:
+        raise HTTPException(
+            exc.http_status, detail={"code": exc.code, "message": exc.message}
+        ) from exc
+
+
 @app.get("/api/matching/preferences")
 def get_matching_preferences(user: Annotated[dict, Depends(require_user)]) -> dict:
     with db.connect() as conn:
@@ -2128,12 +2181,19 @@ def get_matching_preferences(user: Annotated[dict, Depends(require_user)]) -> di
         assert "password" not in view
         assert "email" not in view
         assert "phone" not in view
+        enabled = matching_config.change_chain_enabled()
         return {
             "preferences": view,
             "feature_flags": {
-                "CHANGE_CHAIN_ENABLED": matching_config.change_chain_enabled(),
+                "CHANGE_CHAIN_ENABLED": enabled,
             },
             "compatibility_policy": get_compatibility().policy_version,
+            **settlement_capability(),
+            "user_message": (
+                settlement_capability()["user_message"]
+                if enabled
+                else feature_disabled_payload()["user_message"]
+            ),
         }
 
 
@@ -2162,11 +2222,18 @@ def patch_matching_preferences(
                     detail=db.dumps(public_preferences_view(prefs)),
                     correlation_id=_cid(request),
                 )
+            enabled = matching_config.change_chain_enabled()
             return {
                 "preferences": public_preferences_view(prefs),
                 "feature_flags": {
-                    "CHANGE_CHAIN_ENABLED": matching_config.change_chain_enabled()
+                    "CHANGE_CHAIN_ENABLED": enabled
                 },
+                **settlement_capability(),
+                "user_message": (
+                    settlement_capability()["user_message"]
+                    if enabled
+                    else feature_disabled_payload()["user_message"]
+                ),
             }
     except ValueError as exc:
         raise HTTPException(

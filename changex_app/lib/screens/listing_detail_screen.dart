@@ -31,12 +31,26 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   bool _loadingMine = false;
   List<Map<String, dynamic>> _approvedMine = [];
   int? _selectedOfferId;
+  bool _chainEngineEnabled = false;
 
   @override
   void initState() {
     super.initState();
+    _loadChainStatus();
     if (widget.user != null) {
       _loadApprovedMine();
+    }
+  }
+
+  Future<void> _loadChainStatus() async {
+    try {
+      final status = await api.changeChainStatus();
+      if (!mounted) return;
+      setState(() {
+        _chainEngineEnabled = status['enabled'] == true;
+      });
+    } catch (_) {
+      // Default remains false — production flag off / settlement NOT_IMPLEMENTED.
     }
   }
 
@@ -182,7 +196,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             ),
           ),
           SliverToBoxAdapter(
-            child: ListingSpecStrip(listing: widget.listing),
+            child: ListingSpecStrip(
+              listing: widget.listing,
+              chainEngineEnabled: _chainEngineEnabled,
+            ),
           ),
           SliverToBoxAdapter(
             child: Padding(
@@ -205,7 +222,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       fontSize: 12,
                     ),
                   ),
-                  if (_isOwner || _isStaff) ...[
+                  ChainEngineNotice(chainEngineEnabled: _chainEngineEnabled),                  if (_isOwner || _isStaff) ...[
                     const SizedBox(height: 14),
                     _OwnerModerationPanel(listing: widget.listing),
                   ],
@@ -261,7 +278,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     ),
                   ],
                   const SizedBox(height: 18),
-                  ListingAttributeList(listing: widget.listing),
+                  ListingAttributeList(
+                    listing: widget.listing,
+                    chainEngineEnabled: _chainEngineEnabled,
+                  ),
                   if ((widget.listing['description']?.toString() ?? '')
                       .trim()
                       .isNotEmpty) ...[
