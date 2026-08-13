@@ -1,6 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
+
+
+class CalibrationStatus(str, Enum):
+    """Predicted confidence vs actual outcome assessment (feeds decision evidence)."""
+
+    CALIBRATED = "CALIBRATED"
+    OVERCONFIDENT = "OVERCONFIDENT"
+    UNDERCONFIDENT = "UNDERCONFIDENT"
+    INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
 
 
 @dataclass
@@ -49,12 +59,29 @@ class CalibrationMonitor:
         else:
             self.confidence_haircut = 0.0
 
+    def status(self) -> CalibrationStatus:
+        """Map confidence buckets → CALIBRATED / OVERCONFIDENT / … for decision evidence."""
+        hi = next(b for b in self.buckets if b.lo == 80)
+        mid = next(b for b in self.buckets if b.lo == 60)
+        total_n = sum(b.n for b in self.buckets)
+        if total_n < 8 or hi.n < 3:
+            return CalibrationStatus.INSUFFICIENT_DATA
+        if hi.n >= 5 and mid.n >= 5 and hi.hit_rate + 0.05 < mid.hit_rate:
+            return CalibrationStatus.OVERCONFIDENT
+        if hi.n >= 5 and hi.hit_rate < 0.45:
+            return CalibrationStatus.OVERCONFIDENT
+        if hi.hit_rate > 0.85 and mid.n >= 5 and mid.hit_rate < 0.4:
+            return CalibrationStatus.UNDERCONFIDENT
+        return CalibrationStatus.CALIBRATED
+
     def adjust(self, confidence: float) -> float:
         return round(max(5.0, confidence * (1 - self.confidence_haircut)), 1)
 
     def report(self) -> dict:
         return {
             "haircut": self.confidence_haircut,
+            "status": self.status().value,
+            "feeds_decision": True,
             "buckets": [
                 {"range": f"{b.lo}-{b.hi}", "n": b.n, "hit_rate": round(b.hit_rate, 3)} for b in self.buckets
             ],

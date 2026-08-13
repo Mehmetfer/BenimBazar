@@ -229,6 +229,20 @@ class PortfolioLedger:
                 (_utc(), "BUY", symbol, quantity, price, 0, order_id),
             )
 
+    def update_stop(self, symbol: str, stop: float) -> None:
+        """Tighten stop only (never widen for longs). Paper risk management."""
+        with self._connect() as conn:
+            row = conn.execute("SELECT stop_price FROM positions WHERE symbol=?", (symbol,)).fetchone()
+            if not row:
+                return
+            current = row["stop_price"]
+            if current is not None and float(stop) < float(current):
+                return  # never widen
+            conn.execute(
+                "UPDATE positions SET stop_price=? WHERE symbol=?",
+                (float(stop), symbol),
+            )
+
     def apply_sell(self, symbol: str, quantity: float, price: float, order_id: str) -> float:
         with self._connect() as conn:
             existing = conn.execute("SELECT * FROM positions WHERE symbol=?", (symbol,)).fetchone()
