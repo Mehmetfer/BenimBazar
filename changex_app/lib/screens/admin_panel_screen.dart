@@ -21,18 +21,22 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
   Map<String, dynamic>? _panel;
+  Map<String, dynamic>? _dashboard;
   List<dynamic> _queue = [];
   List<dynamic> _staff = [];
   List<dynamic> _users = [];
   List<dynamic> _myTasks = [];
+  List<dynamic> _audit = [];
+  Map<String, dynamic>? _health;
   bool _loading = true;
   String? _error;
   final _userSearch = TextEditingController();
+  final _listingSearch = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    _tabs = TabController(length: 5, vsync: this);
     _refreshAll();
   }
 
@@ -40,12 +44,15 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   void dispose() {
     _tabs.dispose();
     _userSearch.dispose();
+    _listingSearch.dispose();
     super.dispose();
   }
 
   bool get _canAssignTasks =>
       widget.user['role'] == 'admin' || widget.user['role'] == 'superadmin';
   bool get _canAssignRoles => widget.user['role'] == 'superadmin';
+  bool get _canViewAudit =>
+      widget.user['role'] == 'admin' || widget.user['role'] == 'superadmin';
 
   Future<void> _refreshAll({bool silent = false}) async {
     if (!silent) {
@@ -58,6 +65,26 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
       final panel = await api.adminPanel();
       final queue = await api.moderationQueue();
       final tasks = await api.myAssignments();
+      Map<String, dynamic>? dash;
+      List<dynamic> audit = const [];
+      Map<String, dynamic>? health;
+      try {
+        dash = await api.adminDashboard();
+      } catch (_) {
+        dash = null;
+      }
+      try {
+        health = await api.health();
+      } catch (_) {
+        health = null;
+      }
+      if (_canViewAudit) {
+        try {
+          audit = await api.adminAudit(limit: 40);
+        } catch (_) {
+          audit = const [];
+        }
+      }
       List<dynamic> staff = const [];
       if (_canAssignTasks) {
         staff = await api.adminStaff();
@@ -65,9 +92,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
       if (!mounted) return;
       setState(() {
         _panel = panel;
+        _dashboard = dash;
         _queue = queue;
         _myTasks = tasks;
         _staff = staff;
+        _audit = audit;
+        _health = health;
         _loading = false;
         _error = null;
       });
@@ -81,6 +111,37 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   }
 
   Future<void> _decide(int id, String decision, {String reason = ''}) async {
+    final needsConfirm = decision == 'APPROVE' ||
+        decision == 'REJECT' ||
+        decision == 'DELETE';
+    if (needsConfirm) {
+      final labels = {
+        'APPROVE': 'Bu ilanı ONAYLAMAK istediğinize emin misiniz?',
+        'REJECT': 'Bu ilanı REDDETMEK istediğinize emin misiniz?',
+        'DELETE': 'Bu ilanı SİLMEK istediğinize emin misiniz? Bu işlem geri alınamaz.',
+      };
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(
+            'Onay gerekli',
+            style: GoogleFonts.montserrat(fontWeight: FontWeight.w800),
+          ),
+          content: Text(labels[decision] ?? decision),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Onayla'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
     try {
       await api.moderationDecision(
         id,
@@ -100,7 +161,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
       );
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('İşlem başarısız: ${e.message}'),
+          action: SnackBarAction(label: 'Tekrar', onPressed: () => _decide(id, decision, reason: reason)),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -215,8 +281,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
             fontSize: 12,
           ),
           tabs: [
+            const Tab(text: 'ÖZET'),
             Tab(text: 'ONAY ($pending)'),
             Tab(text: 'GÖREVLERİM (${_myTasks.length})'),
+            const Tab(text: 'SİSTEM'),
             const Tab(text: 'PERSONEL'),
           ],
         ),
@@ -240,8 +308,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
               : TabBarView(
                   controller: _tabs,
                   children: [
+                    _buildDashboardTab(),
                     _buildQueueTab(),
                     _buildTasksTab(),
+                    _buildSystemTab(),
                     _buildStaffTab(),
                   ],
                 ),
@@ -288,6 +358,216 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDashboardTab() {
+    final g = Map<String, dynamic>.from((_dashboard?['general'] as Map?) ?? {});
+    final sec = Map<String, dynamic>.from((_dashboard?['security'] as Map?) ?? {});
+    final tiles = <(String, String)>[
+      ('Kullanıcı', '${g['total_users'] ?? '—'}'),
+      ('Aktif', '${g['active_users'] ?? '—'}'),
+      ('İlan', '${g['total_listings'] ?? '—'}'),
+      ('Pending', '${g['pending_listings'] ?? _queue.length}'),
+      ('Onaylı', '${g['approved_listings'] ?? '—'}'),
+      ('Red', '${g['rejected_listings'] ?? '—'}'),
+      ('Silinen', '${g['deleted_listings'] ?? '—'}'),
+      ('Fotoğraf', '${g['total_photos'] ?? '—'}'),
+    ];
+    return RefreshIndicator(
+      color: AppColors.gold,
+      onRefresh: _refreshAll,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            'GENEL DURUM',
+            style: GoogleFonts.montserrat(
+              color: AppColors.gold,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: tiles
+                .map(
+                  (t) => Container(
+                    width: 150,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.bgElevated,
+                      border: Border.all(color: AppColors.line),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          t.$1,
+                          style: GoogleFonts.montserrat(
+                            color: AppColors.muted,
+                            fontSize: 11,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          t.$2,
+                          style: GoogleFonts.montserrat(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 20,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'GÜVENLİK',
+            style: GoogleFonts.montserrat(
+              color: AppColors.gold,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Başarısız giriş: ${sec['failed_logins_24h'] ?? '—'} · '
+            'Yetkisiz: ${sec['unauthorized_attempts'] ?? '—'} · '
+            'Admin işlem: ${sec['admin_actions'] ?? '—'}',
+            style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.muted),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _listingSearch,
+            decoration: InputDecoration(
+              labelText: 'İlan ara (başlık)',
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.search, color: AppColors.gold),
+                onPressed: () async {
+                  try {
+                    final hits = await api.adminListings(q: _listingSearch.text.trim());
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('${hits.length} sonuç')),
+                    );
+                  } on ApiException catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Arama başarısız: ${e.message}')),
+                    );
+                  }
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Son aktiviteler',
+            style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          if ((_dashboard?['recent_activity'] as List?)?.isEmpty ?? true)
+            Text(
+              'Henüz aktivite yok',
+              style: GoogleFonts.montserrat(color: AppColors.muted, fontSize: 12),
+            )
+          else
+            ...((_dashboard?['recent_activity'] as List?) ?? []).take(8).map((raw) {
+              final a = Map<String, dynamic>.from(raw as Map);
+              return ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  '${a['action']} · ${a['entity'] ?? ''} #${a['entity_id'] ?? ''}',
+                  style: GoogleFonts.montserrat(fontSize: 12),
+                ),
+                subtitle: Text(
+                  'actor=${a['actor_id']} · ${a['created_at']}',
+                  style: GoogleFonts.montserrat(fontSize: 10, color: AppColors.muted),
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSystemTab() {
+    final sys = Map<String, dynamic>.from((_dashboard?['system'] as Map?) ?? {});
+    final storage = Map<String, dynamic>.from((sys['storage'] as Map?) ?? {});
+    return RefreshIndicator(
+      color: AppColors.gold,
+      onRefresh: _refreshAll,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            'SİSTEM SAĞLIĞI',
+            style: GoogleFonts.montserrat(
+              color: AppColors.gold,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _kv('API health', _health == null ? 'UNKNOWN' : 'OK'),
+          _kv('Database', (sys['database'] as Map?)?['ok'] == true ? 'OK' : '—'),
+          _kv('Storage dir', storage['uploads_dir_exists'] == true ? 'OK' : 'MISSING'),
+          _kv('Upload files', '${storage['upload_files'] ?? '—'}'),
+          const SizedBox(height: 16),
+          Text(
+            'AUDIT LOG',
+            style: GoogleFonts.montserrat(
+              color: AppColors.gold,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (!_canViewAudit)
+            Text(
+              'Audit için admin / superadmin gerekli',
+              style: GoogleFonts.montserrat(color: AppColors.muted),
+            )
+          else if (_audit.isEmpty)
+            Text(
+              'Kayıt yok',
+              style: GoogleFonts.montserrat(color: AppColors.muted),
+            )
+          else
+            ..._audit.take(30).map((raw) {
+              final a = Map<String, dynamic>.from(raw as Map);
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.bgElevated,
+                  border: Border.all(color: AppColors.line),
+                ),
+                child: Text(
+                  '${a['action']} | who=${a['actor_id']} | target=${a['entity']}:${a['entity_id']} | when=${a['created_at']}',
+                  style: GoogleFonts.montserrat(fontSize: 11),
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _kv(String k, String v) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(k, style: GoogleFonts.montserrat(color: AppColors.muted, fontSize: 12)),
+          ),
+          Text(v, style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 12)),
+        ],
       ),
     );
   }

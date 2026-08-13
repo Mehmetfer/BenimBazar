@@ -221,6 +221,50 @@ class ChangeXApi {
     return _decode(res);
   }
 
+  Future<Map<String, dynamic>> adminDashboard() async {
+    final res = await http.get(
+      Uri.parse('$_root/api/admin/dashboard'),
+      headers: await _headers(auth: true),
+    );
+    return _decode(res);
+  }
+
+  Future<List<dynamic>> adminAudit({String actionPrefix = '', int limit = 50}) async {
+    final qp = <String, String>{'limit': '$limit'};
+    if (actionPrefix.isNotEmpty) qp['action_prefix'] = actionPrefix;
+    final uri = Uri.parse('$_root/api/admin/audit').replace(queryParameters: qp);
+    final res = await http.get(uri, headers: await _headers(auth: true));
+    final data = _decode(res);
+    return (data['audit'] as List?) ?? [];
+  }
+
+  Future<List<dynamic>> adminListings({
+    String q = '',
+    String owner = '',
+    String status = '',
+    String category = '',
+  }) async {
+    final qp = <String, String>{};
+    if (q.isNotEmpty) qp['q'] = q;
+    if (owner.isNotEmpty) qp['owner'] = owner;
+    if (status.isNotEmpty) qp['status'] = status;
+    if (category.isNotEmpty) qp['category'] = category;
+    final uri = Uri.parse('$_root/api/admin/listings').replace(
+      queryParameters: qp.isEmpty ? null : qp,
+    );
+    final res = await http.get(uri, headers: await _headers(auth: true));
+    final data = _decode(res);
+    return (data['listings'] as List?) ?? [];
+  }
+
+  Future<Map<String, dynamic>> health() async {
+    final res = await http.get(
+      Uri.parse('$_root/api/health'),
+      headers: await _headers(),
+    );
+    return _decode(res);
+  }
+
   Future<List<dynamic>> adminStaff() async {
     final res = await http.get(
       Uri.parse('$_root/api/admin/staff'),

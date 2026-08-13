@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
 from . import db
+from .admin_dashboard import dashboard_snapshot, list_audit_logs, search_admin_listings
 from .engine import (
     DomainError,
     accept_offer,
@@ -315,6 +316,13 @@ class MatchingPreferencesIn(BaseModel):
 class ModerationDecisionIn(BaseModel):
     decision: ModerationDecision
     reason: str = ""
+
+
+class BulkModerationIn(BaseModel):
+    listing_ids: list[int] = Field(min_length=1, max_length=50)
+    decision: ModerationDecision
+    reason: str = ""
+    confirm: bool = False  # high-impact ops require explicit confirmation
 
 
 class OfferCreateIn(BaseModel):
@@ -1755,6 +1763,121 @@ def admin_panel_bootstrap(user: Annotated[dict, Depends(require_moderation_staff
             "actions": ["APPROVE", "REJECT", "REQUEST_EDIT", "DELETE"],
         }
 
+
+@app.get("/api/admin/dashboard")
+def admin_dashboard(user: Annotated[dict, Depends(require_moderation_staff)]) -> dict:
+    """Professional yönetim dashboard: general / moderation / system / security."""
+    with db.connect() as conn:
+        snap = dashboard_snapshot(conn)
+        snap["actor"] = {
+            "id": user["id"],
+            "username": user.get("username"),
+            "role": user.get("role"),
+        }
+        return snap
+
+
+@app.get("/api/admin/audit")
+def admin_audit_feed(
+    user: Annotated[dict, Depends(require_admin)],
+    limit: int = 100,
+    action_prefix: str = "",
+) -> dict:
+    with db.connect() as conn:
+        rows = list_audit_logs(conn, limit=limit, action_prefix=action_prefix.strip())
+        return {"audit": rows, "count": len(rows), "who_what_when": True}
+
+
+@app.get("/api/admin/listings")
+def admin_listings_search(
+    user: Annotated[dict, Depends(require_moderation_staff)],
+    q: str = "",
+    owner: str = "",
+    status: str = "",
+    category: str = "",
+    limit: int = 100,
+) -> dict:
+    """Admin listing search — pending (oldest) ordered first when status empty."""
+    with db.connect() as conn:
+        rows = search_admin_listings(
+            conn, q=q.strip(), owner=owner.strip(), status=status.strip(), category=category.strip(), limit=limit
+        )
+        return {"listings": rows, "count": len(rows)}
+
+
+@app.post("/api/admin/moderation/bulk")
+def moderation_bulk_decision(
+    body: BulkModerationIn,
+    request: Request,
+    user: Annotated[dict, Depends(require_moderation_staff)],
+) -> dict:
+    """Bulk review — requires confirm=true for APPROVE/REJECT/DELETE."""
+    high_impact = body.decision in {
+        ModerationDecision.APPROVE,
+        ModerationDecision.REJECT,
+        ModerationDecision.DELETE,
+    }
+    if high_impact and not body.confirm:
+        raise HTTPException(
+            status_code=400,
+            detail="confirmation_required: set confirm=true for bulk high-impact decisions",
+        )
+    results: list[dict] = []
+    with db.connect() as conn:
+        for lid in body.listing_ids:
+            try:
+                with db.immediate_tx(conn):
+                    row = apply_moderation_decision(
+                        conn,
+                        listing_id=int(lid),
+                        actor_id=int(user["id"]),
+                        actor_role=str(user["role"]),
+                        decision=body.decision,
+                        reason=body.reason or "bulk_panel",
+                        correlation_id=_cid(request),
+                    )
+                status = str(dict(row).get("status") if hasattr(row, "keys") else getattr(row, "status", ""))
+                results.append({"listing_id": lid, "ok": True, "status": status})
+                invalidate_listing(int(lid))
+            except (ModerationError, DomainError, InvalidTransition, HTTPException) as exc:
+                results.append(
+                    {
+                        "listing_id": lid,
+                        "ok": False,
+                        "error": getattr(exc, "detail", None) or str(exc),
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001
+                results.append({"listing_id": lid, "ok": False, "error": str(exc)})
+        import json as _json
+
+        with db.immediate_tx(conn):
+            db.audit(
+                conn,
+                actor_id=int(user["id"]),
+                action="moderation.bulk",
+                entity="listing_batch",
+                entity_id=None,
+                detail=_json.dumps(
+                    {
+                        "decision": body.decision.value
+                        if hasattr(body.decision, "value")
+                        else str(body.decision),
+                        "count": len(body.listing_ids),
+                        "confirm": True,
+                        "results": [
+                            {"listing_id": r["listing_id"], "ok": r["ok"]} for r in results
+                        ],
+                    }
+                ),
+                correlation_id=_cid(request),
+            )
+    return {
+        "results": results,
+        "ok_count": sum(1 for r in results if r["ok"]),
+        "fail_count": sum(1 for r in results if not r["ok"]),
+        "confirmation_used": True,
+    }
 
 
 @app.get("/api/admin/metrics")
