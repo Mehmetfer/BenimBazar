@@ -10,7 +10,9 @@ import 'admin_panel_screen.dart';
 import 'create_listing_screen.dart';
 import 'listing_detail_screen.dart';
 import 'login_screen.dart';
+import 'messages_inbox_screen.dart';
 import 'my_listings_screen.dart';
+import 'support_screen.dart';
 import 'trades_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -449,6 +451,38 @@ class _HomeScreenState extends State<HomeScreen> {
                         },
                         icon: const Icon(Icons.account_tree_outlined),
                         label: const Text('Takaslarım'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => MessagesInboxScreen(user: widget.user!),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.chat_outlined, color: AppColors.gold),
+                        label: const Text('Mesajlar'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => SupportScreen(user: widget.user!),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.support_agent_outlined, color: AppColors.gold),
+                        label: const Text('Destek'),
                       ),
                     ),
                   ],

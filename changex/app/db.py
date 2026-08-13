@@ -566,6 +566,86 @@ def _migrate(conn: sqlite3.Connection) -> None:
           ON moderation_assignments(assignee_id, status);
         CREATE INDEX IF NOT EXISTS idx_mod_assign_listing
           ON moderation_assignments(listing_id, status);
+
+        -- GÖREV 36: Professional messaging + support (phone-free)
+        CREATE TABLE IF NOT EXISTS conversations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          listing_id INTEGER REFERENCES trade_listings(id) ON DELETE SET NULL,
+          buyer_id INTEGER NOT NULL REFERENCES users(id),
+          seller_id INTEGER NOT NULL REFERENCES users(id),
+          status TEXT NOT NULL DEFAULT 'OPEN',
+          created_at REAL NOT NULL,
+          updated_at REAL NOT NULL,
+          UNIQUE(listing_id, buyer_id, seller_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_conv_buyer ON conversations(buyer_id, updated_at);
+        CREATE INDEX IF NOT EXISTS idx_conv_seller ON conversations(seller_id, updated_at);
+
+        CREATE TABLE IF NOT EXISTS messages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+          sender_id INTEGER NOT NULL REFERENCES users(id),
+          body TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'SENT',
+          created_at REAL NOT NULL,
+          delivered_at REAL,
+          read_at REAL,
+          edited_at REAL,
+          deleted_at REAL
+        );
+        CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages(conversation_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS user_blocks (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          blocker_id INTEGER NOT NULL REFERENCES users(id),
+          blocked_id INTEGER NOT NULL REFERENCES users(id),
+          created_at REAL NOT NULL,
+          UNIQUE(blocker_id, blocked_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS message_reports (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+          reporter_id INTEGER NOT NULL REFERENCES users(id),
+          reason TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'OPEN',
+          created_at REAL NOT NULL,
+          UNIQUE(message_id, reporter_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS support_tickets (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          public_id TEXT NOT NULL UNIQUE,
+          user_id INTEGER NOT NULL REFERENCES users(id),
+          subject TEXT NOT NULL,
+          category TEXT NOT NULL DEFAULT 'GENERAL',
+          priority TEXT NOT NULL DEFAULT 'NORMAL',
+          status TEXT NOT NULL DEFAULT 'OPEN',
+          assignee_id INTEGER REFERENCES users(id),
+          created_at REAL NOT NULL,
+          updated_at REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_support_user ON support_tickets(user_id, updated_at);
+        CREATE INDEX IF NOT EXISTS idx_support_status ON support_tickets(status, priority);
+
+        CREATE TABLE IF NOT EXISTS support_messages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ticket_id INTEGER NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+          sender_id INTEGER NOT NULL REFERENCES users(id),
+          body TEXT NOT NULL,
+          attachment_url TEXT,
+          created_at REAL NOT NULL,
+          is_staff INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_support_msg ON support_messages(ticket_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS messaging_rate_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          kind TEXT NOT NULL,
+          created_at REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_msg_rate ON messaging_rate_events(user_id, kind, created_at);
         """
     )
     _seed_default_superadmin(conn)

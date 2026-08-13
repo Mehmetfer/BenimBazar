@@ -444,4 +444,29 @@ void main() {
     expect(hasRetry || hasOzet, isTrue);
   });
 
+
+
+  testWidgets('listing detail shows message seller CTA for non-owner', (tester) async {
+    await pumpApp(
+      tester,
+      ListingDetailScreen(
+        user: {'id': 2, 'username': 'buyer', 'role': 'user'},
+        listing: {
+          'id': 10,
+          'title': 'iPhone 15',
+          'description': 'test',
+          'status': 'APPROVED',
+          'owner_id': 1,
+          'owner': {'id': 1, 'username': 'seller', 'change_score': 10},
+          'photos': <String>[],
+          'photo_urls': <String>[],
+          'value': {'madalyon': 1, 'dirhem': 0, 'mandal': 0},
+          'category': 'Elektronik',
+        },
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Satıcıya Mesaj Gönder'), findsOneWidget);
+  });
+
 }

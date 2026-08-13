@@ -27,6 +27,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   List<dynamic> _users = [];
   List<dynamic> _myTasks = [];
   List<dynamic> _audit = [];
+  List<dynamic> _supportTickets = [];
+  List<dynamic> _messageReports = [];
   Map<String, dynamic>? _health;
   bool _loading = true;
   String? _error;
@@ -36,7 +38,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 5, vsync: this);
+    _tabs = TabController(length: 6, vsync: this);
     _refreshAll();
   }
 
@@ -85,6 +87,20 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
           audit = const [];
         }
       }
+      List<dynamic> support = const [];
+      List<dynamic> reports = const [];
+      if (_canViewAudit) {
+        try {
+          support = await api.adminSupportTickets();
+        } catch (_) {
+          support = const [];
+        }
+        try {
+          reports = await api.adminMessageReports();
+        } catch (_) {
+          reports = const [];
+        }
+      }
       List<dynamic> staff = const [];
       if (_canAssignTasks) {
         staff = await api.adminStaff();
@@ -97,6 +113,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         _myTasks = tasks;
         _staff = staff;
         _audit = audit;
+        _supportTickets = support;
+        _messageReports = reports;
         _health = health;
         _loading = false;
         _error = null;
@@ -284,6 +302,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
             const Tab(text: 'ÖZET'),
             Tab(text: 'ONAY ($pending)'),
             Tab(text: 'GÖREVLERİM (${_myTasks.length})'),
+            Tab(text: 'DESTEK (${_supportTickets.length})'),
             const Tab(text: 'SİSTEM'),
             const Tab(text: 'PERSONEL'),
           ],
@@ -311,6 +330,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                     _buildDashboardTab(),
                     _buildQueueTab(),
                     _buildTasksTab(),
+                    _buildSupportTab(),
                     _buildSystemTab(),
                     _buildStaffTab(),
                   ],
@@ -365,6 +385,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   Widget _buildDashboardTab() {
     final g = Map<String, dynamic>.from((_dashboard?['general'] as Map?) ?? {});
     final sec = Map<String, dynamic>.from((_dashboard?['security'] as Map?) ?? {});
+    final msg = Map<String, dynamic>.from((_dashboard?['messaging'] as Map?) ?? {});
     final tiles = <(String, String)>[
       ('Kullanıcı', '${g['total_users'] ?? '—'}'),
       ('Aktif', '${g['active_users'] ?? '—'}'),
@@ -374,6 +395,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
       ('Red', '${g['rejected_listings'] ?? '—'}'),
       ('Silinen', '${g['deleted_listings'] ?? '—'}'),
       ('Fotoğraf', '${g['total_photos'] ?? '—'}'),
+      ('Destek açık', '${msg['open_support_tickets'] ?? '—'}'),
+      ('Mesaj rapor', '${msg['reported_messages'] ?? '—'}'),
+      ('Konuşma', '${msg['active_conversations'] ?? '—'}'),
+      ('Engelli', '${msg['blocked_users'] ?? '—'}'),
     ];
     return RefreshIndicator(
       color: AppColors.gold,
@@ -490,6 +515,127 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                   'actor=${a['actor_id']} · ${a['created_at']}',
                   style: GoogleFonts.montserrat(fontSize: 10, color: AppColors.muted),
                 ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSupportTab() {
+    if (!_canViewAudit) {
+      return Center(
+        child: Text(
+          'Destek merkezi için admin / superadmin gerekli',
+          style: GoogleFonts.montserrat(color: AppColors.muted),
+        ),
+      );
+    }
+    return RefreshIndicator(
+      color: AppColors.gold,
+      onRefresh: _refreshAll,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            'DESTEK MERKEZİ',
+            style: GoogleFonts.montserrat(color: AppColors.gold, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          if (_supportTickets.isEmpty)
+            Text('Açık destek kaydı yok', style: GoogleFonts.montserrat(color: AppColors.muted))
+          else
+            ..._supportTickets.map((raw) {
+              final t = Map<String, dynamic>.from(raw as Map);
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.bgElevated,
+                  border: Border.all(color: AppColors.line),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${t['public_id']} · ${t['subject']}',
+                      style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
+                    ),
+                    Text(
+                      '${t['status']} · ${t['priority']} · user=${t['user_id']}',
+                      style: GoogleFonts.montserrat(color: AppColors.muted, fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        _ActionChip(
+                          label: 'YANITLA',
+                          color: AppColors.gold,
+                          onTap: () async {
+                            final ctrl = TextEditingController();
+                            final ok = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Destek yanıtı'),
+                                content: TextField(controller: ctrl, maxLines: 4),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+                                  FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Gönder')),
+                                ],
+                              ),
+                            );
+                            final text = ctrl.text.trim();
+                            ctrl.dispose();
+                            if (ok == true && text.isNotEmpty) {
+                              try {
+                                await api.adminSupportReply((t['id'] as num).toInt(), text);
+                                await _refreshAll(silent: true);
+                              } on ApiException catch (e) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+                              }
+                            }
+                          },
+                        ),
+                        _ActionChip(
+                          label: 'ÇÖZ',
+                          color: AppColors.blue,
+                          onTap: () async {
+                            try {
+                              await api.adminSupportReply(
+                                (t['id'] as num).toInt(),
+                                'Ticket çözüldü olarak işaretlendi.',
+                                resolve: true,
+                              );
+                              await _refreshAll(silent: true);
+                            } on ApiException catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
+          const SizedBox(height: 20),
+          Text(
+            'MESAJ MODERASYONU',
+            style: GoogleFonts.montserrat(color: AppColors.gold, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          if (_messageReports.isEmpty)
+            Text('Bildirilen mesaj yok', style: GoogleFonts.montserrat(color: AppColors.muted))
+          else
+            ..._messageReports.take(30).map((raw) {
+              final r = Map<String, dynamic>.from(raw as Map);
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('report #${r['id']} · ${r['reason']} · ${r['status']}'),
+                subtitle: Text(r['body_preview']?.toString() ?? ''),
               );
             }),
         ],

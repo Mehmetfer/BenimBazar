@@ -66,6 +66,19 @@ def dashboard_snapshot(conn) -> dict[str, Any]:
         ).fetchall()
     ]
 
+    messaging_block = {
+        "open_support_tickets": 0,
+        "reported_messages": 0,
+        "active_conversations": 0,
+        "blocked_users": 0,
+    }
+    try:
+        from changex.app.messaging.service import messaging_stats
+
+        messaging_block = messaging_stats(conn)
+    except Exception:  # noqa: BLE001
+        pass
+
     oldest_pending = [
         dict(r)
         for r in conn.execute(
@@ -156,6 +169,7 @@ def dashboard_snapshot(conn) -> dict[str, Any]:
         },
         "security": security,
         "recent_activity": recent_activity,
+        "messaging": messaging_block,
         "real_money": False,
         "live_trading": False,
     }

@@ -16,6 +16,25 @@ from pydantic import BaseModel, Field, field_validator
 
 from . import db
 from .admin_dashboard import dashboard_snapshot, list_audit_logs, search_admin_listings
+from .messaging import (
+    MessagingError,
+    block_user,
+    create_or_get_listing_conversation,
+    create_support_ticket,
+    get_conversation_for_user,
+    inbox_for_user,
+    list_messages,
+    list_reports_for_staff,
+    list_support_tickets,
+    messaging_stats,
+    moderate_report,
+    report_message,
+    reply_support_ticket,
+    send_message,
+    send_support_message,
+    unblock_user,
+)
+from .messaging.service import get_support_ticket, unread_count_for_user
 from .engine import (
     DomainError,
     accept_offer,
@@ -325,6 +344,41 @@ class BulkModerationIn(BaseModel):
     confirm: bool = False  # high-impact ops require explicit confirmation
 
 
+class MessageCreateIn(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+    acknowledge_contact_warning: bool = False
+
+
+class ConversationStartIn(BaseModel):
+    listing_id: int
+
+
+class MessageReportIn(BaseModel):
+    reason: str = "OTHER"
+
+
+class BlockUserIn(BaseModel):
+    user_id: int
+
+
+class SupportTicketIn(BaseModel):
+    subject: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=8000)
+    category: str = "GENERAL"
+    priority: str = "NORMAL"
+    attachment_url: str | None = None
+
+
+class SupportReplyIn(BaseModel):
+    body: str = Field(min_length=1, max_length=8000)
+    resolve: bool = False
+    attachment_url: str | None = None
+
+
+class ReportModerateIn(BaseModel):
+    status: str
+
+
 class OfferCreateIn(BaseModel):
     """Multi-listing offer. Server recalculates values from listing mandal_units."""
 
@@ -450,6 +504,14 @@ def _http_domain(exc: DomainError) -> HTTPException:
 def _http_mod(exc: ModerationError) -> HTTPException:
     return HTTPException(exc.status_code, detail={"code": exc.code, "message": exc.message})
 
+
+def _http_msg(exc: MessagingError) -> HTTPException:
+    detail: dict[str, Any] = {"code": exc.code, "message": exc.message}
+    if exc.extra:
+        detail.update(exc.extra)
+    return HTTPException(exc.http, detail=detail)
+
+
 def _parse_value(body: ValueIn) -> ChangeValue:
     try:
         return ChangeValue.from_units(
@@ -562,7 +624,277 @@ def health() -> dict:
         "canonical": "mandal_units",
         "version": "0.3.0",
         "core": "trust_safety_v1",
+        "messaging": True,
     }
+
+
+# --- Messaging + Support (phone-free) ---------------------------------
+
+
+@app.get("/api/messages/unread-count")
+def messages_unread_count(user: Annotated[dict, Depends(require_user)]) -> dict:
+    with db.connect() as conn:
+        return {"unread": unread_count_for_user(conn, int(user["id"]))}
+
+
+@app.get("/api/messages/inbox")
+def messages_inbox(user: Annotated[dict, Depends(require_user)]) -> dict:
+    with db.connect() as conn:
+        items = inbox_for_user(conn, int(user["id"]))
+        return {"conversations": items, "count": len(items), "unread": unread_count_for_user(conn, int(user["id"]))}
+
+
+@app.post("/api/messages/conversations")
+def messages_start_conversation(
+    body: ConversationStartIn,
+    request: Request,
+    user: Annotated[dict, Depends(require_user)],
+) -> dict:
+    _rate_limit(request, limit=40, endpoint="/api/messages/conversations", user_id=int(user["id"]))
+    with db.connect() as conn:
+        try:
+            with db.immediate_tx(conn):
+                return create_or_get_listing_conversation(
+                    conn,
+                    buyer_id=int(user["id"]),
+                    listing_id=int(body.listing_id),
+                    correlation_id=_cid(request),
+                )
+        except MessagingError as exc:
+            raise _http_msg(exc) from exc
+
+
+@app.get("/api/messages/conversations/{conversation_id}")
+def messages_get_conversation(
+    conversation_id: int,
+    user: Annotated[dict, Depends(require_user)],
+) -> dict:
+    with db.connect() as conn:
+        try:
+            return get_conversation_for_user(conn, conversation_id, int(user["id"]))
+        except MessagingError as exc:
+            raise _http_msg(exc) from exc
+
+
+@app.get("/api/messages/conversations/{conversation_id}/messages")
+def messages_list(
+    conversation_id: int,
+    user: Annotated[dict, Depends(require_user)],
+) -> dict:
+    with db.connect() as conn:
+        try:
+            with db.immediate_tx(conn):
+                items = list_messages(conn, conversation_id, int(user["id"]))
+            return {"messages": items, "count": len(items)}
+        except MessagingError as exc:
+            raise _http_msg(exc) from exc
+
+
+@app.post("/api/messages/conversations/{conversation_id}/messages")
+def messages_send(
+    conversation_id: int,
+    body: MessageCreateIn,
+    request: Request,
+    user: Annotated[dict, Depends(require_user)],
+) -> dict:
+    _rate_limit(request, limit=60, endpoint="/api/messages/send", user_id=int(user["id"]))
+    with db.connect() as conn:
+        try:
+            with db.immediate_tx(conn):
+                return send_message(
+                    conn,
+                    conversation_id=conversation_id,
+                    sender_id=int(user["id"]),
+                    body=body.body,
+                    correlation_id=_cid(request),
+                    acknowledge_contact_warning=body.acknowledge_contact_warning,
+                )
+        except MessagingError as exc:
+            raise _http_msg(exc) from exc
+
+
+@app.post("/api/messages/{message_id}/report")
+def messages_report(
+    message_id: int,
+    body: MessageReportIn,
+    request: Request,
+    user: Annotated[dict, Depends(require_user)],
+) -> dict:
+    with db.connect() as conn:
+        try:
+            with db.immediate_tx(conn):
+                return report_message(
+                    conn,
+                    message_id=message_id,
+                    reporter_id=int(user["id"]),
+                    reason=body.reason,
+                    correlation_id=_cid(request),
+                )
+        except MessagingError as exc:
+            raise _http_msg(exc) from exc
+
+
+@app.post("/api/messages/block")
+def messages_block(
+    body: BlockUserIn,
+    request: Request,
+    user: Annotated[dict, Depends(require_user)],
+) -> dict:
+    with db.connect() as conn:
+        try:
+            with db.immediate_tx(conn):
+                return block_user(conn, int(user["id"]), int(body.user_id), correlation_id=_cid(request))
+        except MessagingError as exc:
+            raise _http_msg(exc) from exc
+
+
+@app.post("/api/messages/unblock")
+def messages_unblock(
+    body: BlockUserIn,
+    request: Request,
+    user: Annotated[dict, Depends(require_user)],
+) -> dict:
+    with db.connect() as conn:
+        try:
+            with db.immediate_tx(conn):
+                return unblock_user(conn, int(user["id"]), int(body.user_id), correlation_id=_cid(request))
+        except MessagingError as exc:
+            raise _http_msg(exc) from exc
+
+
+@app.post("/api/support/tickets")
+def support_create(
+    body: SupportTicketIn,
+    request: Request,
+    user: Annotated[dict, Depends(require_user)],
+) -> dict:
+    _rate_limit(request, limit=20, endpoint="/api/support/tickets", user_id=int(user["id"]))
+    with db.connect() as conn:
+        try:
+            with db.immediate_tx(conn):
+                return create_support_ticket(
+                    conn,
+                    user_id=int(user["id"]),
+                    subject=body.subject,
+                    body=body.body,
+                    category=body.category,
+                    priority=body.priority,
+                    attachment_url=body.attachment_url,
+                    correlation_id=_cid(request),
+                )
+        except MessagingError as exc:
+            raise _http_msg(exc) from exc
+
+
+@app.get("/api/support/tickets")
+def support_list_mine(user: Annotated[dict, Depends(require_user)]) -> dict:
+    with db.connect() as conn:
+        items = list_support_tickets(conn, user_id=int(user["id"]), staff=False)
+        return {"tickets": items, "count": len(items)}
+
+
+@app.get("/api/support/tickets/{ticket_id}")
+def support_get(ticket_id: int, user: Annotated[dict, Depends(require_user)]) -> dict:
+    with db.connect() as conn:
+        try:
+            return get_support_ticket(conn, ticket_id, user_id=int(user["id"]), staff=False)
+        except MessagingError as exc:
+            raise _http_msg(exc) from exc
+
+
+@app.post("/api/support/tickets/{ticket_id}/messages")
+def support_user_reply(
+    ticket_id: int,
+    body: SupportReplyIn,
+    request: Request,
+    user: Annotated[dict, Depends(require_user)],
+) -> dict:
+    with db.connect() as conn:
+        try:
+            with db.immediate_tx(conn):
+                return send_support_message(
+                    conn,
+                    ticket_id=ticket_id,
+                    sender_id=int(user["id"]),
+                    body=body.body,
+                    is_staff=False,
+                    attachment_url=body.attachment_url,
+                    correlation_id=_cid(request),
+                )
+        except MessagingError as exc:
+            raise _http_msg(exc) from exc
+
+
+@app.get("/api/admin/support/tickets")
+def admin_support_list(user: Annotated[dict, Depends(require_admin)]) -> dict:
+    with db.connect() as conn:
+        items = list_support_tickets(conn, staff=True)
+        return {"tickets": items, "count": len(items)}
+
+
+@app.get("/api/admin/support/tickets/{ticket_id}")
+def admin_support_get(ticket_id: int, user: Annotated[dict, Depends(require_admin)]) -> dict:
+    with db.connect() as conn:
+        try:
+            return get_support_ticket(conn, ticket_id, user_id=int(user["id"]), staff=True)
+        except MessagingError as exc:
+            raise _http_msg(exc) from exc
+
+
+@app.post("/api/admin/support/tickets/{ticket_id}/reply")
+def admin_support_reply(
+    ticket_id: int,
+    body: SupportReplyIn,
+    request: Request,
+    user: Annotated[dict, Depends(require_admin)],
+) -> dict:
+    with db.connect() as conn:
+        try:
+            with db.immediate_tx(conn):
+                return reply_support_ticket(
+                    conn,
+                    ticket_id=ticket_id,
+                    admin_id=int(user["id"]),
+                    body=body.body,
+                    resolve=body.resolve,
+                    correlation_id=_cid(request),
+                )
+        except MessagingError as exc:
+            raise _http_msg(exc) from exc
+
+
+@app.get("/api/admin/messages/reports")
+def admin_message_reports(user: Annotated[dict, Depends(require_admin)]) -> dict:
+    with db.connect() as conn:
+        items = list_reports_for_staff(conn)
+        return {"reports": items, "count": len(items)}
+
+
+@app.post("/api/admin/messages/reports/{report_id}")
+def admin_moderate_report(
+    report_id: int,
+    body: ReportModerateIn,
+    request: Request,
+    user: Annotated[dict, Depends(require_admin)],
+) -> dict:
+    with db.connect() as conn:
+        try:
+            with db.immediate_tx(conn):
+                return moderate_report(
+                    conn,
+                    report_id=report_id,
+                    actor_id=int(user["id"]),
+                    status=body.status,
+                    correlation_id=_cid(request),
+                )
+        except MessagingError as exc:
+            raise _http_msg(exc) from exc
+
+
+@app.get("/api/admin/messages/stats")
+def admin_messages_stats(user: Annotated[dict, Depends(require_admin)]) -> dict:
+    with db.connect() as conn:
+        return messaging_stats(conn)
 
 
 @app.post("/api/auth/register")

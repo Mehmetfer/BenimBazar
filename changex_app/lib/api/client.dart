@@ -265,6 +265,156 @@ class ChangeXApi {
     return _decode(res);
   }
 
+  // --- Messaging / Support ---
+
+  Future<int> messagesUnreadCount() async {
+    final res = await http.get(
+      Uri.parse('$_root/api/messages/unread-count'),
+      headers: await _headers(auth: true),
+    );
+    final data = _decode(res);
+    return (data['unread'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<List<dynamic>> messagesInbox() async {
+    final res = await http.get(
+      Uri.parse('$_root/api/messages/inbox'),
+      headers: await _headers(auth: true),
+    );
+    final data = _decode(res);
+    return (data['conversations'] as List?) ?? [];
+  }
+
+  Future<Map<String, dynamic>> startConversation(int listingId) async {
+    final res = await http.post(
+      Uri.parse('$_root/api/messages/conversations'),
+      headers: await _headers(auth: true),
+      body: jsonEncode({'listing_id': listingId}),
+    );
+    return _decode(res);
+  }
+
+  Future<List<dynamic>> conversationMessages(int conversationId) async {
+    final res = await http.get(
+      Uri.parse('$_root/api/messages/conversations/$conversationId/messages'),
+      headers: await _headers(auth: true),
+    );
+    final data = _decode(res);
+    return (data['messages'] as List?) ?? [];
+  }
+
+  Future<Map<String, dynamic>> sendConversationMessage(
+    int conversationId,
+    String body, {
+    bool acknowledgeContactWarning = false,
+  }) async {
+    final res = await http.post(
+      Uri.parse('$_root/api/messages/conversations/$conversationId/messages'),
+      headers: await _headers(auth: true),
+      body: jsonEncode({
+        'body': body,
+        'acknowledge_contact_warning': acknowledgeContactWarning,
+      }),
+    );
+    return _decode(res);
+  }
+
+  Future<Map<String, dynamic>> reportMessage(int messageId, String reason) async {
+    final res = await http.post(
+      Uri.parse('$_root/api/messages/$messageId/report'),
+      headers: await _headers(auth: true),
+      body: jsonEncode({'reason': reason}),
+    );
+    return _decode(res);
+  }
+
+  Future<Map<String, dynamic>> blockUser(int userId) async {
+    final res = await http.post(
+      Uri.parse('$_root/api/messages/block'),
+      headers: await _headers(auth: true),
+      body: jsonEncode({'user_id': userId}),
+    );
+    return _decode(res);
+  }
+
+  Future<Map<String, dynamic>> createSupportTicket({
+    required String subject,
+    required String body,
+    String category = 'GENERAL',
+    String priority = 'NORMAL',
+    String? attachmentUrl,
+  }) async {
+    final res = await http.post(
+      Uri.parse('$_root/api/support/tickets'),
+      headers: await _headers(auth: true),
+      body: jsonEncode({
+        'subject': subject,
+        'body': body,
+        'category': category,
+        'priority': priority,
+        if (attachmentUrl != null) 'attachment_url': attachmentUrl,
+      }),
+    );
+    return _decode(res);
+  }
+
+  Future<List<dynamic>> mySupportTickets() async {
+    final res = await http.get(
+      Uri.parse('$_root/api/support/tickets'),
+      headers: await _headers(auth: true),
+    );
+    final data = _decode(res);
+    return (data['tickets'] as List?) ?? [];
+  }
+
+  Future<Map<String, dynamic>> getSupportTicket(int id) async {
+    final res = await http.get(
+      Uri.parse('$_root/api/support/tickets/$id'),
+      headers: await _headers(auth: true),
+    );
+    return _decode(res);
+  }
+
+  Future<Map<String, dynamic>> replySupportTicket(int id, String body) async {
+    final res = await http.post(
+      Uri.parse('$_root/api/support/tickets/$id/messages'),
+      headers: await _headers(auth: true),
+      body: jsonEncode({'body': body}),
+    );
+    return _decode(res);
+  }
+
+  Future<List<dynamic>> adminSupportTickets() async {
+    final res = await http.get(
+      Uri.parse('$_root/api/admin/support/tickets'),
+      headers: await _headers(auth: true),
+    );
+    final data = _decode(res);
+    return (data['tickets'] as List?) ?? [];
+  }
+
+  Future<Map<String, dynamic>> adminSupportReply(
+    int ticketId,
+    String body, {
+    bool resolve = false,
+  }) async {
+    final res = await http.post(
+      Uri.parse('$_root/api/admin/support/tickets/$ticketId/reply'),
+      headers: await _headers(auth: true),
+      body: jsonEncode({'body': body, 'resolve': resolve}),
+    );
+    return _decode(res);
+  }
+
+  Future<List<dynamic>> adminMessageReports() async {
+    final res = await http.get(
+      Uri.parse('$_root/api/admin/messages/reports'),
+      headers: await _headers(auth: true),
+    );
+    final data = _decode(res);
+    return (data['reports'] as List?) ?? [];
+  }
+
   Future<List<dynamic>> adminStaff() async {
     final res = await http.get(
       Uri.parse('$_root/api/admin/staff'),

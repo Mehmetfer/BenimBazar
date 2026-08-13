@@ -9,6 +9,7 @@ import '../widgets/value_widgets.dart';
 import 'create_listing_screen.dart';
 import 'edit_listing_screen.dart';
 import 'login_screen.dart';
+import 'chat_detail_screen.dart';
 import 'my_listings_screen.dart';
 
 class ListingDetailScreen extends StatefulWidget {
@@ -222,7 +223,45 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       fontSize: 12,
                     ),
                   ),
-                  ChainEngineNotice(chainEngineEnabled: _chainEngineEnabled),                  if (_isOwner || _isStaff) ...[
+                  if (!_isOwner && widget.user != null) ...[
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.gold,
+                        side: const BorderSide(color: AppColors.gold),
+                      ),
+                      onPressed: _busy
+                          ? null
+                          : () async {
+                              setState(() => _busy = true);
+                              try {
+                                final conv = await api.startConversation(
+                                  _asInt(widget.listing['id']),
+                                );
+                                if (!context.mounted) return;
+                                await Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => ChatDetailScreen(
+                                      user: widget.user!,
+                                      conversation: conv,
+                                    ),
+                                  ),
+                                );
+                              } on ApiException catch (e) {
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(e.message)),
+                                );
+                              } finally {
+                                if (mounted) setState(() => _busy = false);
+                              }
+                            },
+                      icon: const Icon(Icons.chat_bubble_outline),
+                      label: const Text('Satıcıya Mesaj Gönder'),
+                    ),
+                  ],
+                  ChainEngineNotice(chainEngineEnabled: _chainEngineEnabled),
+                  if (_isOwner || _isStaff) ...[
                     const SizedBox(height: 14),
                     _OwnerModerationPanel(listing: widget.listing),
                   ],
