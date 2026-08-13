@@ -124,6 +124,7 @@ def decide_matrix(
     news_block: bool,
     capital_mode: CapitalMode,
     regime: MarketRegime,
+    strategy_blocked: bool = False,
     cfg: Settings | None = None,
 ):
     """Final decision matrix — NO_TRADE / WAIT are first-class."""
@@ -131,6 +132,8 @@ def decide_matrix(
 
     cfg = cfg or default_settings
     if capital_mode == CapitalMode.KILL_SWITCH:
+        return SignalAction.NO_TRADE
+    if strategy_blocked:
         return SignalAction.NO_TRADE
     if news_block or conflict:
         return SignalAction.WAIT if not owned else SignalAction.WATCH
@@ -150,6 +153,8 @@ def decide_matrix(
     # Long side
     if regime == MarketRegime.STRONG_BEAR:
         return SignalAction.NO_TRADE
+    if scores.ai_confidence < cfg.min_ai_confidence_to_trade:
+        return SignalAction.NO_TRADE
     if capital_mode == CapitalMode.HIGH_RISK and not (
         scores.final >= cfg.strong_buy_threshold and opp.expected_value > 1.0 and opp.p_win >= 0.6
     ):
@@ -161,6 +166,7 @@ def decide_matrix(
         and opp.expected_value > 0.8
         and scores.risk <= 35
         and scores.liquidity >= 60
+        and scores.ai_confidence >= cfg.min_ai_confidence_to_trade
     ):
         return SignalAction.STRONG_BUY
     if (
@@ -168,6 +174,7 @@ def decide_matrix(
         and opp.expected_value > 0.0
         and opp.risk_reward >= cfg.min_risk_reward
         and scores.market >= 45
+        and scores.ai_confidence >= cfg.min_ai_confidence_to_trade
     ):
         return SignalAction.BUY
     if scores.final >= cfg.watch_threshold:

@@ -1,0 +1,537 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import '../api/client.dart';
+import '../auth/auth_intent.dart';
+import '../theme/app_theme.dart';
+import '../widgets/listing_presentation_layout.dart';
+import '../widgets/value_widgets.dart';
+import 'admin_login_screen.dart';
+import 'admin_panel_screen.dart';
+import 'create_listing_screen.dart';
+import 'listing_detail_screen.dart';
+import 'messages_inbox_screen.dart';
+import 'my_listings_screen.dart';
+import 'support_screen.dart';
+import 'trades_screen.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key, required this.user});
+
+  final Map<String, dynamic>? user;
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final _search = TextEditingController();
+  List<dynamic> _listings = [];
+  bool _loading = true;
+  String? _error;
+  String? _category;
+  int _balanceMandal = 0;
+  int _unreadMessages = 0;
+
+  static const categories = [
+    'TÜM TAKASLAR',
+    'POPÜLER',
+    'YENİ',
+    'YAKININDA',
+    'HIZLI TAKAS',
+    'Elektronik',
+    'Spor',
+    'Ev',
+    'Kitap',
+    'Moda',
+    'Diğer',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _category = 'TÜM TAKASLAR';
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final list = await api.listings(
+        q: _search.text.trim(),
+        category: _category == null ||
+                _category == 'TÜM TAKASLAR' ||
+                _category == 'POPÜLER' ||
+                _category == 'YENİ' ||
+                _category == 'YAKININDA' ||
+                _category == 'HIZLI TAKAS'
+            ? null
+            : _category,
+      );
+      var bal = 0;
+      for (final raw in list) {
+        final item = Map<String, dynamic>.from(raw as Map);
+        final owner = Map<String, dynamic>.from(item['owner'] as Map? ?? {});
+        if (widget.user != null &&
+            owner['username'] == widget.user!['username']) {
+          final value = Map<String, dynamic>.from(item['value'] as Map? ?? {});
+          bal += (value['total_mandal'] as num?)?.toInt() ?? 0;
+        }
+      }
+      var unread = 0;
+      if (widget.user != null) {
+        try {
+          unread = await api.messagesUnreadCount();
+        } catch (_) {
+          unread = 0;
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _listings = list;
+        _balanceMandal = bal;
+        _unreadMessages = unread;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  bool get _loggedIn => widget.user != null;
+
+  Future<void> _openCreateListing() async {
+    if (!_loggedIn) {
+      await openLoginGate(context, intent: AuthIntent.createListing);
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CreateListingScreen(user: widget.user!),
+      ),
+    );
+    if (mounted) await _load();
+  }
+
+  Future<void> _openMessages() async {
+    if (!_loggedIn) {
+      await openLoginGate(context, intent: AuthIntent.messagesInbox);
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => MessagesInboxScreen(user: widget.user!)),
+    );
+    if (mounted) await _load();
+  }
+
+  Future<void> _openTrades() async {
+    if (!_loggedIn) {
+      await openLoginGate(context, intent: AuthIntent.trades);
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => TradesScreen(user: widget.user!)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = widget.user?['username']?.toString();
+    return Scaffold(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF171A22), AppColors.bg],
+          ),
+        ),
+        child: SafeArea(
+          child: RefreshIndicator(
+            color: AppColors.gold,
+            onRefresh: _load,
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const BrandMark(compact: true),
+                            const Spacer(),
+                            if (_loggedIn)
+                              BalanceChip(totalMandal: _balanceMandal),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Text(
+                              name != null ? 'Merhaba, $name' : 'Ziyaretçi',
+                              style: GoogleFonts.montserrat(
+                                color: AppColors.muted,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const Spacer(),
+                            if (_loggedIn)
+                              TextButton(
+                                onPressed: () async {
+                                  await api.setToken(null);
+                                  if (!context.mounted) return;
+                                  Navigator.of(context).pushAndRemoveUntil(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const HomeScreen(user: null),
+                                    ),
+                                    (_) => false,
+                                  );
+                                },
+                                child: Text(
+                                  'Çıkış',
+                                  style: GoogleFonts.montserrat(
+                                    color: AppColors.gold,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              )
+                            else
+                              TextButton(
+                                onPressed: () {
+                                  openLoginGate(
+                                    context,
+                                    intent: AuthIntent.profile,
+                                  );
+                                },
+                                child: Text(
+                                  'Giriş',
+                                  style: GoogleFonts.montserrat(
+                                    color: AppColors.gold,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        if (widget.user?['role'] == 'superadmin' ||
+                            widget.user?['role'] == 'admin' ||
+                            widget.user?['role'] == 'moderator') ...[
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => AdminPanelScreen(
+                                      user: widget.user!,
+                                    ),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.admin_panel_settings_outlined,
+                                  color: AppColors.gold, size: 18),
+                              label: Text(
+                                'YÖNETİM PANELİ',
+                                style: GoogleFonts.montserrat(
+                                  color: AppColors.gold,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ] else ...[
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const AdminLoginScreen(),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.admin_panel_settings_outlined,
+                                  color: AppColors.muted, size: 18),
+                              label: Text(
+                                'Yönetim girişi',
+                                style: GoogleFonts.montserrat(
+                                  color: AppColors.muted,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                        const PlatformBanner(),
+                        const SizedBox(height: 14),
+                        const PillarsRow(),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _search,
+                          onSubmitted: (_) => _load(),
+                          decoration: InputDecoration(
+                            hintText: 'Takas kaydı ara…',
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.search, color: AppColors.gold),
+                              onPressed: _load,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 40,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: categories.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(width: 8),
+                            itemBuilder: (context, i) {
+                              final c = categories[i];
+                              final selected = (_category ?? 'TÜM TAKASLAR') == c;
+                              return ChoiceChip(
+                                label: Text(c),
+                                selected: selected,
+                                onSelected: (_) {
+                                  setState(() => _category = c);
+                                  _load();
+                                },
+                                selectedColor: AppColors.gold,
+                                labelStyle: GoogleFonts.montserrat(
+                                  color: selected
+                                      ? AppColors.bg
+                                      : AppColors.ink,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                                backgroundColor: AppColors.bgElevated,
+                                side: BorderSide(
+                                  color: selected
+                                      ? AppColors.gold
+                                      : AppColors.line,
+                                ),
+                                showCheckmark: false,
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Takas kayıtları',
+                          style: GoogleFonts.montserrat(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Change Score · doğrulanmış üyeler · güvenli takas',
+                          style: GoogleFonts.montserrat(
+                            color: AppColors.muted,
+                            fontSize: 11,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_loading)
+                  const SliverFillRemaining(
+                    child: Center(
+                      child: CircularProgressIndicator(color: AppColors.gold),
+                    ),
+                  )
+                else if (_error != null)
+                  SliverFillRemaining(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.montserrat(color: AppColors.danger),
+                        ),
+                      ),
+                    ),
+                  )
+                else if (_listings.isEmpty)
+                  SliverFillRemaining(
+                    child: Center(
+                      child: Text(
+                        'Henüz takas kaydı yok.\nİlk kaydı sen oluştur.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.montserrat(color: AppColors.muted),
+                      ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                    sliver: SliverList.separated(
+                      itemCount: _listings.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final item =
+                            Map<String, dynamic>.from(_listings[index] as Map);
+                        return _ListingCard(
+                          item: item,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => ListingDetailScreen(
+                                  listing: item,
+                                  user: widget.user,
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      // FAB on Flutter web often fails hit-testing under a custom bottom bar.
+      // Primary create CTA lives in the bottom bar (and header) instead.
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.gold,
+                    foregroundColor: AppColors.bg,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: _openCreateListing,
+                  icon: const Icon(Icons.add_a_photo_outlined),
+                  label: Text(
+                    'Fotoğraflı ilan',
+                    style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.ink,
+                        side: const BorderSide(color: AppColors.line),
+                      ),
+                      onPressed: _openTrades,
+                      icon: const Icon(Icons.account_tree_outlined),
+                      label: const Text('Takaslar'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _openMessages,
+                      icon: const Icon(Icons.chat_outlined, color: AppColors.gold),
+                      label: Text(
+                        _loggedIn && _unreadMessages > 0
+                            ? 'Mesajlar ($_unreadMessages)'
+                            : 'Mesajlar',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (_loggedIn) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.gold,
+                          side: const BorderSide(color: AppColors.gold),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context)
+                              .push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  MyListingsScreen(user: widget.user!),
+                            ),
+                          )
+                              .then((_) => _load());
+                        },
+                        icon: const Icon(Icons.photo_library_outlined),
+                        label: const Text('İlanlarım'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => SupportScreen(user: widget.user!),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.support_agent_outlined, color: AppColors.gold),
+                        label: const Text('Destek'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ListingCard extends StatelessWidget {
+  const _ListingCard({required this.item, required this.onTap});
+
+  final Map<String, dynamic> item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.line),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ListingPresentationCard(listing: item, onTap: onTap),
+    );
+  }
+}

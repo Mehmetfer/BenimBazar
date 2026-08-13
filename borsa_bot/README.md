@@ -23,28 +23,26 @@ Kâr garantisi yoktur. Geçmiş performans geleceği garanti etmez. LIVE öncesi
 - **Risk-adjusted strategy ranking:** yüksek getiri + yüksek DD cezalı
 - **Alerts:** uygulama içi + push/SMS stub + ses + TTS (TR); SIGNAL ≠ EXECUTION; trading’i etkilemez
 
-## Çalıştır / Test
-
-```bash
-export PYTHONPATH=/workspace/borsa_bot
-uvicorn dashboard.app:app --app-dir borsa_bot --host 0.0.0.0 --port 8090
-pytest borsa_bot/tests -q
-```
-
 ## Çalıştır
 
 ```bash
 cd /workspace
 cp borsa_bot/.env.example borsa_bot/.env
 source .venv/bin/activate
+# Uvicorn app-dir flat imports için hâlâ borsa_bot path ister:
 export PYTHONPATH=/workspace/borsa_bot
 uvicorn dashboard.app:app --app-dir borsa_bot --host 0.0.0.0 --port 8090
 ```
 
 ## Test
 
+Kök `pytest.ini` `pythonpath = . borsa_bot` ayarlar; düz `pytest` collection hatası vermez:
+
 ```bash
-PYTHONPATH=/workspace/borsa_bot pytest borsa_bot/tests -q
+cd /workspace
+source .venv/bin/activate
+pytest                 # tüm suite’ler (changex + companion + borsa_bot)
+pytest borsa_bot/tests -q
 ```
 
 ## Modüller
