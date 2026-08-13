@@ -5,6 +5,8 @@ Para yok. Satın alma yok. **Sadece takas.**
 Platform birimleri: **Mandal · Dirhem · Madalyon**  
 (1 Madalyon = 254 Dirhem = 64.516 Mandal — gerçek para değildir)
 
+[![CI](https://github.com/Mehmetfer/Koca_Kafa/actions/workflows/ci.yml/badge.svg)](https://github.com/Mehmetfer/Koca_Kafa/actions/workflows/ci.yml)
+
 ## Çalıştır
 
 ```bash
@@ -13,6 +15,31 @@ bash scripts/start.sh
 ```
 
 Aç: http://127.0.0.1:8000
+
+## CI
+
+Pull request’lerde GitHub Actions şunları çalıştırır:
+
+- CHANGE X `pytest` (`changex/tests`)
+- Security regresyon suite
+- Image E2E + API E2E suite’leri
+- Flutter `analyze` + `test` (`changex_app`)
+- Düz `pytest --collect-only` (borsa_bot `PYTHONPATH` dahil collection hatası olmamalı)
+
+Tek kontrol noktası: workflow job **`CI Gate`**.  
+Merge’i kilitlemek için GitHub’da `main` branch protection’da **Require status checks → `CI Gate`** seçilmelidir (Actions’ın en az bir kez çalışmış olması gerekir).
+
+Python bağımlılıkları `requirements.lock.txt` ile pin’lidir. Flutter için `changex_app/pubspec.lock` commit’lidir. Secret / production credential commit edilmez (`.env` gitignore’dadır; örnek: `borsa_bot/.env.example`).
+
+## Test (lokal)
+
+```bash
+bash scripts/install.sh
+source .venv/bin/activate
+pytest                 # kök pytest.ini: pythonpath=. borsa_bot
+pytest changex/tests -q
+cd changex_app && flutter pub get && flutter analyze && flutter test
+```
 
 ## API (özet)
 

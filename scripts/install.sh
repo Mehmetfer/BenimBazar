@@ -17,6 +17,5 @@ fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
 python -m pip install -U pip
-python -m pip install -r companion/requirements.txt
-python -m pip install -r changex/requirements.txt
-python -m pip install pytest
+# Deterministic install used by CI (see requirements.lock.txt).
+python -m pip install -r "$ROOT/requirements.lock.txt"
