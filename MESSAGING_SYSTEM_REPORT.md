@@ -60,8 +60,15 @@
 - No WebSocket/SSE live push yet (poll/refresh; schema ready for realtime later)
 - No mobile push notification provider wired
 - Admin does **not** get unbounded private transcript browser (reports + support only)
-- Attachment on support: URL field accepted; rich upload UX for tickets is minimal
+- Support attachments must be owned `/uploads/` URLs (theft blocked); rich ticket upload UX still minimal
 - Peer “Reports” product for listings still separate from message reports
+
+## Hardening (post-V1)
+See `reports/overnight/HARDENING_PASS_REPORT.md`:
+- APPROVED/ACTIVE-only listing chats; soft-delete; report ACTIONED soft-delete
+- Support never BLOCK contact policy; attachment ownership
+- ApiException structured contact codes; learning consecutive-fail reset
+- Admin DESTEK transcript + unread badge
 
 ## Remaining Work
 - Optional WebSocket layer
@@ -83,21 +90,23 @@
 | Rate limiting | PASS |
 | Block | PASS |
 | Report | PASS |
-| Moderation | PASS (report queue; not god-mode inbox) |
+| Moderation | PASS (report queue; ACTIONED soft-deletes) |
+| Soft-delete own message | PASS |
+| Support attachment ownership | PASS |
 | Audit | PASS |
 | Flutter UI | PASS |
 | E2E | PASS |
 | Refresh persistence | PASS |
-| Regression green | PASS (274 changex) |
+| Regression green | PASS (278 changex target) |
 
-**MESSAGING SYSTEM: COMPLETE** (V1 — with limitations above, no fake claims)
+**MESSAGING SYSTEM: COMPLETE** (V1 hardened — limitations above, no fake claims)
 
 ## Regression
-- `pytest changex/tests -q` → **274 passed** (264 → +10 messaging)
+- `pytest changex/tests -q` → **278** (messaging harden + attachment ownership)
 - `flutter analyze` clean · `flutter test` 18
 
 ## CURRENT REAL PHASE
-Professional admin + verified listings + F6/F7 + **messaging V1**
+Professional admin + verified listings + F6/F7 + **messaging V1 hardened**
 
 ## CURRENT SCORE
 ~79/100 (F8 still disabled)

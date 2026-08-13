@@ -57,6 +57,20 @@ def test_budget_pauses(tmp_path):
     second = loop.run_cycle()
     assert second.final_state == AutonomyState.PAUSED_FOR_REVIEW.value
 
+def test_learning_resets_after_pass(tmp_path):
+    from autonomy.components import LearningStore
+
+    store = LearningStore(tmp_path / "learn.jsonl")
+    problem, proposal = "p", "fix"
+    store.record({"fingerprint": f"{problem}::{proposal}", "result": "FAILED"})
+    store.record({"fingerprint": f"{problem}::{proposal}", "result": "FAILED"})
+    assert store.should_block(problem, proposal) is True
+    store.record({"fingerprint": f"{problem}::{proposal}", "result": "PASSED"})
+    assert store.should_block(problem, proposal) is False
+    store.record({"fingerprint": f"{problem}::{proposal}", "result": "FAILED"})
+    assert store.should_block(problem, proposal) is False  # only 1 fail since pass
+
+
 def test_continuous_loop_respects_budget(tmp_path):
     budget = AutonomyBudget(max_iterations=2)
     loop = AutonomyLoop(target_root=TARGET, budget=budget, reports_dir=tmp_path)

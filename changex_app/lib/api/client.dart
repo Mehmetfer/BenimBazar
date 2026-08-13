@@ -406,6 +406,34 @@ class ChangeXApi {
     return _decode(res);
   }
 
+  Future<Map<String, dynamic>> adminSupportTicket(int ticketId) async {
+    final res = await http.get(
+      Uri.parse('$_root/api/admin/support/tickets/$ticketId'),
+      headers: await _headers(auth: true),
+    );
+    return _decode(res);
+  }
+
+  Future<Map<String, dynamic>> adminModerateMessageReport(
+    int reportId,
+    String status,
+  ) async {
+    final res = await http.post(
+      Uri.parse('$_root/api/admin/messages/reports/$reportId'),
+      headers: await _headers(auth: true),
+      body: jsonEncode({'status': status}),
+    );
+    return _decode(res);
+  }
+
+  Future<Map<String, dynamic>> softDeleteMessage(int messageId) async {
+    final res = await http.delete(
+      Uri.parse('$_root/api/messages/$messageId'),
+      headers: await _headers(auth: true),
+    );
+    return _decode(res);
+  }
+
   Future<List<dynamic>> adminMessageReports() async {
     final res = await http.get(
       Uri.parse('$_root/api/admin/messages/reports'),
@@ -501,22 +529,46 @@ class ChangeXApi {
     if (res.statusCode >= 400) {
       final detail = body['detail'];
       String message;
+      String? code;
+      Map<String, dynamic>? detailMap;
       if (detail is Map) {
-        message = detail['user_message']?.toString() ??
-            detail['message']?.toString() ??
+        detailMap = Map<String, dynamic>.from(detail);
+        message = detailMap['user_message']?.toString() ??
+            detailMap['message']?.toString() ??
             detail.toString();
+        code = detailMap['code']?.toString();
       } else {
         message = detail?.toString() ?? 'İstek başarısız (${res.statusCode})';
       }
-      throw ApiException(message);
+      throw ApiException(
+        message,
+        statusCode: res.statusCode,
+        code: code,
+        detail: detailMap,
+      );
     }
     return body;
   }
 }
 
 class ApiException implements Exception {
-  ApiException(this.message);
+  ApiException(
+    this.message, {
+    this.statusCode,
+    this.code,
+    this.detail,
+  });
+
   final String message;
+  final int? statusCode;
+  final String? code;
+  final Map<String, dynamic>? detail;
+
+  bool get isContactWarning =>
+      code == 'CONTACT_INFO_WARNING' || statusCode == 409;
+
+  bool get isContactBlocked => code == 'CONTACT_INFO_BLOCKED';
+
   @override
   String toString() => message;
 }

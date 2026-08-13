@@ -70,7 +70,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       await _load();
     } on ApiException catch (e) {
       if (!mounted) return;
-      if (e.message.contains('iletişim') || e.message.toLowerCase().contains('contact')) {
+      if (e.isContactWarning) {
         final ok = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
@@ -87,6 +87,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         if (ok == true) {
           await _send(ack: true);
         }
+      } else if (e.isContactBlocked) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Mesaj engellendi: ${e.message}')),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -112,6 +116,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Mesaj bildirildi')),
       );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
+  Future<void> _deleteOwn(int messageId) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Mesajı sil'),
+        content: const Text('Bu mesaj soft-delete edilir ve karşı tarafta görünmez.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sil')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await api.softDeleteMessage(messageId);
+      await _load();
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
@@ -238,6 +264,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                                 style: GoogleFonts.montserrat(
                                                   fontSize: 10,
                                                   color: AppColors.danger,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                          if (mine) ...[
+                                            const SizedBox(width: 8),
+                                            GestureDetector(
+                                              onTap: () => _deleteOwn((m['id'] as num).toInt()),
+                                              child: Text(
+                                                'Sil',
+                                                style: GoogleFonts.montserrat(
+                                                  fontSize: 10,
+                                                  color: AppColors.muted,
                                                 ),
                                               ),
                                             ),

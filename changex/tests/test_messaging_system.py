@@ -318,3 +318,101 @@ def test_admin_dashboard_includes_messaging_stats(client):
     assert "messaging" in r.json()
     for k in ("active_conversations", "open_support_tickets", "reported_messages", "blocked_users"):
         assert k in r.json()["messaging"]
+
+
+def test_soft_delete_message_and_pending_listing_blocked(client):
+    a = register(client, "del_a")
+    b = register(client, "del_b")
+    pending = make_listing(client, a["token"], "Pending No Chat", approve=False)
+    bad = client.post(
+        "/api/messages/conversations",
+        headers=auth(b["token"]),
+        json={"listing_id": pending["id"]},
+    )
+    assert bad.status_code == 400
+    listing = make_listing(client, a["token"], "Delete Msg Listing", approve=True)
+    conv = client.post(
+        "/api/messages/conversations",
+        headers=auth(b["token"]),
+        json={"listing_id": listing["id"]},
+    ).json()
+    msg = client.post(
+        f"/api/messages/conversations/{conv['id']}/messages",
+        headers=auth(b["token"]),
+        json={"body": "silinecek"},
+    ).json()
+    # other user cannot delete
+    deny = client.delete(f"/api/messages/{msg['id']}", headers=auth(a["token"]))
+    assert deny.status_code == 403
+    ok = client.delete(f"/api/messages/{msg['id']}", headers=auth(b["token"]))
+    assert ok.status_code == 200
+    msgs = client.get(
+        f"/api/messages/conversations/{conv['id']}/messages",
+        headers=auth(a["token"]),
+    ).json()["messages"]
+    assert all(m["id"] != msg["id"] for m in msgs)
+
+
+def test_support_allows_phone_even_under_block_policy(client, monkeypatch):
+    monkeypatch.setenv("CHANGEX_CONTACT_POLICY", "BLOCK")
+    u = register(client, "support_phone_ok")
+    r = client.post(
+        "/api/support/tickets",
+        headers=auth(u["token"]),
+        json={
+            "subject": "İletişim",
+            "body": "Beni 05321234567 numarasından arayın",
+            "category": "ACCOUNT",
+            "priority": "HIGH",
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert "05321234567" in r.json()["messages"][0]["body"]
+
+
+def test_moderate_report_missing_404(client):
+    super_u = _super(client)
+    r = client.post(
+        "/api/admin/messages/reports/999999",
+        headers=auth(super_u["token"]),
+        json={"status": "ACTIONED"},
+    )
+    assert r.status_code == 404
+
+
+def test_support_attachment_must_be_owned_upload(client):
+    a = register(client, "att_owner")
+    b = register(client, "att_thief")
+    png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00"
+        b"\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    up = client.post(
+        "/api/uploads/image",
+        headers=auth(a["token"]),
+        files={"file": ("own.png", png, "image/png")},
+    )
+    assert up.status_code == 200, up.text
+    url = up.json()["url"]
+    steal = client.post(
+        "/api/support/tickets",
+        headers=auth(b["token"]),
+        json={
+            "subject": "Ek çalma",
+            "body": "Bu ek bana ait değil",
+            "attachment_url": url,
+        },
+    )
+    assert steal.status_code == 403, steal.text
+    ok = client.post(
+        "/api/support/tickets",
+        headers=auth(a["token"]),
+        json={
+            "subject": "Kendi ekim",
+            "body": "Bu ek bana ait",
+            "attachment_url": url,
+        },
+    )
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["messages"][0]["attachment_url"] == url

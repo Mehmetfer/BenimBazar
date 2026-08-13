@@ -570,6 +570,51 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                       spacing: 8,
                       children: [
                         _ActionChip(
+                          label: 'AÇ',
+                          color: AppColors.blue,
+                          onTap: () async {
+                            try {
+                              final full = await api.adminSupportTicket((t['id'] as num).toInt());
+                              if (!mounted) return;
+                              final msgs = (full['messages'] as List?) ?? [];
+                              await showDialog<void>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: Text('${full['public_id']}'),
+                                  content: SizedBox(
+                                    width: 420,
+                                    child: SingleChildScrollView(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(full['subject']?.toString() ?? ''),
+                                          const SizedBox(height: 12),
+                                          ...msgs.map((raw) {
+                                            final m = Map<String, dynamic>.from(raw as Map);
+                                            return Padding(
+                                              padding: const EdgeInsets.only(bottom: 8),
+                                              child: Text(
+                                                '${m['is_staff'] == true ? 'DESTEK' : 'KULLANICI'}: ${m['body']}',
+                                                style: GoogleFonts.montserrat(fontSize: 12),
+                                              ),
+                                            );
+                                          }),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Kapat')),
+                                  ],
+                                ),
+                              );
+                            } on ApiException catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+                            }
+                          },
+                        ),
+                        _ActionChip(
                           label: 'YANITLA',
                           color: AppColors.gold,
                           onTap: () async {
@@ -632,10 +677,58 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
           else
             ..._messageReports.take(30).map((raw) {
               final r = Map<String, dynamic>.from(raw as Map);
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text('report #${r['id']} · ${r['reason']} · ${r['status']}'),
-                subtitle: Text(r['body_preview']?.toString() ?? ''),
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.bgElevated,
+                  border: Border.all(color: AppColors.line),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'report #${r['id']} · ${r['reason']} · ${r['status']}',
+                      style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 12),
+                    ),
+                    Text(
+                      r['body_preview']?.toString() ?? '',
+                      style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.muted),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        _ActionChip(
+                          label: 'İŞLEM',
+                          color: AppColors.danger,
+                          onTap: () async {
+                            try {
+                              await api.adminModerateMessageReport((r['id'] as num).toInt(), 'ACTIONED');
+                              await _refreshAll(silent: true);
+                            } on ApiException catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+                            }
+                          },
+                        ),
+                        _ActionChip(
+                          label: 'REDDET',
+                          color: AppColors.muted,
+                          onTap: () async {
+                            try {
+                              await api.adminModerateMessageReport((r['id'] as num).toInt(), 'DISMISSED');
+                              await _refreshAll(silent: true);
+                            } on ApiException catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               );
             }),
         ],

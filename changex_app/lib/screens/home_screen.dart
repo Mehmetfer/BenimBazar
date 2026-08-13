@@ -31,6 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _error;
   String? _category;
   int _balanceMandal = 0;
+  int _unreadMessages = 0;
 
   static const categories = [
     'TÜM TAKASLAR',
@@ -86,10 +87,19 @@ class _HomeScreenState extends State<HomeScreen> {
           bal += (value['total_mandal'] as num?)?.toInt() ?? 0;
         }
       }
+      var unread = 0;
+      if (widget.user != null) {
+        try {
+          unread = await api.messagesUnreadCount();
+        } catch (_) {
+          unread = 0;
+        }
+      }
       if (!mounted) return;
       setState(() {
         _listings = list;
         _balanceMandal = bal;
+        _unreadMessages = unread;
         _loading = false;
       });
     } catch (e) {
@@ -461,14 +471,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () {
-                          Navigator.of(context).push(
+                          Navigator.of(context)
+                              .push(
                             MaterialPageRoute(
                               builder: (_) => MessagesInboxScreen(user: widget.user!),
                             ),
-                          );
+                          )
+                              .then((_) => _load());
                         },
                         icon: const Icon(Icons.chat_outlined, color: AppColors.gold),
-                        label: const Text('Mesajlar'),
+                        label: Text(_unreadMessages > 0 ? 'Mesajlar ($_unreadMessages)' : 'Mesajlar'),
                       ),
                     ),
                     const SizedBox(width: 10),

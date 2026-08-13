@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 import time
 from typing import Any
 
@@ -113,6 +114,13 @@ def create_or_get_listing_conversation(
     ).fetchone()
     if not listing:
         raise MessagingError("LISTING_NOT_FOUND", "İlan bulunamadı", http=404)
+    status = str(listing["status"] or "").upper()
+    if status not in {"APPROVED", "ACTIVE"}:
+        raise MessagingError(
+            "LISTING_NOT_PUBLIC",
+            "Yalnızca onaylı ilanlar için mesaj başlatılabilir",
+            http=400,
+        )
     seller_id = int(listing["owner_id"])
     if seller_id == int(buyer_id):
         raise MessagingError("SELF_MESSAGE", "Kendi ilanınıza mesaj gönderemezsiniz", http=400)
@@ -131,14 +139,26 @@ def create_or_get_listing_conversation(
 
     _check_rates(conn, buyer_id, new_conversation=True, peer_id=seller_id)
     now = _now()
-    cur = conn.execute(
-        """
-        INSERT INTO conversations(listing_id, buyer_id, seller_id, status, created_at, updated_at)
-        VALUES (?,?,?,?,?,?)
-        """,
-        (listing_id, buyer_id, seller_id, "OPEN", now, now),
-    )
-    cid = int(cur.lastrowid)
+    try:
+        cur = conn.execute(
+            """
+            INSERT INTO conversations(listing_id, buyer_id, seller_id, status, created_at, updated_at)
+            VALUES (?,?,?,?,?,?)
+            """,
+            (listing_id, buyer_id, seller_id, "OPEN", now, now),
+        )
+        cid = int(cur.lastrowid)
+    except sqlite3.IntegrityError:
+        row = conn.execute(
+            """
+            SELECT * FROM conversations
+            WHERE listing_id=? AND buyer_id=? AND seller_id=?
+            """,
+            (listing_id, buyer_id, seller_id),
+        ).fetchone()
+        if not row:
+            raise
+        return _conversation_public(conn, dict(row), viewer_id=buyer_id)
     _record_rate(conn, buyer_id, "conversation")
     _record_rate(conn, buyer_id, "new_peer")
     _record_rate(conn, buyer_id, f"peer:{seller_id}")
@@ -261,16 +281,53 @@ def inbox_for_user(conn, user_id: int) -> list[dict]:
     return [_conversation_public(conn, dict(r), viewer_id=user_id) for r in rows]
 
 
+def soft_delete_message(
+    conn,
+    *,
+    message_id: int,
+    actor_id: int,
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    msg = conn.execute("SELECT * FROM messages WHERE id=?", (message_id,)).fetchone()
+    if not msg:
+        raise MessagingError("NOT_FOUND", "Mesaj bulunamadı", http=404)
+    if int(msg["sender_id"]) != int(actor_id):
+        raise MessagingError("FORBIDDEN", "Yalnızca kendi mesajınızı silebilirsiniz", http=403)
+    if msg["deleted_at"] is not None:
+        return {"id": message_id, "deleted": True}
+    now = _now()
+    conn.execute(
+        "UPDATE messages SET deleted_at=?, body='[silindi]', status='DELETED' WHERE id=?",
+        (now, message_id),
+    )
+    db.audit(
+        conn,
+        actor_id=actor_id,
+        action="MESSAGE_DELETED",
+        entity="message",
+        entity_id=message_id,
+        detail=f"conversation_id={msg['conversation_id']}",
+        correlation_id=correlation_id,
+    )
+    return {"id": message_id, "deleted": True, "deleted_at": now}
+
+
 def block_user(conn, blocker_id: int, blocked_id: int, correlation_id: str | None = None) -> dict:
     if int(blocker_id) == int(blocked_id):
         raise MessagingError("INVALID", "Kendinizi engelleyemezsiniz")
-    conn.execute(
-        """
-        INSERT OR IGNORE INTO user_blocks(blocker_id, blocked_id, created_at)
-        VALUES (?,?,?)
-        """,
-        (blocker_id, blocked_id, _now()),
-    )
+    exists = conn.execute("SELECT id FROM users WHERE id=?", (blocked_id,)).fetchone()
+    if not exists:
+        raise MessagingError("NOT_FOUND", "Kullanıcı bulunamadı", http=404)
+    try:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO user_blocks(blocker_id, blocked_id, created_at)
+            VALUES (?,?,?)
+            """,
+            (blocker_id, blocked_id, _now()),
+        )
+    except sqlite3.IntegrityError as exc:
+        raise MessagingError("NOT_FOUND", "Kullanıcı bulunamadı", http=404) from exc
     db.audit(
         conn,
         actor_id=blocker_id,
@@ -364,7 +421,20 @@ def moderate_report(
     status = status.upper()
     if status not in {"OPEN", "REVIEWING", "ACTIONED", "DISMISSED"}:
         raise MessagingError("INVALID_STATUS", "Geçersiz rapor durumu")
+    row = conn.execute("SELECT * FROM message_reports WHERE id=?", (report_id,)).fetchone()
+    if not row:
+        raise MessagingError("NOT_FOUND", "Rapor bulunamadı", http=404)
     conn.execute("UPDATE message_reports SET status=? WHERE id=?", (status, report_id))
+    if status == "ACTIONED":
+        # Soft-delete reported message content (moderation action)
+        mid = int(row["message_id"])
+        conn.execute(
+            """
+            UPDATE messages SET deleted_at=COALESCE(deleted_at, ?), body='[moderasyon]', status='DELETED'
+            WHERE id=? AND deleted_at IS NULL
+            """,
+            (_now(), mid),
+        )
     db.audit(
         conn,
         actor_id=actor_id,
@@ -398,8 +468,8 @@ def create_support_ticket(
     body = (body or "").strip()
     if not subject or not body:
         raise MessagingError("INVALID", "Konu ve mesaj zorunlu")
-    _, hits, warn = _apply_contact_policy(body)
-    # Support may contain contact info intentionally — WARN only, never silent rewrite
+    # Support may intentionally include contact info — detect for evidence but never BLOCK/silent rewrite
+    hits = [h.to_dict() for h in detect_contact_info(body) if h.confidence >= 0.7]
     now = _now()
     public_id = _next_support_public_id(conn)
     cur = conn.execute(
@@ -429,7 +499,7 @@ def create_support_ticket(
     out = get_support_ticket(conn, tid, user_id=user_id, staff=False)
     if hits:
         out["contact_hits"] = hits
-        out["contact_note"] = warn
+        out["contact_note"] = "SUPPORT_ALLOWS_CONTACT_INFO"
     return out
 
 
@@ -521,7 +591,7 @@ def send_support_message(
     db.audit(
         conn,
         actor_id=sender_id,
-        action="SUPPORT_REPLY" if is_staff else "SUPPORT_TICKET_CREATED",
+        action="SUPPORT_REPLY" if is_staff else "SUPPORT_USER_REPLY",
         entity="support_ticket",
         entity_id=ticket_id,
         detail=f"msg_id={cur.lastrowid};staff={int(is_staff)}",

@@ -19,6 +19,7 @@ from .service import (
     reply_support_ticket,
     send_message,
     send_support_message,
+    soft_delete_message,
     unblock_user,
 )
 

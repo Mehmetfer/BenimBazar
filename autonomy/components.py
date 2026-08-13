@@ -293,17 +293,23 @@ class LearningStore:
             fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
     def should_block(self, problem: str, proposal: str, *, max_fails: int = 2) -> bool:
+        """Block only after max_fails consecutive FAILUREs since last PASS for fingerprint."""
         if not self.path.exists():
             return False
         fp = f"{problem}::{proposal}".lower()
-        n = 0
+        consecutive = 0
         for line in self.path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
             row = json.loads(line)
-            if row.get("fingerprint") == fp and row.get("result") == "FAILED":
-                n += 1
-        return n >= max_fails
+            if row.get("fingerprint") != fp:
+                continue
+            result = row.get("result")
+            if result == "PASSED":
+                consecutive = 0
+            elif result == "FAILED":
+                consecutive += 1
+        return consecutive >= max_fails
 
 
 class AuditLogger:

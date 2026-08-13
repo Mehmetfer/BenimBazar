@@ -34,7 +34,7 @@ from .messaging import (
     send_support_message,
     unblock_user,
 )
-from .messaging.service import get_support_ticket, unread_count_for_user
+from .messaging.service import get_support_ticket, soft_delete_message, unread_count_for_user
 from .engine import (
     DomainError,
     accept_offer,
@@ -734,6 +734,25 @@ def messages_report(
             raise _http_msg(exc) from exc
 
 
+@app.delete("/api/messages/{message_id}")
+def messages_soft_delete(
+    message_id: int,
+    request: Request,
+    user: Annotated[dict, Depends(require_user)],
+) -> dict:
+    with db.connect() as conn:
+        try:
+            with db.immediate_tx(conn):
+                return soft_delete_message(
+                    conn,
+                    message_id=message_id,
+                    actor_id=int(user["id"]),
+                    correlation_id=_cid(request),
+                )
+        except MessagingError as exc:
+            raise _http_msg(exc) from exc
+
+
 @app.post("/api/messages/block")
 def messages_block(
     body: BlockUserIn,
@@ -772,6 +791,9 @@ def support_create(
     with db.connect() as conn:
         try:
             with db.immediate_tx(conn):
+                att = (body.attachment_url or "").strip()[:500] or None
+                if att:
+                    _assert_photo_urls_owned(conn, user_id=int(user["id"]), urls=[att])
                 return create_support_ticket(
                     conn,
                     user_id=int(user["id"]),
@@ -779,7 +801,7 @@ def support_create(
                     body=body.body,
                     category=body.category,
                     priority=body.priority,
-                    attachment_url=body.attachment_url,
+                    attachment_url=att,
                     correlation_id=_cid(request),
                 )
         except MessagingError as exc:
@@ -812,13 +834,16 @@ def support_user_reply(
     with db.connect() as conn:
         try:
             with db.immediate_tx(conn):
+                att = (body.attachment_url or "").strip()[:500] or None
+                if att:
+                    _assert_photo_urls_owned(conn, user_id=int(user["id"]), urls=[att])
                 return send_support_message(
                     conn,
                     ticket_id=ticket_id,
                     sender_id=int(user["id"]),
                     body=body.body,
                     is_staff=False,
-                    attachment_url=body.attachment_url,
+                    attachment_url=att,
                     correlation_id=_cid(request),
                 )
         except MessagingError as exc:

@@ -648,6 +648,17 @@ def _migrate(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_msg_rate ON messaging_rate_events(user_id, kind, created_at);
         """
     )
+    # Deduplicate listing-linked conversations (NULL listing_id excluded by SQLite UNIQUE semantics)
+    try:
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_conv_listing_pair
+            ON conversations(listing_id, buyer_id, seller_id)
+            WHERE listing_id IS NOT NULL
+            """
+        )
+    except sqlite3.OperationalError:
+        pass
     _seed_default_superadmin(conn)
 
 
