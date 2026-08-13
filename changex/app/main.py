@@ -134,7 +134,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_CORS_ORIGINS,
     allow_credentials=_CORS_CREDENTIALS,
-    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Correlation-Id"],
 )
 
@@ -213,6 +213,17 @@ async def observability_middleware(request: Request, call_next):
             result = "error"
             error_code = str(response.status_code)
         response.headers["X-Correlation-Id"] = cid
+        # Baseline browser hardening
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        # Restrictive CSP only on API JSON — do not break mounted Flutter web assets
+        if request.url.path.startswith("/api/"):
+            response.headers.setdefault(
+                "Content-Security-Policy",
+                "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+            )
         return response
     except Exception:
         result = "error"

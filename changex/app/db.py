@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import secrets
 import sqlite3
 import time
@@ -662,12 +663,29 @@ def _migrate(conn: sqlite3.Connection) -> None:
     _seed_default_superadmin(conn)
 
 
-DEFAULT_SUPERADMIN_USERNAME = "superadmin"
-DEFAULT_SUPERADMIN_PASSWORD = "14531453"
+DEFAULT_SUPERADMIN_USERNAME = (
+    os.environ.get("CHANGEX_BOOTSTRAP_SUPERADMIN_USERNAME") or "superadmin"
+).strip() or "superadmin"
+DEFAULT_SUPERADMIN_PASSWORD = (
+    os.environ.get("CHANGEX_BOOTSTRAP_SUPERADMIN_PASSWORD") or "14531453"
+)
+
+
+def _bootstrap_force_sync() -> bool:
+    """Only force-reset bootstrap password when explicitly opted in (dev/test recovery)."""
+    return (os.environ.get("CHANGEX_BOOTSTRAP_SUPERADMIN_FORCE_SYNC") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
 
 
 def _seed_default_superadmin(conn: sqlite3.Connection) -> None:
-    """Ensure bootstrap Superadmin exists and password stays synced (temp: 14531453)."""
+    """Ensure bootstrap Superadmin exists.
+
+    Security: do NOT overwrite an existing password on every init.
+    Force-resync only when CHANGEX_BOOTSTRAP_SUPERADMIN_FORCE_SYNC=1.
+    """
     from .states import UserRole
 
     user_cols = _table_cols(conn, "users")
@@ -694,14 +712,25 @@ def _seed_default_superadmin(conn: sqlite3.Connection) -> None:
         (DEFAULT_SUPERADMIN_USERNAME,),
     ).fetchone()
     if row:
-        conn.execute(
-            """
-            UPDATE users
-            SET password_hash = ?, role = ?, suspended = 0
-            WHERE id = ?
-            """,
-            (pw, UserRole.SUPERADMIN.value, int(row["id"])),
-        )
+        if _bootstrap_force_sync():
+            conn.execute(
+                """
+                UPDATE users
+                SET password_hash = ?, role = ?, suspended = 0
+                WHERE id = ?
+                """,
+                (pw, UserRole.SUPERADMIN.value, int(row["id"])),
+            )
+        else:
+            # Keep existing credentials; only ensure role stays superadmin + not suspended
+            conn.execute(
+                """
+                UPDATE users
+                SET role = ?, suspended = 0
+                WHERE id = ?
+                """,
+                (UserRole.SUPERADMIN.value, int(row["id"])),
+            )
         return
 
     conn.execute(

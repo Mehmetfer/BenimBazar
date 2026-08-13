@@ -8,13 +8,28 @@ from changex.app.states import UserRole
 from changex.tests.helpers import auth, make_listing, promote_admin, register
 
 
-def test_default_superadmin_password_resync(client, tmp_db):
-    """Bootstrap account password is forced to the documented temporary password."""
+def test_default_superadmin_password_resync(client, tmp_db, monkeypatch):
+    """Force-sync recovers bootstrap password only when explicitly enabled."""
     with db.connect() as conn:
         conn.execute(
             "UPDATE users SET password_hash = ? WHERE username = ? COLLATE NOCASE",
             (db.hash_password("wrong-old-password"), DEFAULT_SUPERADMIN_USERNAME),
         )
+    # Without force-sync, custom password must survive re-init
+    monkeypatch.delenv("CHANGEX_BOOTSTRAP_SUPERADMIN_FORCE_SYNC", raising=False)
+    db.init_db(tmp_db)
+    kept = client.post(
+        "/api/auth/login",
+        json={"username": DEFAULT_SUPERADMIN_USERNAME, "password": "wrong-old-password"},
+    )
+    assert kept.status_code == 200, kept.text
+    blocked = client.post(
+        "/api/auth/login",
+        json={"username": DEFAULT_SUPERADMIN_USERNAME, "password": DEFAULT_SUPERADMIN_PASSWORD},
+    )
+    assert blocked.status_code in {401, 403}
+    # With force-sync, documented bootstrap password is restored
+    monkeypatch.setenv("CHANGEX_BOOTSTRAP_SUPERADMIN_FORCE_SYNC", "1")
     db.init_db(tmp_db)
     r = client.post(
         "/api/auth/login",
