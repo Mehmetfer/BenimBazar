@@ -57,6 +57,7 @@ class Settings:
     min_risk_reward: float = _f("MIN_RISK_REWARD", 1.5)
     preferred_risk_reward: float = _f("PREFERRED_RISK_REWARD", 2.0)
     min_expected_value: float = _f("MIN_EXPECTED_VALUE", 0.0)
+    min_ai_confidence_to_trade: float = _f("MIN_AI_CONFIDENCE_TO_TRADE", 55.0)
     buy_score_threshold: float = _f("BUY_SCORE_THRESHOLD", 80)
     strong_buy_threshold: float = _f("STRONG_BUY_THRESHOLD", 90)
     watch_threshold: float = _f("WATCH_THRESHOLD", 65)
