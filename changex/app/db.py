@@ -697,18 +697,32 @@ def sync_dual_status(
 
 
 def hash_password(password: str, salt: str | None = None) -> str:
-    salt = salt or secrets.token_hex(8)
-    digest = hashlib.sha256(f"{salt}:{password}".encode()).hexdigest()
-    return f"{salt}${digest}"
+    """PBKDF2-HMAC-SHA256 (legacy salt$sha256 still verified)."""
+    salt = salt or secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt.encode("utf-8"), 120_000
+    ).hex()
+    return f"pbkdf2${salt}${digest}"
 
 
 def verify_password(password: str, stored: str) -> bool:
     try:
+        if stored.startswith("pbkdf2$"):
+            _, salt, digest = stored.split("$", 2)
+            check = hashlib.pbkdf2_hmac(
+                "sha256", password.encode("utf-8"), salt.encode("utf-8"), 120_000
+            ).hex()
+            return secrets.compare_digest(check, digest)
         salt, digest = stored.split("$", 1)
     except ValueError:
         return False
+    # Legacy: unsalted-style SHA256(salt:password) with random salt prefix
     check = hashlib.sha256(f"{salt}:{password}".encode()).hexdigest()
     return secrets.compare_digest(check, digest)
+
+
+def needs_rehash(stored: str) -> bool:
+    return not str(stored or "").startswith("pbkdf2$")
 
 
 def audit(

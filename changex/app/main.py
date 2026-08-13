@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 import time
 import uuid
@@ -9,6 +10,7 @@ from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
@@ -96,13 +98,39 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="CHANGE X", version="0.3.0", lifespan=lifespan)
+
+# CORS: Bearer auth (not cookies) — do not pair allow_origins=* with credentials.
+_cors_raw = (os.environ.get("CHANGE_X_CORS_ORIGINS") or "*").strip()
+_CORS_ORIGINS = [o.strip() for o in _cors_raw.split(",") if o.strip()] or ["*"]
+_CORS_CREDENTIALS = _CORS_ORIGINS != ["*"] and os.environ.get(
+    "CHANGE_X_CORS_CREDENTIALS", "0"
+).strip() in {"1", "true", "yes"}
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_CORS_ORIGINS,
+    allow_credentials=_CORS_CREDENTIALS,
+    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Correlation-Id"],
 )
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception):
+    """Never leak stack traces / paths to clients."""
+    if isinstance(exc, HTTPException):
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    cid = getattr(request.state, "correlation_id", None) or str(uuid.uuid4())
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": {
+                "code": "INTERNAL_ERROR",
+                "message": "Beklenmeyen sunucu hatası",
+                "correlation_id": cid,
+            }
+        },
+    )
+
 
 # Rate buckets: key -> timestamps. Keys include ip / user / endpoint dimensions.
 _RATE: dict[str, list[float]] = {}
@@ -118,7 +146,6 @@ def _rate_hit(key: str, limit: int, window: float) -> None:
                 "code": "RATE_LIMIT",
                 "message": "Çok fazla istek",
                 "scope": key.split(":")[0],
-                "key": key,
             },
         )
     bucket.append(now)
@@ -337,7 +364,9 @@ def current_user(
     with db.connect() as conn:
         row = conn.execute(
             """
-            SELECT u.* FROM sessions s
+            SELECT u.id, u.username, u.role, u.change_score, u.user_risk_score,
+                   u.suspended, u.created_at
+            FROM sessions s
             JOIN users u ON u.id = s.user_id
             WHERE s.token = ? AND s.expires_at > ?
             """,
@@ -451,6 +480,19 @@ def _image_payload_ok(raw: bytes) -> bool:
     return False
 
 
+def _ext_from_sniffed_bytes(raw: bytes) -> str | None:
+    """Extension from content only — never trust client filename/MIME for path."""
+    if raw.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if raw.startswith(b"GIF87a") or raw.startswith(b"GIF89a"):
+        return ".gif"
+    if raw.startswith(b"RIFF") and len(raw) >= 12 and raw[8:12] == b"WEBP":
+        return ".webp"
+    return None
+
+
 def _assert_photo_urls_owned(
     conn,
     *,
@@ -540,7 +582,35 @@ def login(body: LoginIn, request: Request) -> dict:
             (body.username.strip(),),
         ).fetchone()
         if not row or not db.verify_password(body.password, row["password_hash"]):
-            raise HTTPException(401, detail={"code": "BAD_CREDENTIALS", "message": "Kullanıcı veya şifre hatalı"})
+            db.audit(
+                conn,
+                actor_id=int(row["id"]) if row else None,
+                action="login.failed",
+                entity="user",
+                entity_id=int(row["id"]) if row else None,
+                detail=body.username.strip()[:80],
+                correlation_id=_cid(request),
+            )
+            raise HTTPException(
+                401, detail={"code": "BAD_CREDENTIALS", "message": "Kullanıcı veya şifre hatalı"}
+            )
+        if int(row["suspended"] or 0) == 1:
+            db.audit(
+                conn,
+                actor_id=int(row["id"]),
+                action="login.blocked_suspended",
+                entity="user",
+                entity_id=int(row["id"]),
+                correlation_id=_cid(request),
+            )
+            raise HTTPException(
+                403, detail={"code": "USER_SUSPENDED", "message": "Hesap askıda"}
+            )
+        if db.needs_rehash(row["password_hash"]):
+            conn.execute(
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                (db.hash_password(body.password), int(row["id"])),
+            )
         token = _new_session(conn, row["id"])
         request.state.actor_id = row["id"]
         db.audit(conn, actor_id=row["id"], action="login", entity="user", entity_id=row["id"], correlation_id=_cid(request))
@@ -567,6 +637,30 @@ def _new_session(conn, user_id: int) -> str:
     return token
 
 
+@app.post("/api/auth/logout")
+def logout(
+    request: Request,
+    user: Annotated[dict, Depends(require_user)],
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict:
+    """Revoke the current Bearer session."""
+    token = None
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+    with db.connect() as conn:
+        if token:
+            conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+        db.audit(
+            conn,
+            actor_id=int(user["id"]),
+            action="logout",
+            entity="user",
+            entity_id=int(user["id"]),
+            correlation_id=_cid(request),
+        )
+    return {"ok": True}
+
+
 @app.get("/api/auth/me")
 def me(user: Annotated[dict | None, Depends(current_user)]) -> dict:
     if not user:
@@ -580,7 +674,8 @@ def me(user: Annotated[dict | None, Depends(current_user)]) -> dict:
 
 
 @app.post("/api/value/normalize")
-def normalize_value(body: ValueIn) -> dict:
+def normalize_value(body: ValueIn, request: Request) -> dict:
+    _rate_limit(request, limit=60, endpoint="/api/value/normalize")
     return _parse_value(body).serialize()
 
 
@@ -992,6 +1087,79 @@ def update_listing(
     return out
 
 
+@app.post("/api/listings/{listing_id}/cancel")
+def cancel_listing(
+    listing_id: int,
+    request: Request,
+    user: Annotated[dict, Depends(require_user)],
+) -> dict:
+    """Owner soft-deletes own listing (CANCELLED). Non-owners get 403."""
+    _rate_limit(request, limit=20, endpoint="/api/listings/cancel", user_id=int(user["id"]))
+    cid = _cid(request)
+    with db.connect() as conn:
+        with db.immediate_tx(conn):
+            row = conn.execute(
+                "SELECT * FROM trade_listings WHERE id = ?", (listing_id,)
+            ).fetchone()
+            if not row:
+                raise HTTPException(
+                    404, detail={"code": "LISTING_NOT_FOUND", "message": "Bulunamadı"}
+                )
+            d = dict(row)
+            is_owner = int(d["owner_id"]) == int(user["id"])
+            is_staff = user.get("role") in {
+                UserRole.ADMIN.value,
+                UserRole.SUPERADMIN.value,
+            }
+            if not is_owner and not is_staff:
+                raise HTTPException(
+                    403, detail={"code": "FORBIDDEN", "message": "Bu kaydı silemezsin"}
+                )
+            status = normalize_listing_status(d["status"])
+            if status in {ListingStatus.TRADED, ListingStatus.RESERVED}:
+                raise HTTPException(
+                    409,
+                    detail={
+                        "code": "NOT_DELETABLE",
+                        "message": "Rezerve/takas edilmiş ilan silinemez",
+                    },
+                )
+            if status == ListingStatus.CANCELLED:
+                return _listing_public(conn, d, include_moderation=True)
+            now = time.time()
+            conn.execute(
+                """
+                UPDATE trade_listings
+                SET status = ?, moderation_status = ?, inventory_status = ?,
+                    updated_at = ?, moderation_updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    ListingStatus.CANCELLED.value,
+                    "CANCELLED",
+                    "CANCELLED",
+                    now,
+                    now,
+                    listing_id,
+                ),
+            )
+            db.audit(
+                conn,
+                actor_id=int(user["id"]),
+                action="listing.cancel",
+                entity="listing",
+                entity_id=listing_id,
+                correlation_id=cid,
+            )
+            invalidate_listing(listing_id)
+            row2 = conn.execute(
+                "SELECT * FROM trade_listings WHERE id = ?", (listing_id,)
+            ).fetchone()
+            out = _listing_public(conn, dict(row2), include_moderation=True)
+            out["user_message"] = user_status_message(out["status"])
+            return out
+
+
 @app.post("/api/trades/offer")
 def create_offer_api(
     body: OfferCreateIn,
@@ -1123,7 +1291,25 @@ def trade_transition(
         if not trade:
             raise HTTPException(404, detail={"code": "TRADE_NOT_FOUND", "message": "Takas bulunamadı"})
         t = dict(trade)
-        if user["id"] not in (t.get("proposer_id") or t.get("initiator_id"), t.get("receiver_id") or t.get("counterparty_id")) and user.get("role") != "admin":
+        is_party = user["id"] in (
+            t.get("proposer_id") or t.get("initiator_id"),
+            t.get("receiver_id") or t.get("counterparty_id"),
+        )
+        is_staff = user.get("role") in {
+            UserRole.ADMIN.value,
+            UserRole.SUPERADMIN.value,
+        }
+        # Generic transitions (DISPUTED/EXPIRED/…) are staff-only.
+        # Parties must use dedicated accept/cancel/confirm/complete endpoints.
+        if not is_staff:
+            raise HTTPException(
+                403,
+                detail={
+                    "code": "USE_DEDICATED_ENDPOINT",
+                    "message": "Bu geçiş için accept/cancel/confirm/complete kullanın",
+                },
+            )
+        if not is_party and not is_staff:
             raise HTTPException(403, detail={"code": "FORBIDDEN", "message": "Bu takasa erişimin yok"})
         current = TradeState(t.get("status") or t.get("state"))
         try:
@@ -2015,27 +2201,6 @@ async def upload_listing_image(
 ) -> dict:
     """Upload a listing photo; returns a public /uploads/... URL (no money)."""
     _rate_limit(request, limit=30, endpoint="/api/uploads/image", user_id=int(user["id"]))
-    content_type = (file.content_type or "").lower().strip()
-    ext = ALLOWED_IMAGE_TYPES.get(content_type)
-    if not ext:
-        # Fallback by filename
-        name = (file.filename or "").lower()
-        if name.endswith((".jpg", ".jpeg")):
-            ext = ".jpg"
-        elif name.endswith(".png"):
-            ext = ".png"
-        elif name.endswith(".webp"):
-            ext = ".webp"
-        elif name.endswith(".gif"):
-            ext = ".gif"
-        else:
-            raise HTTPException(
-                400,
-                detail={
-                    "code": "INVALID_IMAGE",
-                    "message": "Yalnızca JPG/PNG/WEBP/GIF yükleyebilirsiniz",
-                },
-            )
     raw = await file.read()
     if not raw:
         raise HTTPException(400, detail={"code": "EMPTY_FILE", "message": "Boş dosya"})
@@ -2050,6 +2215,22 @@ async def upload_listing_image(
             400,
             detail={"code": "INVALID_IMAGE", "message": "Geçersiz görsel içeriği"},
         )
+    # Extension from sniffed bytes only — ignore client MIME/filename (path injection)
+    ext = _ext_from_sniffed_bytes(raw)
+    if not ext:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "INVALID_IMAGE",
+                "message": "Yalnızca JPG/PNG/WEBP/GIF yükleyebilirsiniz",
+            },
+        )
+    content_type = {
+        ".jpg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+    }[ext]
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     fname = f"{uuid.uuid4().hex}{ext}"
     path = UPLOAD_DIR / fname
@@ -2065,7 +2246,7 @@ async def upload_listing_image(
         ) from exc
     url = f"/uploads/{fname}"
     absolute = str(request.base_url).rstrip("/") + url
-    ctype = content_type or f"image/{ext[1:]}"
+    ctype = content_type
     now = time.time()
     try:
         with db.connect() as conn:
@@ -2083,7 +2264,14 @@ async def upload_listing_image(
                     action="upload.image",
                     entity="upload",
                     entity_id=None,
-                    detail=db.dumps({"url": url, "bytes": len(raw), "content_type": ctype}),
+                    detail=db.dumps(
+                        {
+                            "url": url,
+                            "bytes": len(raw),
+                            "content_type": ctype,
+                            "client_filename": (file.filename or "")[:120],
+                        }
+                    ),
                     correlation_id=_cid(request),
                 )
     except Exception:

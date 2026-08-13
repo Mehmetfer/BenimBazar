@@ -338,7 +338,7 @@ def test_suspended_user_cannot_act(client):
     )
     assert r.status_code == 200
     assert r.json()["status"] == "SUSPENDED"
-    # Suspended owner cannot create new listings
+    # Sessions revoked → token no longer authenticates (401), or still blocked (403)
     r2 = client.post(
         "/api/listings",
         headers=auth(a["token"]),
@@ -348,8 +348,16 @@ def test_suspended_user_cannot_act(client):
             "items": [{"name": "x", "value": {"madalyon": 1, "dirhem": 0, "mandal": 0}}],
         },
     )
-    assert r2.status_code == 403
-    assert r2.json()["detail"]["code"] == "USER_SUSPENDED"
+    assert r2.status_code in {401, 403}
+    if r2.status_code == 403:
+        assert r2.json()["detail"]["code"] == "USER_SUSPENDED"
+    # Fresh login must also be blocked
+    login = client.post(
+        "/api/auth/login",
+        json={"username": "ts_sus_a", "password": "pass12"},
+    )
+    assert login.status_code == 403
+    assert login.json()["detail"]["code"] == "USER_SUSPENDED"
 
 
 def test_search_cache_cannot_expose_unapproved(client):

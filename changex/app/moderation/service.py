@@ -354,6 +354,8 @@ def apply_moderation_decision(
             "UPDATE users SET suspended = 1, user_risk_score = COALESCE(user_risk_score, 0) + 25 WHERE id = ?",
             (listing["owner_id"],),
         )
+        # Kill active sessions so suspended tokens cannot keep calling APIs
+        conn.execute("DELETE FROM sessions WHERE user_id = ?", (listing["owner_id"],))
 
     # Close open assignments for this listing
     conn.execute(
