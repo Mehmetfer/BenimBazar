@@ -384,3 +384,9 @@ borsa_app/.flutter-plugins
 borsa_app/.flutter-plugins-dependencies
 borsa_app/build/
 borsa_app/.packages
+
+changex/data/
+.venv/
+
+# F7 self-verification sandbox artifacts
+self_verification/.last_run/

@@ -1,15 +1,15 @@
 {
-  "name": "Borsa",
+  "name": "CHANGE X",
   "install": "bash scripts/install.sh",
   "start": "bash scripts/start.sh",
   "ports": [
-    { "name": "Borsa", "port": 8000 }
+    { "name": "CHANGE X", "port": 8000 }
   ],
   "terminals": [
     {
-      "name": "borsa",
+      "name": "changex",
       "command": "bash scripts/dev.sh",
-      "description": "Borsa al-sat web app on http://127.0.0.1:8000"
+      "description": "CHANGE X takas platformu on http://127.0.0.1:8000"
     }
   ]
 }

@@ -1,3 +1,9 @@
+"""Post-trade review + drift detection.
+
+Wired into paper decision feedback (`analytics.paper_feedback`) via
+`TradingService.monitor_exits` / manual sells. Never auto-deploys LIVE strategies.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
