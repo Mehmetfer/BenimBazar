@@ -165,6 +165,12 @@ void main() {
     expect(find.text('Fotoğraflar'), findsOneWidget);
     expect(find.text('Kaydet'), findsOneWidget);
     expect(find.byIcon(Icons.add_a_photo_outlined), findsOneWidget);
+    // Existing photos show remove controls (close icons).
+    expect(find.byIcon(Icons.close), findsNWidgets(2));
+    // Removing one photo leaves a single close control.
+    await tester.tap(find.byIcon(Icons.close).first);
+    await tester.pump();
+    expect(find.byIcon(Icons.close), findsOneWidget);
   });
 
   testWidgets('listing hero shows gallery controls for multiple photos', (tester) async {

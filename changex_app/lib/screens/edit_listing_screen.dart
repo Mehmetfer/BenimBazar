@@ -191,10 +191,38 @@ class _EditListingScreenState extends State<EditListingScreen> {
                       ],
                     ),
                   ),
-                for (final p in _pending)
+                for (var i = 0; i < _pending.length; i++)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: Image.memory(p.bytes, width: 96, height: 96, fit: BoxFit.cover),
+                    child: Stack(
+                      children: [
+                        Image.memory(
+                          _pending[i].bytes,
+                          width: 96,
+                          height: 96,
+                          fit: BoxFit.cover,
+                        ),
+                        Positioned(
+                          top: 0,
+                          right: 0,
+                          child: IconButton(
+                            style: IconButton.styleFrom(
+                              backgroundColor: Colors.black54,
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(28, 28),
+                            ),
+                            onPressed: _busy
+                                ? null
+                                : () => setState(() => _pending.removeAt(i)),
+                            icon: const Icon(
+                              Icons.close,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 InkWell(
                   onTap: _busy ? null : _addPhotos,

@@ -71,6 +71,7 @@ from .states import (
     transition,
 )
 from .value import ChangeValue, ChangeValueError
+from . import media_storage
 
 WEB_DIR = Path(__file__).resolve().parents[2] / "changex_app" / "build" / "web"
 ALT_WEB = Path("/home/ubuntu/varmisin-app/build/web")
@@ -826,6 +827,7 @@ def update_listing(
             },
         )
     cid = _cid(request)
+    purge_urls: list[str] = []
     with db.connect() as conn:
         with db.immediate_tx(conn):
             row = conn.execute("SELECT * FROM trade_listings WHERE id = ?", (listing_id,)).fetchone()
@@ -853,9 +855,18 @@ def update_listing(
             subcategory = (
                 body.subcategory.strip() if body.subcategory is not None else row["subcategory"]
             )
+            existing_photos = db.loads(row["photo_urls"], [])
+            photos_changed = False
             if body.photo_urls is not None:
                 photos = _normalize_photo_urls(list(body.photo_urls or []))
-                existing_photos = db.loads(row["photo_urls"], [])
+                if not photos:
+                    raise HTTPException(
+                        400,
+                        detail={
+                            "code": "PHOTO_REQUIRED",
+                            "message": "İlanda en az 1 fotoğraf kalmalı",
+                        },
+                    )
                 staff = user.get("role") in {
                     UserRole.ADMIN.value,
                     UserRole.SUPERADMIN.value,
@@ -868,8 +879,9 @@ def update_listing(
                     existing=existing_photos,
                     is_staff=staff,
                 )
+                photos_changed = photos != existing_photos
             else:
-                photos = db.loads(row["photo_urls"], [])
+                photos = existing_photos
             accept_cats = (
                 body.accept_categories
                 if body.accept_categories is not None
@@ -893,7 +905,7 @@ def update_listing(
                 critical = True
             if body.wanted_items is not None and wanted != row["wanted_items"]:
                 critical = True
-            if body.photo_urls is not None and photos != db.loads(row["photo_urls"], []):
+            if photos_changed:
                 critical = True
             if body.accept_categories is not None and accept_cats != db.loads(
                 row["accept_categories"], []
@@ -926,6 +938,15 @@ def update_listing(
                         listing_id,
                     ),
                 )
+                if photos_changed:
+                    # DB photo_urls already updated — soft-delete unreferenced only.
+                    # Physical unlink happens AFTER this transaction commits.
+                    purge_urls = media_storage.apply_photo_url_change(
+                        conn,
+                        listing_id=listing_id,
+                        old_urls=existing_photos,
+                        new_urls=photos,
+                    )
                 remoderate_after_edit(
                     conn, listing_id=listing_id, actor_id=user["id"], correlation_id=cid
                 )
@@ -965,7 +986,10 @@ def update_listing(
             row2 = conn.execute("SELECT * FROM trade_listings WHERE id = ?", (listing_id,)).fetchone()
             out = _listing_public(conn, dict(row2), include_moderation=True)
             out["user_message"] = user_status_message(out["status"])
-            return out
+    # Commit succeeded — only now touch the filesystem.
+    if purge_urls:
+        media_storage.finalize_storage_deletes(UPLOAD_DIR, purge_urls)
+    return out
 
 
 @app.post("/api/trades/offer")
@@ -2014,30 +2038,63 @@ async def upload_listing_image(
     absolute = str(request.base_url).rstrip("/") + url
     ctype = content_type or f"image/{ext[1:]}"
     now = time.time()
-    with db.connect() as conn:
-        with db.immediate_tx(conn):
-            conn.execute(
-                """
-                INSERT INTO media_uploads(url, uploader_id, bytes, content_type, created_at)
-                VALUES (?,?,?,?,?)
-                """,
-                (url, int(user["id"]), len(raw), ctype, now),
-            )
-            db.audit(
-                conn,
-                actor_id=user["id"],
-                action="upload.image",
-                entity="upload",
-                entity_id=None,
-                detail=db.dumps({"url": url, "bytes": len(raw), "content_type": ctype}),
-                correlation_id=_cid(request),
-            )
+    try:
+        with db.connect() as conn:
+            with db.immediate_tx(conn):
+                conn.execute(
+                    """
+                    INSERT INTO media_uploads(url, uploader_id, bytes, content_type, created_at)
+                    VALUES (?,?,?,?,?)
+                    """,
+                    (url, int(user["id"]), len(raw), ctype, now),
+                )
+                db.audit(
+                    conn,
+                    actor_id=user["id"],
+                    action="upload.image",
+                    entity="upload",
+                    entity_id=None,
+                    detail=db.dumps({"url": url, "bytes": len(raw), "content_type": ctype}),
+                    correlation_id=_cid(request),
+                )
+    except Exception:
+        # Roll back orphan disk write if registry insert fails.
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
     return {
         "url": url,
         "absolute_url": absolute,
         "bytes": len(raw),
         "content_type": ctype,
     }
+
+
+class OrphanCleanupIn(BaseModel):
+    max_age_seconds: float = Field(default=3600, ge=0, le=60 * 60 * 24 * 30)
+
+
+@app.post("/api/admin/media/cleanup-orphans")
+def admin_cleanup_orphan_media(
+    body: OrphanCleanupIn,
+    user: Annotated[dict, Depends(require_admin)],
+) -> dict:
+    """Purge soft-deleted / never-attached uploads (physical delete after DB mark)."""
+    stats = media_storage.run_orphan_cleanup(
+        UPLOAD_DIR, max_age_seconds=float(body.max_age_seconds)
+    )
+    with db.connect() as conn:
+        db.audit(
+            conn,
+            actor_id=user["id"],
+            action="media.orphan_cleanup",
+            entity="upload",
+            entity_id=None,
+            detail=db.dumps(stats),
+        )
+    return {"ok": True, **stats}
 
 
 def _web_root() -> Path | None:
