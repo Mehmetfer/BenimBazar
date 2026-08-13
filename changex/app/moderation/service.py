@@ -491,18 +491,33 @@ def remoderate_after_edit(
 def user_status_message(status: str) -> str:
     s = normalize_listing_status(status)
     return {
-        ListingStatus.PENDING_MODERATION: "İçeriğiniz incelemeye gönderildi.",
-        ListingStatus.AI_REVIEW: "İçeriğiniz incelemeye gönderildi.",
-        ListingStatus.ADMIN_REVIEW: "İçeriğiniz incelemeye gönderildi.",
-        ListingStatus.MODERATION_UNAVAILABLE: "İçeriğiniz incelemeye gönderildi.",
-        ListingStatus.APPROVED: "Takasa açıldı.",
-        ListingStatus.ACTIVE: "Takasa açıldı.",
+        ListingStatus.DRAFT: "Taslak kaydedildi. Yayınlamak için tamamlayıp gönderin.",
+        ListingStatus.PENDING_MODERATION: (
+            "İlanınız incelemede. Ana sayfada görünmez; İlanlarım’da duruyor."
+        ),
+        ListingStatus.AI_REVIEW: (
+            "İlanınız incelemede. Ana sayfada görünmez; İlanlarım’da duruyor."
+        ),
+        ListingStatus.ADMIN_REVIEW: (
+            "İlanınız incelemede. Ana sayfada görünmez; İlanlarım’da duruyor."
+        ),
+        ListingStatus.MODERATION_UNAVAILABLE: (
+            "İlanınız incelemede. Ana sayfada görünmez; İlanlarım’da duruyor."
+        ),
+        ListingStatus.APPROVED: "İlanınız yayında — ana sayfada görünür.",
+        ListingStatus.ACTIVE: "İlanınız yayında — ana sayfada görünür.",
         ListingStatus.REJECTED: "İçeriğiniz Change X kurallarına uygun bulunmadı.",
         ListingStatus.EDIT_REQUIRED: "İçeriğinizde düzenleme gerekiyor.",
-        ListingStatus.ESCALATED: "İçeriğiniz incelemeye gönderildi.",
+        ListingStatus.ESCALATED: (
+            "İlanınız incelemede. Ana sayfada görünmez; İlanlarım’da duruyor."
+        ),
         ListingStatus.SUSPENDED: "İçeriğiniz askıya alındı.",
         ListingStatus.RESERVED: "Takas rezervinde.",
         ListingStatus.TRADED: "Takas tamamlandı.",
+        ListingStatus.CANCELLED: (
+            "İlan silindi / yayından kaldırıldı. Kayıt İlanlarım’da arşivde kalır."
+        ),
+        ListingStatus.EXPIRED: "İlan süresi doldu.",
     }.get(s, "Durum güncellendi.")
 
 

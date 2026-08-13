@@ -13,6 +13,7 @@ import 'package:changex/screens/listing_detail_screen.dart';
 import 'package:changex/screens/login_screen.dart';
 import 'package:changex/screens/my_listings_screen.dart';
 import 'package:changex/screens/splash_screen.dart';
+import 'package:changex/utils/listing_status_ux.dart';
 import 'package:changex/utils/photo_pick.dart';
 import 'package:changex/widgets/listing_media.dart';
 
@@ -105,6 +106,136 @@ void main() {
     // Must not crash; either loading finished into empty/error content.
     expect(tester.takeException(), isNull);
     expect(find.text('İlanlarım'), findsOneWidget);
+  });
+
+  testWidgets('my listings shows status chips for pending approved rejected deleted', (
+    tester,
+  ) async {
+    final items = [
+      {
+        'id': 1,
+        'title': 'Pending Item',
+        'status': 'PENDING_MODERATION',
+        'user_message':
+            'İlanınız incelemede. Ana sayfada görünmez; İlanlarım’da duruyor.',
+        'photo_urls': ['/uploads/a.png'],
+        'all_photo_urls': ['/uploads/a.png'],
+        'photos': [
+          {'url': '/uploads/a.png', 'moderation_status': 'PENDING'},
+        ],
+        'owner': {'id': 1, 'username': 'tester'},
+      },
+      {
+        'id': 2,
+        'title': 'Approved Item',
+        'status': 'APPROVED',
+        'user_message': 'İlanınız yayında — ana sayfada görünür.',
+        'photo_urls': ['/uploads/b.png'],
+        'all_photo_urls': ['/uploads/b.png'],
+        'owner': {'id': 1, 'username': 'tester'},
+      },
+      {
+        'id': 3,
+        'title': 'Rejected Item',
+        'status': 'REJECTED',
+        'user_message': 'İçeriğiniz Change X kurallarına uygun bulunmadı.',
+        'moderation_reason': 'spam policy',
+        'photo_urls': ['/uploads/c.png'],
+        'all_photo_urls': ['/uploads/c.png'],
+        'owner': {'id': 1, 'username': 'tester'},
+      },
+      {
+        'id': 4,
+        'title': 'Deleted Item',
+        'status': 'CANCELLED',
+        'user_message':
+            'İlan silindi / yayından kaldırıldı. Kayıt İlanlarım’da arşivde kalır.',
+        'photo_urls': ['/uploads/d.png'],
+        'all_photo_urls': ['/uploads/d.png'],
+        'owner': {'id': 1, 'username': 'tester'},
+      },
+    ];
+    await pumpApp(
+      tester,
+      MyListingsScreen(
+        user: {'id': 1, 'username': 'tester', 'role': 'user'},
+        initialItems: items,
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Tümü'), findsOneWidget);
+    expect(find.text('Kapalı'), findsOneWidget);
+    expect(find.text('Pending Item'), findsOneWidget);
+    expect(find.textContaining('Ana sayfada görünmez'), findsWidgets);
+    // Horizontal filter chips — ensure Kapalı is on-screen.
+    await tester.dragUntilVisible(
+      find.text('Kapalı'),
+      find.byType(ListView).first,
+      const Offset(-80, 0),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Kapalı'));
+    await tester.pumpAndSettle();
+    expect(find.text('Rejected Item'), findsOneWidget);
+    expect(find.text('Deleted Item'), findsOneWidget);
+    expect(find.text('Pending Item'), findsNothing);
+    expect(find.text('Reddedildi'), findsOneWidget);
+    expect(find.text('Silindi'), findsOneWidget);
+    expect(find.textContaining('Gerekçe: spam policy'), findsOneWidget);
+  });
+
+  test('listing status ux maps draft and image lines', () {
+    expect(
+      listingUxChipLabel(resolveListingUxState({'status': 'DRAFT'})),
+      'Taslak',
+    );
+    expect(
+      listingImageStatusLine({
+        'status': 'PENDING_MODERATION',
+        'photos': [
+          {'url': '/uploads/a.png', 'moderation_status': 'PENDING'},
+          {'url': '/uploads/b.png', 'moderation_status': 'APPROVED'},
+        ],
+      }),
+      contains('incelemede'),
+    );
+    expect(listingUxEditable(ListingUxState.deleted), isFalse);
+    expect(listingUxEditable(ListingUxState.pending), isTrue);
+  });
+
+  testWidgets('owner pending detail shows moderation panel not offer CTA', (
+    tester,
+  ) async {
+    await pumpApp(
+      tester,
+      ListingDetailScreen(
+        listing: {
+          'id': 11,
+          'title': 'Benim Pending',
+          'description': 'desc',
+          'category': 'Elektronik',
+          'status': 'PENDING_MODERATION',
+          'user_message':
+              'İlanınız incelemede. Ana sayfada görünmez; İlanlarım’da duruyor.',
+          'photo_urls': <String>[],
+          'owner_id': 1,
+          'owner': {'id': 1, 'username': 'tester', 'change_score': 50},
+          'value': {
+            'madalyon': 1,
+            'dirhem': 0,
+            'mandal': 0,
+            'total_mandal': 64516,
+            'display': '1 Madalyon',
+          },
+        },
+        user: {'id': 1, 'username': 'tester', 'role': 'user'},
+      ),
+    );
+    await tester.pump();
+    expect(find.text('İncelemede'), findsWidgets);
+    expect(find.textContaining('Ana sayfada görünmez'), findsWidgets);
+    expect(find.text('İlanlarıma dön'), findsOneWidget);
+    expect(find.text('Takas teklifi ver'), findsNothing);
   });
 
   testWidgets('listing detail requires approved own listing for offer', (tester) async {

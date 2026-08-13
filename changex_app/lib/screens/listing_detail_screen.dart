@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../api/client.dart';
 import '../theme/app_theme.dart';
+import '../utils/listing_status_ux.dart';
 import '../widgets/listing_media.dart';
 import '../widgets/value_widgets.dart';
 import 'create_listing_screen.dart';
@@ -42,6 +43,22 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   bool get _tradeOpen {
     final ribbon = resolveListingRibbon(widget.listing);
     return ribbon == ListingTradeRibbon.none;
+  }
+
+  bool get _isOwner {
+    final owner = Map<String, dynamic>.from(widget.listing['owner'] as Map? ?? {});
+    final uid = widget.user?['id'];
+    final oid = widget.listing['owner_id'] ?? owner['id'];
+    if (uid == null || oid == null) {
+      return widget.user != null &&
+          owner['username'] == widget.user!['username'];
+    }
+    return uid == oid || uid.toString() == oid.toString();
+  }
+
+  bool get _isStaff {
+    final role = widget.user?['role']?.toString();
+    return role == 'admin' || role == 'superadmin' || role == 'moderator';
   }
 
   Future<void> _loadApprovedMine() async {
@@ -188,10 +205,12 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       fontSize: 12,
                     ),
                   ),
-                  if (widget.user != null &&
-                      (owner['username'] == widget.user!['username'] ||
-                          widget.user!['role'] == 'admin' ||
-                          widget.user!['role'] == 'superadmin')) ...[
+                  if (_isOwner || _isStaff) ...[
+                    const SizedBox(height: 14),
+                    _OwnerModerationPanel(listing: widget.listing),
+                  ],
+                  if (_isOwner &&
+                      listingUxEditable(resolveListingUxState(widget.listing))) ...[
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
                       onPressed: () async {
@@ -231,7 +250,11 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     Text(
                       ribbonLabel(ribbon),
                       style: GoogleFonts.montserrat(
-                        color: AppColors.gold,
+                        color: ribbon == ListingTradeRibbon.rejected
+                            ? AppColors.danger
+                            : ribbon == ListingTradeRibbon.inReview
+                                ? AppColors.blue
+                                : AppColors.gold,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 0.8,
                       ),
@@ -267,6 +290,31 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     ),
                   ],
                   const SizedBox(height: 24),
+                  // Owners managing their own pending/rejected listing should not
+                  // feel forced into the offer UI — reassure first.
+                  if (_isOwner && !_tradeOpen) ...[
+                    Text(
+                      resolveListingUxState(widget.listing) == ListingUxState.pending
+                          ? 'İlanınız incelemede. Onaylanınca ana sayfada ve tekliflerde görünür.'
+                          : listingUxBody(widget.listing),
+                      style: GoogleFonts.montserrat(
+                        color: AppColors.muted,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => MyListingsScreen(user: widget.user!),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: const Text('İlanlarıma dön'),
+                    ),
+                  ] else ...[
                   Text(
                     'Takas teklifi ver',
                     style: GoogleFonts.montserrat(
@@ -289,7 +337,11 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     Text(
                       ribbon == ListingTradeRibbon.exchanged
                           ? 'Bu ürün takas edilmiştir. Yeni teklif alınamaz.'
-                          : 'Bu ilan takasa kapalıdır.',
+                          : ribbon == ListingTradeRibbon.rejected
+                              ? 'Bu ilan reddedildi — teklif alınamaz.'
+                              : ribbon == ListingTradeRibbon.inReview
+                                  ? 'İlan incelemede — teklif için onay bekleniyor.'
+                                  : 'Bu ilan takasa kapalıdır.',
                       style: GoogleFonts.montserrat(color: AppColors.danger),
                     )
                   else if (widget.user == null)
@@ -384,6 +436,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       ),
                     ),
                   ],
+                  ],
                   if (_result != null) ...[
                     const SizedBox(height: 14),
                     Text(_result!, style: GoogleFonts.montserrat(height: 1.35)),
@@ -392,6 +445,72 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OwnerModerationPanel extends StatelessWidget {
+  const _OwnerModerationPanel({required this.listing});
+
+  final Map<String, dynamic> listing;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = resolveListingUxState(listing);
+    final color = listingUxChipColor(state);
+    final reason = listing['moderation_reason']?.toString().trim() ?? '';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            listingUxChipLabel(state),
+            style: GoogleFonts.montserrat(
+              color: color,
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+              letterSpacing: 0.4,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            listingUxBody(listing),
+            style: GoogleFonts.montserrat(
+              color: AppColors.ink,
+              fontSize: 13,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            listingImageStatusLine(listing),
+            style: GoogleFonts.montserrat(
+              color: AppColors.muted,
+              fontSize: 11,
+            ),
+          ),
+          if (reason.isNotEmpty &&
+              (state == ListingUxState.rejected ||
+                  state == ListingUxState.editRequired)) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Gerekçe: $reason',
+              style: GoogleFonts.montserrat(
+                color: AppColors.danger,
+                fontSize: 12,
+                height: 1.3,
+              ),
+            ),
+          ],
         ],
       ),
     );

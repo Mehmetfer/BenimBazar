@@ -645,13 +645,13 @@ def get_listing(
         is_staff = user and user.get("role") in {
             UserRole.ADMIN.value,
             UserRole.SUPERADMIN.value,
+            UserRole.MODERATOR.value,
         }
         # Marketplace-visible lifecycle (post-approval) may be fetched by id.
-        # Pre-approval / rejected stay private except owner/staff.
+        # Soft-deleted (CANCELLED) and pre-approval stay private except owner/staff.
         visible_by_id = PUBLIC_LISTING | {
             ListingStatus.RESERVED,
             ListingStatus.TRADED,
-            ListingStatus.CANCELLED,
             ListingStatus.EXPIRED,
         }
         if status not in visible_by_id and not is_owner and not is_staff:
@@ -1702,6 +1702,29 @@ def _listing_public(conn, row: dict, include_moderation: bool = False) -> dict:
         "user_message": user_status_message(status),
     }
     if include_moderation:
+        photo_rows: list[dict[str, Any]] = []
+        try:
+            mod_ver = int(row.get("moderation_version") or 1)
+            by_url: dict[str, str] = {}
+            for pr in conn.execute(
+                """
+                SELECT url, moderation_status, moderation_version FROM listing_photos
+                WHERE listing_id = ? ORDER BY id ASC
+                """,
+                (row["id"],),
+            ).fetchall():
+                # Prefer current moderation_version status per url
+                if int(pr["moderation_version"] or 0) == mod_ver or pr["url"] not in by_url:
+                    by_url[str(pr["url"])] = str(pr["moderation_status"] or "PENDING")
+            for url in all_photos:
+                photo_rows.append(
+                    {
+                        "url": url,
+                        "moderation_status": by_url.get(url, "PENDING"),
+                    }
+                )
+        except sqlite3.Error:
+            photo_rows = [{"url": u, "moderation_status": "PENDING"} for u in all_photos]
         out.update(
             {
                 "ai_result": row.get("ai_result"),
@@ -1714,6 +1737,12 @@ def _listing_public(conn, row: dict, include_moderation: bool = False) -> dict:
                 "approved_at": row.get("approved_at"),
                 "approved_by": row.get("approved_by"),
                 "all_photo_urls": all_photos,
+                "photos": photo_rows,
+                "visibility": (
+                    "public"
+                    if status in {"APPROVED", "ACTIVE", "RESERVED", "TRADED"}
+                    else "owner_only"
+                ),
             }
         )
     return out

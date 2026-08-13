@@ -9,11 +9,15 @@ import '../utils/url_utils.dart';
 ///
 /// CHANGE X copy (no money / no "sold"):
 /// - TRADED → "Takas edilmiştir"
+/// - REJECTED → "Uygun bulunmadı" (not the same as trade-closed)
 /// - closed / unavailable → "Takasa kapalı"
+/// - pending review → "İncelemede"
 enum ListingTradeRibbon {
   none,
-  exchanged, // Takas edilmiştir
-  closed, // Takasa kapalı
+  exchanged,
+  closed,
+  rejected,
+  inReview,
 }
 
 ListingTradeRibbon resolveListingRibbon(Map<String, dynamic> listing) {
@@ -25,6 +29,22 @@ ListingTradeRibbon resolveListingRibbon(Map<String, dynamic> listing) {
     return ListingTradeRibbon.exchanged;
   }
 
+  if (status == 'REJECTED' || mod == 'REJECTED') {
+    return ListingTradeRibbon.rejected;
+  }
+
+  if (status == 'PENDING_MODERATION' ||
+      status == 'AI_REVIEW' ||
+      status == 'ADMIN_REVIEW' ||
+      status == 'MODERATION_UNAVAILABLE' ||
+      status == 'ESCALATED' ||
+      status == 'EDIT_REQUIRED' ||
+      mod == 'PENDING' ||
+      mod == 'IN_REVIEW' ||
+      mod == 'EDIT_REQUIRED') {
+    return ListingTradeRibbon.inReview;
+  }
+
   if (status == 'RESERVED' ||
       inv == 'RESERVED' ||
       status == 'CANCELLED' ||
@@ -32,9 +52,7 @@ ListingTradeRibbon resolveListingRibbon(Map<String, dynamic> listing) {
       status == 'EXPIRED' ||
       inv == 'EXPIRED' ||
       status == 'SUSPENDED' ||
-      mod == 'SUSPENDED' ||
-      status == 'REJECTED' ||
-      mod == 'REJECTED') {
+      mod == 'SUSPENDED') {
     return ListingTradeRibbon.closed;
   }
 
@@ -47,6 +65,10 @@ String ribbonLabel(ListingTradeRibbon ribbon) {
       return 'TAKAS EDİLMİŞTİR';
     case ListingTradeRibbon.closed:
       return 'TAKASA KAPALI';
+    case ListingTradeRibbon.rejected:
+      return 'UYGUN BULUNMADI';
+    case ListingTradeRibbon.inReview:
+      return 'İNCELEMEDE';
     case ListingTradeRibbon.none:
       return '';
   }
@@ -313,13 +335,7 @@ class TradeStatusRibbon extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            ribbon == ListingTradeRibbon.exchanged
-                ? Icons.check_circle_outline
-                : Icons.block,
-            color: Colors.white,
-            size: 18,
-          ),
+          Icon(_ribbonIcon(ribbon), color: Colors.white, size: 18),
           const SizedBox(width: 10),
           Flexible(
             child: Text(
@@ -334,16 +350,24 @@ class TradeStatusRibbon extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          Icon(
-            ribbon == ListingTradeRibbon.exchanged
-                ? Icons.check_circle_outline
-                : Icons.block,
-            color: Colors.white,
-            size: 18,
-          ),
+          Icon(_ribbonIcon(ribbon), color: Colors.white, size: 18),
         ],
       ),
     );
+  }
+
+  static IconData _ribbonIcon(ListingTradeRibbon ribbon) {
+    switch (ribbon) {
+      case ListingTradeRibbon.exchanged:
+        return Icons.check_circle_outline;
+      case ListingTradeRibbon.inReview:
+        return Icons.hourglass_top_outlined;
+      case ListingTradeRibbon.rejected:
+        return Icons.gpp_bad_outlined;
+      case ListingTradeRibbon.closed:
+      case ListingTradeRibbon.none:
+        return Icons.block;
+    }
   }
 }
 
@@ -431,6 +455,10 @@ class ListingAttributeList extends StatelessWidget {
     String takasValue;
     if (ribbon == ListingTradeRibbon.exchanged) {
       takasValue = 'TAKAS EDİLMİŞTİR';
+    } else if (ribbon == ListingTradeRibbon.rejected) {
+      takasValue = 'UYGUN BULUNMADI';
+    } else if (ribbon == ListingTradeRibbon.inReview) {
+      takasValue = 'İNCELEMEDE';
     } else if (ribbon == ListingTradeRibbon.closed) {
       takasValue = 'TAKASA KAPALI';
     } else if (chainOpt && preference == 'CHAIN_ALLOWED') {
