@@ -31,6 +31,17 @@ Merge’i kilitlemek için GitHub’da `main` branch protection’da **Require s
 
 Python bağımlılıkları `requirements.lock.txt` ile pin’lidir. Flutter için `changex_app/pubspec.lock` commit’lidir. Secret / production credential commit edilmez (`.env` gitignore’dadır; örnek: `borsa_bot/.env.example`).
 
+## Self-verification (F7 foundation)
+
+Controlled sandbox loop only — **no production mutate, no self-deploy, no LIVE autonomy**:
+
+```bash
+bash scripts/self_verify.sh
+pytest self_verification/tests -q
+```
+
+Stages: OBSERVE → DETECT → DIAGNOSE → PLAN → PROPOSE → SANDBOX APPLY → TEST → VERIFY → ROLLBACK|READY_FOR_REVIEW → REPORT (audit JSONL).
+
 ## Test (lokal)
 
 ```bash

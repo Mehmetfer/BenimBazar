@@ -387,3 +387,6 @@ borsa_app/.packages
 
 changex/data/
 .venv/
+
+# F7 self-verification sandbox artifacts
+self_verification/.last_run/
