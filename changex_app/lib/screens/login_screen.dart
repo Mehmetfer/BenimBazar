@@ -2,17 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../api/client.dart';
+import '../auth/auth_intent.dart';
 import '../theme/app_theme.dart';
 import '../widgets/value_widgets.dart';
 import 'admin_login_screen.dart';
-import 'admin_panel_screen.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, this.nextListingId});
+  const LoginScreen({super.key, this.intent});
 
-  final int? nextListingId;
+  /// Why login is required and where to continue after success.
+  final AuthIntent? intent;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -42,16 +43,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await api.setToken(res['token'] as String);
       final user = Map<String, dynamic>.from(res['user'] as Map);
       if (!mounted) return;
-      final role = user['role']?.toString() ?? '';
-      final isStaff = {'superadmin', 'admin', 'moderator'}.contains(role);
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) => isStaff
-              ? AdminPanelScreen(user: user)
-              : HomeScreen(user: user),
-        ),
-        (_) => false,
-      );
+      await resumeAfterAuth(context, user: user, intent: widget.intent);
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (_) {
@@ -63,6 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final reason = widget.intent?.reason;
     return Scaffold(
       body: DecoratedBox(
         decoration: const BoxDecoration(
@@ -81,17 +74,59 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Center(child: BrandMark()),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Takas için hesabına giriş yap',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.montserrat(
-                        fontSize: 14,
-                        color: AppColors.muted,
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(
+                              builder: (_) => const HomeScreen(user: null),
+                            ),
+                            (_) => false,
+                          );
+                        },
+                        icon: const Icon(Icons.storefront_outlined, color: AppColors.gold),
+                        label: Text(
+                          'İlanlara dön',
+                          style: GoogleFonts.montserrat(
+                            color: AppColors.gold,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const Center(child: BrandMark()),
+                    const SizedBox(height: 18),
+                    if (reason != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.bgElevated,
+                          border: Border.all(color: AppColors.line),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          reason,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.montserrat(
+                            fontSize: 14,
+                            height: 1.35,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ] else ...[
+                      Text(
+                        'Takas için hesabına giriş yap',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.montserrat(
+                          fontSize: 14,
+                          color: AppColors.muted,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     const PlatformBanner(),
                     const SizedBox(height: 24),
                     TextField(
@@ -142,7 +177,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           : () {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (_) => const RegisterScreen(),
+                                  builder: (_) =>
+                                      RegisterScreen(intent: widget.intent),
                                 ),
                               );
                             },

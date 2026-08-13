@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'dart:typed_data';
 
+import 'package:changex/auth/auth_intent.dart';
 import 'package:changex/main.dart';
 import 'package:changex/screens/create_listing_screen.dart';
 import 'package:changex/screens/edit_listing_screen.dart';
@@ -42,27 +43,30 @@ void main() {
     );
   }
 
-  testWidgets('CHANGE X splash shows brand', (tester) async {
+  testWidgets('CHANGE X splash shows brand then opens public listings', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(const ChangeXApp());
     expect(find.textContaining('CHANGE'), findsWidgets);
     expect(find.text('X'), findsOneWidget);
-    // Splash no longer auto-leaves when session is empty — brand stays.
-    await tester.pump(const Duration(milliseconds: 2000));
+    // Splash brand beat, then public Home (guest) — not Login.
+    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pump(const Duration(milliseconds: 1200));
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('X'), findsOneWidget);
-    expect(find.text('Giriş / Kayıt'), findsOneWidget);
-    expect(find.text('Yönetim Paneli'), findsOneWidget);
+    expect(find.text('Ziyaretçi'), findsOneWidget);
+    expect(find.text('Fotoğraflı ilan'), findsOneWidget);
+    // Must not land on dedicated login as initial route.
+    expect(find.text('Giriş yap'), findsNothing);
   });
 
-  testWidgets('splash opens login without auto-skipping', (tester) async {
+  testWidgets('splash opens public home without login gate', (tester) async {
     await pumpApp(tester, const SplashScreen());
-    await tester.pump(); // start animation
-    await tester.pump(const Duration(milliseconds: 1500));
-    expect(find.text('Yönetim Paneli'), findsOneWidget);
-    await tester.tap(find.text('Giriş / Kayıt'));
-    await tester.pumpAndSettle();
-    expect(find.text('Takas için hesabına giriş yap'), findsOneWidget);
-    expect(find.text('Giriş yap'), findsOneWidget);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pump(const Duration(milliseconds: 1200));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Ziyaretçi'), findsOneWidget);
+    expect(find.text('Giriş'), findsOneWidget);
   });
 
   testWidgets('login screen shows yönetim entry and fields', (tester) async {
@@ -72,6 +76,25 @@ void main() {
     expect(find.text('Giriş yap'), findsOneWidget);
     expect(find.text('Yönetim paneli girişi'), findsOneWidget);
     expect(find.textContaining('PARA YOK'), findsWidgets);
+  });
+
+  testWidgets('guest trade gate shows clear login reason', (tester) async {
+    await pumpApp(
+      tester,
+      const LoginScreen(
+        intent: AuthIntent(
+          reason: 'Takas yapmak için hesabınıza giriş yapmanız gerekiyor.',
+          action: AuthAction.trade,
+          listingId: 123,
+        ),
+      ),
+    );
+    expect(
+      find.text('Takas yapmak için hesabınıza giriş yapmanız gerekiyor.'),
+      findsOneWidget,
+    );
+    expect(find.text('Giriş yap'), findsOneWidget);
+    expect(find.text('İlanlara dön'), findsOneWidget);
   });
 
   testWidgets('create listing shows photo-first picker UI', (tester) async {

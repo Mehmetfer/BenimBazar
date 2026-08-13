@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../api/client.dart';
+import '../auth/auth_intent.dart';
 import '../theme/app_theme.dart';
 import '../widgets/value_widgets.dart';
 import 'admin_login_screen.dart';
 import 'admin_panel_screen.dart';
 import 'home_screen.dart';
-import 'login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -26,37 +26,42 @@ class _SplashScreenState extends State<SplashScreen>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 900),
     )..forward();
     _boot();
   }
 
   Future<void> _boot() async {
-    // Do not auto-navigate away — splash is the gateway to Giriş + Yönetim.
-    // Auto-skip only when a session already exists.
+    // Public listings first: never force Login as the initial route.
     Map<String, dynamic>? user;
     try {
-      user = await api.me().timeout(const Duration(milliseconds: 1200), onTimeout: () => null);
+      user = await api.me().timeout(
+        const Duration(milliseconds: 1200),
+        onTimeout: () => null,
+      );
     } catch (_) {
       user = null;
     }
+    // Brief brand beat, then open public (or session) home.
+    await Future<void>.delayed(const Duration(milliseconds: 700));
     if (!mounted || _navigated) return;
-    if (user != null) {
-      _navigated = true;
-      final role = user['role']?.toString() ?? '';
-      final isStaff = {'superadmin', 'admin', 'moderator'}.contains(role);
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder<void>(
-          transitionDuration: const Duration(milliseconds: 450),
-          pageBuilder: (_, anim, __) => FadeTransition(
-            opacity: anim,
-            child: isStaff
-                ? AdminPanelScreen(user: user!)
-                : HomeScreen(user: user),
-          ),
-        ),
-      );
+    _navigated = true;
+    final role = user?['role']?.toString() ?? '';
+    final Widget dest;
+    if (user != null && isStaffRole(role)) {
+      dest = AdminPanelScreen(user: user);
+    } else {
+      dest = HomeScreen(user: user);
     }
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder<void>(
+        transitionDuration: const Duration(milliseconds: 450),
+        pageBuilder: (_, anim, __) => FadeTransition(
+          opacity: anim,
+          child: dest,
+        ),
+      ),
+    );
   }
 
   @override
@@ -105,22 +110,19 @@ class _SplashScreenState extends State<SplashScreen>
                     ),
                   ),
                   const Spacer(flex: 4),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (_) => const LoginScreen()),
-                      );
-                    },
-                    child: Text(
-                      'Giriş / Kayıt',
-                      style: GoogleFonts.montserrat(color: AppColors.gold),
-                    ),
+                  Text(
+                    'İlanlar yükleniyor…',
+                    style: GoogleFonts.montserrat(color: AppColors.muted),
                   ),
+                  const SizedBox(height: 12),
                   TextButton(
                     onPressed: () {
+                      if (_navigated) return;
                       _navigated = true;
                       Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const AdminLoginScreen(),
+                        ),
                       );
                     },
                     child: Text(

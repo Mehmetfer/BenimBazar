@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../api/client.dart';
+import '../auth/auth_intent.dart';
 import '../theme/app_theme.dart';
-import 'home_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+  const RegisterScreen({super.key, this.intent});
+
+  final AuthIntent? intent;
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -41,10 +43,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       await api.setToken(res['token'] as String);
       final user = Map<String, dynamic>.from(res['user'] as Map);
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => HomeScreen(user: user)),
-        (_) => false,
-      );
+      await resumeAfterAuth(context, user: user, intent: widget.intent);
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (_) {
@@ -60,12 +59,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
       appBar: AppBar(
         title: Text('Kayıt ol', style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(24),
           children: [
+            if (widget.intent?.reason != null) ...[
+              Text(
+                widget.intent!.reason,
+                style: GoogleFonts.montserrat(
+                  color: AppColors.muted,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             TextField(
               controller: _userCtrl,
+              autocorrect: false,
               decoration: const InputDecoration(labelText: 'Kullanıcı adı'),
             ),
             const SizedBox(height: 12),
@@ -82,15 +92,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: AppColors.danger)),
+              Text(_error!, style: GoogleFonts.montserrat(color: AppColors.danger)),
             ],
-            const SizedBox(height: 20),
+            const SizedBox(height: 22),
             SizedBox(
-              width: double.infinity,
               height: 52,
               child: FilledButton(
                 onPressed: _busy ? null : _submit,
-                child: Text(_busy ? 'Kaydediliyor…' : 'Kayıt ol'),
+                child: Text(_busy ? 'Kayıt…' : 'Kayıt ol'),
               ),
             ),
           ],

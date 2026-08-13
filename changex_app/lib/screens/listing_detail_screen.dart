@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../api/client.dart';
+import '../auth/auth_intent.dart';
 import '../theme/app_theme.dart';
 import '../utils/listing_status_ux.dart';
 import '../widgets/listing_media.dart';
 import '../widgets/value_widgets.dart';
 import 'create_listing_screen.dart';
 import 'edit_listing_screen.dart';
-import 'login_screen.dart';
 import 'chat_detail_screen.dart';
 import 'my_listings_screen.dart';
 
@@ -17,10 +17,12 @@ class ListingDetailScreen extends StatefulWidget {
     super.key,
     required this.listing,
     required this.user,
+    this.autoStartMessage = false,
   });
 
   final Map<String, dynamic> listing;
   final Map<String, dynamic>? user;
+  final bool autoStartMessage;
 
   @override
   State<ListingDetailScreen> createState() => _ListingDetailScreenState();
@@ -40,79 +42,43 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     _loadChainStatus();
     if (widget.user != null) {
       _loadApprovedMine();
-    }
-  }
-
-  Future<void> _loadChainStatus() async {
-    try {
-      final status = await api.changeChainStatus();
-      if (!mounted) return;
-      setState(() {
-        _chainEngineEnabled = status['enabled'] == true;
-      });
-    } catch (_) {
-      // Default remains false — production flag off / settlement NOT_IMPLEMENTED.
-    }
-  }
-
-  bool get _tradeOpen {
-    final ribbon = resolveListingRibbon(widget.listing);
-    return ribbon == ListingTradeRibbon.none;
-  }
-
-  bool get _isOwner {
-    final owner = Map<String, dynamic>.from(widget.listing['owner'] as Map? ?? {});
-    final uid = widget.user?['id'];
-    final oid = widget.listing['owner_id'] ?? owner['id'];
-    if (uid == null || oid == null) {
-      return widget.user != null &&
-          owner['username'] == widget.user!['username'];
-    }
-    return uid == oid || uid.toString() == oid.toString();
-  }
-
-  bool get _isStaff {
-    final role = widget.user?['role']?.toString();
-    return role == 'admin' || role == 'superadmin' || role == 'moderator';
-  }
-
-  Future<void> _loadApprovedMine() async {
-    setState(() => _loadingMine = true);
-    try {
-      final raw = await api.myListings();
-      final targetId = widget.listing['id'];
-      final approved = <Map<String, dynamic>>[];
-      for (final item in raw) {
-        final m = Map<String, dynamic>.from(item as Map);
-        final status = (m['status']?.toString() ?? '').toUpperCase();
-        if (status != 'APPROVED' && status != 'ACTIVE') continue;
-        if (m['id'] == targetId) continue; // can't offer a listing for itself
-        approved.add(m);
+      if (widget.autoStartMessage) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _startMessage();
+        });
       }
-      if (!mounted) return;
-      setState(() {
-        _approvedMine = approved;
-        _selectedOfferId = approved.isEmpty ? null : approved.first['id'] as int?;
-        // handle num from json
-        if (_selectedOfferId == null && approved.isNotEmpty) {
-          final v = approved.first['id'];
-          _selectedOfferId = v is int ? v : (v as num).toInt();
-        }
-        _loadingMine = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _approvedMine = [];
-        _loadingMine = false;
-      });
     }
   }
 
-  int _asInt(dynamic v) {
-    if (v is int) return v;
-    if (v is num) return v.toInt();
-    return int.parse(v.toString());
+  Future<void> _startMessage() async {
+    if (_isOwner) return;
+    if (widget.user == null) {
+      await openLoginGate(
+        context,
+        intent: AuthIntent.message.withListing(_asInt(widget.listing['id'])),
+      );
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final conv = await api.startConversation(_asInt(widget.listing['id']));
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChatDetailScreen(
+            user: widget.user!,
+            conversation: conv,
+          ),
+        ),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _offer() async {
@@ -121,8 +87,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       return;
     }
     if (widget.user == null) {
-      await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      await openLoginGate(
+        context,
+        intent: AuthIntent.trade.withListing(_asInt(widget.listing['id'])),
       );
       return;
     }
@@ -169,6 +136,77 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _loadChainStatus() async {
+    try {
+      final status = await api.changeChainStatus();
+      if (!mounted) return;
+      setState(() {
+        _chainEngineEnabled = status['enabled'] == true;
+      });
+    } catch (_) {
+      // Default remains false — production flag off / settlement NOT_IMPLEMENTED.
+    }
+  }
+
+  bool get _tradeOpen {
+    final ribbon = resolveListingRibbon(widget.listing);
+    return ribbon == ListingTradeRibbon.none;
+  }
+
+  bool get _isOwner {
+    final owner = Map<String, dynamic>.from(widget.listing['owner'] as Map? ?? {});
+    final uid = widget.user?['id'];
+    final oid = widget.listing['owner_id'] ?? owner['id'];
+    if (uid == null || oid == null) {
+      return widget.user != null &&
+          owner['username'] == widget.user!['username'];
+    }
+    return uid == oid || uid.toString() == oid.toString();
+  }
+
+  bool get _isStaff {
+    final role = widget.user?['role']?.toString();
+    return role == 'admin' || role == 'superadmin' || role == 'moderator';
+  }
+
+  Future<void> _loadApprovedMine() async {
+    setState(() => _loadingMine = true);
+    try {
+      final raw = await api.myListings();
+      final targetId = widget.listing['id'];
+      final approved = <Map<String, dynamic>>[];
+      for (final item in raw) {
+        final m = Map<String, dynamic>.from(item as Map);
+        final status = (m['status']?.toString() ?? '').toUpperCase();
+        if (status != 'APPROVED' && status != 'ACTIVE') continue;
+        if (m['id'] == targetId) continue;
+        approved.add(m);
+      }
+      if (!mounted) return;
+      setState(() {
+        _approvedMine = approved;
+        _selectedOfferId = approved.isEmpty ? null : approved.first['id'] as int?;
+        if (_selectedOfferId == null && approved.isNotEmpty) {
+          final v = approved.first['id'];
+          _selectedOfferId = v is int ? v : (v as num).toInt();
+        }
+        _loadingMine = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _approvedMine = [];
+        _loadingMine = false;
+      });
+    }
+  }
+
+  int _asInt(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.parse(v.toString());
   }
 
   @override
@@ -223,39 +261,14 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       fontSize: 12,
                     ),
                   ),
-                  if (!_isOwner && widget.user != null) ...[
+                  if (!_isOwner) ...[
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.gold,
                         side: const BorderSide(color: AppColors.gold),
                       ),
-                      onPressed: _busy
-                          ? null
-                          : () async {
-                              setState(() => _busy = true);
-                              try {
-                                final conv = await api.startConversation(
-                                  _asInt(widget.listing['id']),
-                                );
-                                if (!context.mounted) return;
-                                await Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => ChatDetailScreen(
-                                      user: widget.user!,
-                                      conversation: conv,
-                                    ),
-                                  ),
-                                );
-                              } on ApiException catch (e) {
-                                if (!context.mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text(e.message)),
-                                );
-                              } finally {
-                                if (mounted) setState(() => _busy = false);
-                              }
-                            },
+                      onPressed: _busy ? null : _startMessage,
                       icon: const Icon(Icons.chat_bubble_outline),
                       label: const Text('Satıcıya Mesaj Gönder'),
                     ),
@@ -404,17 +417,47 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       style: GoogleFonts.montserrat(color: AppColors.danger),
                     )
                   else if (widget.user == null)
-                    SizedBox(
-                      height: 52,
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const LoginScreen()),
-                          );
-                        },
-                        child: const Text('Giriş yap & teklif ver'),
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Takas yapmak için hesabınıza giriş yapmanız gerekiyor.',
+                          style: GoogleFonts.montserrat(
+                            color: AppColors.muted,
+                            height: 1.35,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 52,
+                          width: double.infinity,
+                          child: FilledButton(
+                            onPressed: () {
+                              openLoginGate(
+                                context,
+                                intent: AuthIntent.trade.withListing(
+                                  _asInt(widget.listing['id']),
+                                ),
+                              );
+                            },
+                            child: const Text('Takas Yap'),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            openLoginGate(
+                              context,
+                              intent: AuthIntent.trade.withListing(
+                                _asInt(widget.listing['id']),
+                              ),
+                            );
+                          },
+                          child: Text(
+                            'Giriş Yap / Kayıt Ol',
+                            style: GoogleFonts.montserrat(color: AppColors.gold),
+                          ),
+                        ),
+                      ],
                     )
                   else if (_loadingMine)
                     const Center(child: CircularProgressIndicator())

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../api/client.dart';
+import '../auth/auth_intent.dart';
 import '../theme/app_theme.dart';
 import '../widgets/listing_media.dart';
 import '../widgets/value_widgets.dart';
@@ -9,7 +10,6 @@ import 'admin_login_screen.dart';
 import 'admin_panel_screen.dart';
 import 'create_listing_screen.dart';
 import 'listing_detail_screen.dart';
-import 'login_screen.dart';
 import 'messages_inbox_screen.dart';
 import 'my_listings_screen.dart';
 import 'support_screen.dart';
@@ -115,9 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _openCreateListing() async {
     if (!_loggedIn) {
-      await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
+      await openLoginGate(context, intent: AuthIntent.createListing);
       return;
     }
     await Navigator.of(context).push(
@@ -126,6 +124,27 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     if (mounted) await _load();
+  }
+
+  Future<void> _openMessages() async {
+    if (!_loggedIn) {
+      await openLoginGate(context, intent: AuthIntent.messagesInbox);
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => MessagesInboxScreen(user: widget.user!)),
+    );
+    if (mounted) await _load();
+  }
+
+  Future<void> _openTrades() async {
+    if (!_loggedIn) {
+      await openLoginGate(context, intent: AuthIntent.trades);
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => TradesScreen(user: widget.user!)),
+    );
   }
 
   @override
@@ -196,10 +215,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             else
                               TextButton(
                                 onPressed: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => const LoginScreen(),
-                                    ),
+                                  openLoginGate(
+                                    context,
+                                    intent: AuthIntent.profile,
                                   );
                                 },
                                 child: Text(
@@ -421,8 +439,36 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.ink,
+                        side: const BorderSide(color: AppColors.line),
+                      ),
+                      onPressed: _openTrades,
+                      icon: const Icon(Icons.account_tree_outlined),
+                      label: const Text('Takaslar'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _openMessages,
+                      icon: const Icon(Icons.chat_outlined, color: AppColors.gold),
+                      label: Text(
+                        _loggedIn && _unreadMessages > 0
+                            ? 'Mesajlar ($_unreadMessages)'
+                            : 'Mesajlar',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               if (_loggedIn) ...[
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
@@ -443,44 +489,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         },
                         icon: const Icon(Icons.photo_library_outlined),
                         label: const Text('İlanlarım'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.ink,
-                          side: const BorderSide(color: AppColors.line),
-                        ),
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => TradesScreen(user: widget.user!),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.account_tree_outlined),
-                        label: const Text('Takaslarım'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.of(context)
-                              .push(
-                            MaterialPageRoute(
-                              builder: (_) => MessagesInboxScreen(user: widget.user!),
-                            ),
-                          )
-                              .then((_) => _load());
-                        },
-                        icon: const Icon(Icons.chat_outlined, color: AppColors.gold),
-                        label: Text(_unreadMessages > 0 ? 'Mesajlar ($_unreadMessages)' : 'Mesajlar'),
                       ),
                     ),
                     const SizedBox(width: 10),
