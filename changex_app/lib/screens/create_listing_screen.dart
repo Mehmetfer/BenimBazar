@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../api/client.dart';
+import '../listing_presentation/schemas.dart';
 import '../theme/app_theme.dart';
 import '../utils/photo_pick.dart';
 import '../widgets/value_widgets.dart';
@@ -35,7 +36,9 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   final _madalyon = TextEditingController(text: '1');
   final _dirhem = TextEditingController(text: '0');
   final _mandal = TextEditingController(text: '0');
+  final _subcategory = TextEditingController();
   final _page = PageController();
+  final Map<String, TextEditingController> _attrControllers = {};
 
   String _category = 'Elektronik';
   String _condition = 'good';
@@ -45,6 +48,27 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   int _photoIndex = 0;
   late final List<PickedPhoto> _photos =
       List<PickedPhoto>.from(widget.initialPhotos ?? const []);
+
+  ListingSchema get _schema => schemaForCategory(_category);
+
+  void _syncAttrControllers() {
+    final keys = {
+      for (final f in _schema.createFields) f.key,
+    };
+    for (final k in keys) {
+      _attrControllers.putIfAbsent(k, TextEditingController.new);
+    }
+    final stale = _attrControllers.keys.where((k) => !keys.contains(k)).toList();
+    for (final k in stale) {
+      _attrControllers.remove(k)?.dispose();
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _syncAttrControllers();
+  }
 
   @override
   void dispose() {
@@ -58,7 +82,11 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     _madalyon.dispose();
     _dirhem.dispose();
     _mandal.dispose();
+    _subcategory.dispose();
     _page.dispose();
+    for (final c in _attrControllers.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -147,11 +175,29 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       setState(() => _status = 'İlan kaydediliyor…');
       final brand = _brand.text.trim();
       final model = _model.text.trim();
+      final attrs = <String, String>{
+        if (brand.isNotEmpty) 'MARKA': brand,
+        if (model.isNotEmpty) 'MODEL': model,
+      };
+      for (final e in _attrControllers.entries) {
+        final v = e.value.text.trim();
+        if (v.isNotEmpty) attrs[e.key] = v;
+      }
+      // Map condition into attributes for presentation schemas.
+      const condLabels = {
+        'new': 'SIFIR',
+        'like_new': 'SIFIR AYARINDA',
+        'good': 'İYİ',
+        'fair': 'ORTA',
+        'poor': 'KÖTÜ',
+      };
+      attrs.putIfAbsent('DURUM', () => condLabels[_condition] ?? _condition.toUpperCase());
+
       final created = await api.createListing({
         'title': _title.text.trim(),
         'description': _desc.text.trim(),
         'category': _category,
-        'subcategory': '',
+        'subcategory': _subcategory.text.trim(),
         'condition': _condition,
         'location': _location.text.trim(),
         'location_city': _location.text.trim(),
@@ -161,10 +207,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         'wanted_categories': [_category],
         'accept_categories': [_category],
         'photo_urls': urls,
-        'attributes': {
-          if (brand.isNotEmpty) 'MARKA': brand,
-          if (model.isNotEmpty) 'MODEL': model,
-        },
+        'attributes': attrs,
         'items': [
           {
             'name': _itemName.text.trim().isEmpty
@@ -426,21 +469,33 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
                   value: _category,
-                  items: const [
-                    'Elektronik',
-                    'Telefon',
-                    'Otomobil',
-                    'Spor',
-                    'Ev',
-                    'Kitap',
-                    'Moda',
-                    'Bilgisayar',
-                    'Diğer',
-                  ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                  onChanged: (v) => setState(() => _category = v ?? _category),
+                  items: createCategoryOptions
+                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                      .toList(),
+                  onChanged: (v) {
+                    setState(() {
+                      _category = v ?? _category;
+                      _syncAttrControllers();
+                    });
+                  },
                   decoration: const InputDecoration(labelText: 'Kategori'),
                 ),
                 const SizedBox(height: 10),
+                TextField(
+                  controller: _subcategory,
+                  decoration: const InputDecoration(
+                    labelText: 'Alt kategori',
+                    hintText: 'Örn: Koltuk, Otomobil, Cep Telefonu',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                for (final field in _schema.createFields) ...[
+                  TextField(
+                    controller: _attrControllers[field.key],
+                    decoration: InputDecoration(labelText: field.label),
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 DropdownButtonFormField<String>(
                   value: _condition,
                   items: const [

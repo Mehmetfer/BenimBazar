@@ -5,8 +5,8 @@ import '../api/client.dart';
 import '../auth/auth_intent.dart';
 import '../theme/app_theme.dart';
 import '../utils/listing_status_ux.dart';
+import '../widgets/listing_presentation_layout.dart';
 import '../widgets/listing_media.dart';
-import '../widgets/value_widgets.dart';
 import 'create_listing_screen.dart';
 import 'edit_listing_screen.dart';
 import 'chat_detail_screen.dart';
@@ -211,55 +211,31 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final value = Map<String, dynamic>.from(widget.listing['value'] as Map? ?? {});
     final owner = Map<String, dynamic>.from(widget.listing['owner'] as Map? ?? {});
     final ribbon = resolveListingRibbon(widget.listing);
 
     return Scaffold(
-      backgroundColor: AppColors.bg,
+      backgroundColor: const Color(0xFF050607),
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             pinned: true,
-            backgroundColor: AppColors.bg,
+            backgroundColor: const Color(0xFF050607),
             title: Text(
               'CHANGE X',
               style: GoogleFonts.montserrat(fontWeight: FontWeight.w800),
             ),
           ),
           SliverToBoxAdapter(
-            child: ListingHeroMedia(
+            child: ListingDetailLayout(
               listing: widget.listing,
-              height: MediaQuery.sizeOf(context).width * 0.95,
-              borderRadius: 0,
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: ListingSpecStrip(
-              listing: widget.listing,
-              chainEngineEnabled: _chainEngineEnabled,
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              includeGallery: true,
+              actions: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    widget.listing['title']?.toString() ?? '',
-                    style: GoogleFonts.montserrat(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
                     '${owner['username'] ?? '?'} · skor ${owner['change_score'] ?? '-'}',
-                    style: GoogleFonts.montserrat(
-                      color: AppColors.muted,
-                      fontSize: 12,
-                    ),
+                    style: GoogleFonts.montserrat(color: AppColors.muted, fontSize: 12),
                   ),
                   if (!_isOwner) ...[
                     const SizedBox(height: 12),
@@ -267,6 +243,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.gold,
                         side: const BorderSide(color: AppColors.gold),
+                        minimumSize: const Size(48, 48),
                       ),
                       onPressed: _busy ? null : _startMessage,
                       icon: const Icon(Icons.chat_bubble_outline),
@@ -293,9 +270,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                         );
                         if (ok == true && context.mounted) {
                           try {
-                            final fresh = await api.getListing(
-                              _asInt(widget.listing['id']),
-                            );
+                            final fresh = await api.getListing(_asInt(widget.listing['id']));
                             if (!context.mounted) return;
                             Navigator.of(context).pushReplacement(
                               MaterialPageRoute(
@@ -312,67 +287,13 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       label: const Text('Düzenle / Fotoğraf ekle'),
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  ValueChip(value: value),
-                  if (ribbon != ListingTradeRibbon.none) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      ribbonLabel(ribbon),
-                      style: GoogleFonts.montserrat(
-                        color: ribbon == ListingTradeRibbon.rejected
-                            ? AppColors.danger
-                            : ribbon == ListingTradeRibbon.inReview
-                                ? AppColors.blue
-                                : AppColors.gold,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 18),
-                  ListingAttributeList(
-                    listing: widget.listing,
-                    chainEngineEnabled: _chainEngineEnabled,
-                  ),
-                  if ((widget.listing['description']?.toString() ?? '')
-                      .trim()
-                      .isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      'AÇIKLAMA',
-                      style: GoogleFonts.montserrat(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12,
-                        letterSpacing: 1,
-                        color: AppColors.muted,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      widget.listing['description'].toString(),
-                      style: GoogleFonts.montserrat(height: 1.4),
-                    ),
-                  ],
-                  if ((widget.listing['wanted_items']?.toString() ?? '')
-                      .isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      'İstiyor: ${widget.listing['wanted_items']}',
-                      style: GoogleFonts.montserrat(color: AppColors.gold),
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  // Owners managing their own pending/rejected listing should not
-                  // feel forced into the offer UI — reassure first.
                   if (_isOwner && !_tradeOpen) ...[
                     Text(
                       resolveListingUxState(widget.listing) == ListingUxState.pending
                           ? 'İlanınız incelemede. Onaylanınca ana sayfada ve tekliflerde görünür.'
                           : listingUxBody(widget.listing),
-                      style: GoogleFonts.montserrat(
-                        color: AppColors.muted,
-                        height: 1.35,
-                      ),
+                      style: GoogleFonts.montserrat(color: AppColors.muted, height: 1.35),
                     ),
                     const SizedBox(height: 16),
                     OutlinedButton.icon(
@@ -387,98 +308,60 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                       label: const Text('İlanlarıma dön'),
                     ),
                   ] else ...[
-                  Text(
-                    'Takas teklifi ver',
-                    style: GoogleFonts.montserrat(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Yalnızca onaylanmış kendi ilanlarınızla teklif verebilirsiniz.',
-                    style: GoogleFonts.montserrat(
-                      color: AppColors.muted,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const PlatformBanner(),
-                  const SizedBox(height: 12),
-                  if (!_tradeOpen)
                     Text(
-                      ribbon == ListingTradeRibbon.exchanged
-                          ? 'Bu ürün takas edilmiştir. Yeni teklif alınamaz.'
-                          : ribbon == ListingTradeRibbon.rejected
-                              ? 'Bu ilan reddedildi — teklif alınamaz.'
-                              : ribbon == ListingTradeRibbon.inReview
-                                  ? 'İlan incelemede — teklif için onay bekleniyor.'
-                                  : 'Bu ilan takasa kapalıdır.',
-                      style: GoogleFonts.montserrat(color: AppColors.danger),
-                    )
-                  else if (widget.user == null)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'Takas yapmak için hesabınıza giriş yapmanız gerekiyor.',
-                          style: GoogleFonts.montserrat(
-                            color: AppColors.muted,
-                            height: 1.35,
+                      'Takas teklifi ver',
+                      style: GoogleFonts.montserrat(fontSize: 18, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 8),
+                    if (!_tradeOpen)
+                      Text(
+                        ribbon == ListingTradeRibbon.exchanged
+                            ? 'Bu ürün takas edilmiştir. Yeni teklif alınamaz.'
+                            : ribbon == ListingTradeRibbon.rejected
+                                ? 'Bu ilan reddedildi — teklif alınamaz.'
+                                : ribbon == ListingTradeRibbon.inReview
+                                    ? 'İlan incelemede — teklif için onay bekleniyor.'
+                                    : 'Bu ilan takasa kapalıdır.',
+                        style: GoogleFonts.montserrat(color: AppColors.danger),
+                      )
+                    else if (widget.user == null)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Takas yapmak için hesabınıza giriş yapmanız gerekiyor.',
+                            style: GoogleFonts.montserrat(color: AppColors.muted, height: 1.35),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          height: 52,
-                          width: double.infinity,
-                          child: FilledButton(
-                            onPressed: () {
-                              openLoginGate(
-                                context,
-                                intent: AuthIntent.trade.withListing(
-                                  _asInt(widget.listing['id']),
-                                ),
-                              );
-                            },
-                            child: const Text('Takas Yap'),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            height: 52,
+                            child: FilledButton(
+                              onPressed: () {
+                                openLoginGate(
+                                  context,
+                                  intent: AuthIntent.trade.withListing(
+                                    _asInt(widget.listing['id']),
+                                  ),
+                                );
+                              },
+                              child: const Text('Takas Yap'),
+                            ),
                           ),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            openLoginGate(
-                              context,
-                              intent: AuthIntent.trade.withListing(
-                                _asInt(widget.listing['id']),
-                              ),
-                            );
-                          },
-                          child: Text(
-                            'Giriş Yap / Kayıt Ol',
-                            style: GoogleFonts.montserrat(color: AppColors.gold),
-                          ),
-                        ),
-                      ],
-                    )
-                  else if (_loadingMine)
-                    const Center(child: CircularProgressIndicator())
-                  else if (_approvedMine.isEmpty) ...[
-                    Text(
-                      'Onaylı ilanınız yok. Teklif için önce fotoğraflı ilan oluşturun; yönetim onayından sonra burada seçebilirsiniz.',
-                      style: GoogleFonts.montserrat(
-                        color: AppColors.muted,
-                        height: 1.35,
+                        ],
+                      )
+                    else if (_loadingMine)
+                      const Center(child: CircularProgressIndicator())
+                    else if (_approvedMine.isEmpty) ...[
+                      Text(
+                        'Onaylı ilanınız yok. Teklif için önce fotoğraflı ilan oluşturun.',
+                        style: GoogleFonts.montserrat(color: AppColors.muted, height: 1.35),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 48,
-                      width: double.infinity,
-                      child: FilledButton.icon(
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
                         onPressed: () async {
                           await Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) =>
-                                  CreateListingScreen(user: widget.user!),
+                              builder: (_) => CreateListingScreen(user: widget.user!),
                             ),
                           );
                           _loadApprovedMine();
@@ -486,58 +369,30 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                         icon: const Icon(Icons.add_a_photo_outlined),
                         label: const Text('Fotoğraflı ilan oluştur'),
                       ),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => MyListingsScreen(user: widget.user!),
-                          ),
-                        );
-                      },
-                      child: Text(
-                        'İlanlarımı gör',
-                        style: GoogleFonts.montserrat(color: AppColors.gold),
-                      ),
-                    ),
-                  ] else ...[
-                    DropdownButtonFormField<int>(
-                      value: _selectedOfferId,
-                      decoration: const InputDecoration(
-                        labelText: 'Teklif edeceğin onaylı ilan',
-                      ),
-                      items: [
-                        for (final m in _approvedMine)
-                          DropdownMenuItem(
-                            value: _asInt(m['id']),
-                            child: Text(
-                              '${m['title']} · #${m['id']}',
-                              overflow: TextOverflow.ellipsis,
+                    ] else ...[
+                      DropdownButtonFormField<int>(
+                        value: _selectedOfferId,
+                        decoration: const InputDecoration(
+                          labelText: 'Teklif edeceğin onaylı ilan',
+                        ),
+                        items: [
+                          for (final m in _approvedMine)
+                            DropdownMenuItem(
+                              value: _asInt(m['id']),
+                              child: Text('${m['title']} · #${m['id']}', overflow: TextOverflow.ellipsis),
                             ),
-                          ),
-                      ],
-                      onChanged: _busy
-                          ? null
-                          : (v) => setState(() => _selectedOfferId = v),
-                    ),
-                    const SizedBox(height: 10),
-                    TextButton(
-                      onPressed: _busy ? null : _loadApprovedMine,
-                      child: Text(
-                        'Listeyi yenile',
-                        style: GoogleFonts.montserrat(color: AppColors.muted),
+                        ],
+                        onChanged: _busy ? null : (v) => setState(() => _selectedOfferId = v),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 52,
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: _busy ? null : _offer,
-                        child: Text(_busy ? 'Gönderiliyor…' : 'Takas teklifi ver'),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 52,
+                        child: FilledButton(
+                          onPressed: _busy ? null : _offer,
+                          child: Text(_busy ? 'Gönderiliyor…' : 'Takas teklifi ver'),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
                   ],
                   if (_result != null) ...[
                     const SizedBox(height: 14),

@@ -121,6 +121,50 @@ class _ListingHeroMediaState extends State<ListingHeroMedia> {
     _page.jumpToPage(next);
   }
 
+  void _openFullscreen(BuildContext context, List<String> photos) {
+    if (photos.isEmpty) return;
+    var page = _index;
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            return Scaffold(
+              backgroundColor: Colors.black,
+              appBar: AppBar(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                title: Text(
+                  '${page + 1} / ${photos.length}',
+                  style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
+                ),
+              ),
+              body: PageView.builder(
+                controller: PageController(initialPage: page),
+                itemCount: photos.length,
+                onPageChanged: (i) => setLocal(() => page = i),
+                itemBuilder: (_, i) => InteractiveViewer(
+                  child: Center(
+                    child: Image.network(
+                      photos[i],
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.broken_image_outlined,
+                        color: Colors.white54,
+                        size: 64,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final photos = resolvePhotoUrls(widget.listing);
@@ -180,24 +224,64 @@ class _ListingHeroMediaState extends State<ListingHeroMedia> {
                 ),
               ),
             ),
-            if (widget.showGalleryHint && multi)
+            if (widget.showGalleryHint && hasPhoto)
               Positioned(
                 top: 12,
-                right: 12,
+                left: 12,
                 child: IgnorePointer(
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(8),
+                  child: Semantics(
+                    label:
+                        'Fotoğraf ${_index + 1} / ${photos.length}',
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black87,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${_index + 1} / ${photos.length}',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
-                    child: Text(
-                      '${_index + 1}/${photos.length}',
-                      style: GoogleFonts.montserrat(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
+                  ),
+                ),
+              ),
+            if (widget.showGalleryHint && hasPhoto)
+              Positioned(
+                bottom: multi ? 28 : 12,
+                right: 12,
+                child: Semantics(
+                  button: true,
+                  label: 'Tüm fotoğraflar',
+                  child: Material(
+                    color: Colors.black87,
+                    borderRadius: BorderRadius.circular(20),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () => _openFullscreen(context, photos),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.zoom_in, size: 16, color: Colors.white),
+                            const SizedBox(width: 6),
+                            Text(
+                              'TÜM FOTOĞRAFLAR',
+                              style: GoogleFonts.montserrat(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

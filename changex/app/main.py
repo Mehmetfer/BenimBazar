@@ -44,6 +44,7 @@ from .engine import (
     create_offer,
     trade_public,
 )
+from .listing_presentation import build_presentation
 from .metrics import compute_trade_metrics
 from .moderation import (
     ModerationError,
@@ -2383,6 +2384,7 @@ def _listing_public(conn, row: dict, include_moderation: bool = False) -> dict:
         "updated_at": row.get("updated_at"),
         "user_message": user_status_message(status),
     }
+    out["presentation"] = build_presentation(out)
     if include_moderation:
         photo_rows: list[dict[str, Any]] = []
         try:

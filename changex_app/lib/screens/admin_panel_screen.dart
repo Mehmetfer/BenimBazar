@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../api/client.dart';
 import '../theme/app_theme.dart';
-import '../widgets/listing_media.dart';
+import '../widgets/listing_presentation_layout.dart';
 import 'admin_login_screen.dart';
 import 'create_listing_screen.dart';
 import 'home_screen.dart';
@@ -897,6 +897,37 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
             staff: _staff,
             onDecide: _decide,
             onAssign: _assignTask,
+            onPreview: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => Scaffold(
+                    backgroundColor: const Color(0xFF050607),
+                    appBar: AppBar(
+                      backgroundColor: const Color(0xFF050607),
+                      title: Text(
+                        'İlan önizleme (yayın görünümü)',
+                        style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    body: ListView(
+                      children: [
+                        ListingDetailLayout(listing: item),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            'Bu önizleme kullanıcıya görünecek sunum şablonudur.',
+                            style: GoogleFonts.montserrat(
+                              color: AppColors.muted,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           );
         },
       ),
@@ -1078,6 +1109,7 @@ class _QueueCard extends StatelessWidget {
     required this.staff,
     required this.onDecide,
     required this.onAssign,
+    required this.onPreview,
   });
 
   final Map<String, dynamic> item;
@@ -1086,6 +1118,7 @@ class _QueueCard extends StatelessWidget {
   final List<dynamic> staff;
   final Future<void> Function(int id, String decision, {String reason}) onDecide;
   final Future<void> Function(int listingId, int assigneeId) onAssign;
+  final VoidCallback onPreview;
 
   @override
   Widget build(BuildContext context) {
@@ -1100,7 +1133,11 @@ class _QueueCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ListingHeroMedia(listing: item, height: 160, borderRadius: 0),
+          ListingDetailLayout(
+            listing: item,
+            includeGallery: true,
+            galleryHeight: 180,
+          ),
           Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
@@ -1123,18 +1160,6 @@ class _QueueCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  item['title']?.toString() ?? '',
-                  style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 16),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  item['description']?.toString() ?? '',
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.montserrat(color: AppColors.muted, fontSize: 13),
-                ),
                 if (assignment != null) ...[
                   const SizedBox(height: 8),
                   Text(
@@ -1142,6 +1167,12 @@ class _QueueCard extends StatelessWidget {
                     style: GoogleFonts.montserrat(color: AppColors.gold, fontSize: 12),
                   ),
                 ],
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: onPreview,
+                  icon: const Icon(Icons.visibility_outlined),
+                  label: const Text('İlanı İncele (yayın önizlemesi)'),
+                ),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,

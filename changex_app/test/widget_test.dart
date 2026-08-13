@@ -291,13 +291,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Takas teklifi ver'), findsOneWidget);
-    expect(
-      find.textContaining('Yalnızca onaylanmış kendi ilanlarınızla'),
-      findsOneWidget,
-    );
-    // myListings fails offline → empty approved list CTA
+    // Offline myListings → empty approved list CTA (no hard-coded phone/contact).
     expect(find.textContaining('Onaylı ilanınız yok'), findsOneWidget);
     expect(find.text('Fotoğraflı ilan oluştur'), findsOneWidget);
+    expect(find.textContaining('Sadece uygulama içi mesajlaşma'), findsWidgets);
   });
 
   testWidgets('edit listing shows photo management chrome', (tester) async {
@@ -347,13 +344,13 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.text('1/3'), findsOneWidget);
+    expect(find.text('1 / 3'), findsOneWidget);
     expect(find.byIcon(Icons.chevron_left), findsOneWidget);
     expect(find.byIcon(Icons.chevron_right), findsOneWidget);
     // Advance via chevron — PageController animate
     await tester.tap(find.byIcon(Icons.chevron_right));
     await tester.pumpAndSettle();
-    expect(find.text('2/3'), findsOneWidget);
+    expect(find.text('2 / 3'), findsOneWidget);
   });
 
   testWidgets('resolvePhotoUrls survives non-http Uri.base (file:// tests)', (tester) async {

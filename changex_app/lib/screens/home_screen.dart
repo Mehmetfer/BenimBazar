@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../api/client.dart';
 import '../auth/auth_intent.dart';
 import '../theme/app_theme.dart';
-import '../widgets/listing_media.dart';
+import '../widgets/listing_presentation_layout.dart';
 import '../widgets/value_widgets.dart';
 import 'admin_login_screen.dart';
 import 'admin_panel_screen.dart';
@@ -524,11 +524,6 @@ class _ListingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final value = Map<String, dynamic>.from(item['value'] as Map? ?? {});
-    final owner = Map<String, dynamic>.from(item['owner'] as Map? ?? {});
-    final ribbon = resolveListingRibbon(item);
-
-    // Media outside InkWell so horizontal photo swipe is not stolen by tap target.
     return Container(
       decoration: BoxDecoration(
         color: AppColors.bgCard,
@@ -536,73 +531,7 @@ class _ListingCard extends StatelessWidget {
         border: Border.all(color: AppColors.line),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ListingHeroMedia(
-            listing: item,
-            height: 190,
-            borderRadius: 0,
-          ),
-          InkWell(
-            onTap: onTap,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ListingSpecStrip(listing: item),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item['title']?.toString() ?? '',
-                        style: GoogleFonts.montserrat(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${item['category']} · ${owner['username'] ?? '?'} · skor ${owner['change_score'] ?? '-'}',
-                        style: GoogleFonts.montserrat(
-                          color: AppColors.muted,
-                          fontSize: 11,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      ValueChip(value: value, dense: true),
-                      if (ribbon != ListingTradeRibbon.none) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          ribbonLabel(ribbon),
-                          style: GoogleFonts.montserrat(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.6,
-                            color: AppColors.gold,
-                          ),
-                        ),
-                      ] else if ((item['wanted_items']?.toString() ?? '')
-                          .isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'İstiyor: ${item['wanted_items']}',
-                          style: GoogleFonts.montserrat(
-                            fontSize: 12,
-                            color: AppColors.blue,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+      child: ListingPresentationCard(listing: item, onTap: onTap),
     );
   }
 }
