@@ -4,6 +4,11 @@ from dataclasses import asdict
 from datetime import date
 
 from ai.quality import assess_signal_quality, classify_volatility_regime
+from analytics.paper_feedback import PaperDecisionFeedback
+from ai.calibration import CalibrationMonitor
+from decision.feedback import DecisionFeedbackLoop
+from decision.pipeline import F6PaperLoop
+from decision.replay import DecisionReplayStore
 from alerts import AlertManager
 from alerts.bridge import (
     emit_daily_summary,
@@ -36,6 +41,7 @@ from portfolio.construction import build_correlation_matrix, size_position
 from portfolio.ledger import PortfolioLedger
 from profit.ev import compute_opportunity, decide_matrix, dynamic_size_multiplier
 from profit.modes import select_capital_mode
+from profit.protection import initial_protect, update_profit_protection
 from risk.engine import ENTRY_ACTIONS, EXIT_ACTIONS, RiskEngine
 from signals.engine import (
     build_trade_plan,
@@ -70,7 +76,6 @@ from dashboard.daily import build_daily_home
 from data.integrity import FreshnessStatus, format_age_tr
 from config.models import utc_now
 
-
 def _to_exec_signal(decision: SignalAction) -> SignalAction:
     if decision in {SignalAction.STRONG_BUY, SignalAction.BUY}:
         return SignalAction.AL
@@ -96,7 +101,22 @@ class TradingService:
         self.last_error = ""
         self.pending_approvals: dict[str, dict] = {}
         self.capital_mode = CapitalMode.NORMAL
-        self.multi = MultiHorizonOrchestrator(self.provider, equity=settings.starting_cash)
+        # Paper decision feedback: calibration + post_trade + strategy retirement
+        self.calibration = CalibrationMonitor()
+        self.paper_feedback = PaperDecisionFeedback(calibration=self.calibration)
+        # Night-2 F6 intelligent decision loop (paper/simulation only — LIVE forbidden)
+        self.f6_feedback = DecisionFeedbackLoop()
+        self.f6_replay = DecisionReplayStore()
+        self.f6_loop = F6PaperLoop(
+            feedback=self.f6_feedback,
+            replay=self.f6_replay,
+            strategy="ensemble",
+        )
+        self.multi = MultiHorizonOrchestrator(
+            self.provider, equity=settings.starting_cash, calibration=self.calibration
+        )
+        self._entry_meta: dict[str, dict] = {}
+        self._protect_state: dict[str, object] = {}
         self._last_risk_alert_reason = ""
         self._kill_switch_alerted = False
         self._emit_signal_alerts = True  # dashboard/scan may publish SIGNAL alerts (not fills)
@@ -188,6 +208,15 @@ class TradingService:
                 "LIVE READY yalnızca doğrulanmış piyasa + broker ile."
             ),
             "strategy_ranking_example": example_ranking_report(),
+            "strategy_ranking_example_note": "DEAD_ILLUSTRATIVE — use paper_decision_feedback.strategies",
+            "paper_decision_feedback": self.paper_feedback.report(),
+            "f6_decision_loop": {
+                "enabled": True,
+                "live_trading": False,
+                "calibration": self.calibration.report(),
+                "feedback": self.f6_feedback.report(),
+                "note": "OBSERVE→REGIME→SIGNAL→RISK→DECISION→PAPER→FEEDBACK (no LIVE)",
+            },
             "data_source": meta.to_dict(),
             "system_health": {
                 "market_data": "CONNECTED" if meta.connected and has_data else "DISCONNECTED",
@@ -204,6 +233,16 @@ class TradingService:
                 "push_on": self.alerts.settings_store.get().push_on,
             },
         }
+
+    def f6_paper_decide(self, symbol: str, *, requested_size: float = 10.0) -> dict:
+        """Run one F6 paper decision cycle (never LIVE broker execution)."""
+        cycle = self.f6_loop.run_cycle(
+            provider=self.provider,
+            ledger=self.ledger,
+            symbol=symbol,
+            requested_size=requested_size,
+        )
+        return cycle.to_dict()
 
     def tick(self) -> None:
         self.provider.tick()
@@ -238,6 +277,7 @@ class TradingService:
             regime=regime,
             atr_index_pct=atr_index_pct,
             liquidity_ok=True,
+            force_defensive=self.paper_feedback.should_force_defensive(),
         )
         self.risk.capital_mode = self.capital_mode
         universe_map = {m.symbol: m for m in select_universe(self.provider)}
@@ -314,6 +354,12 @@ class TradingService:
                 conflict=mtf_conflict,
                 mtf=mtf,
             )
+            ai_conf = self.paper_feedback.adjust_confidence(ai_conf)
+            # Night-2: calibration status is evidence for the decision path (not LIVE)
+            cal_status = self.calibration.status().value
+            if cal_status == "OVERCONFIDENT":
+                ai_conf = max(5.0, ai_conf * 0.85)
+                ai_notes = f"{ai_notes};calibration={cal_status}" if ai_notes else f"calibration={cal_status}"
             safety = 80 - mtf_penalty
             if news_block:
                 safety -= 30
@@ -391,10 +437,16 @@ class TradingService:
                 mtf_aligned=mtf_aligned,
                 portfolio_dd_pct=self.ledger.drawdown_pct(),
             )
+            strategy_key = str(alpha_label or "ensemble")
+            strategy_blocked = self.paper_feedback.is_strategy_retired(strategy_key)
             size_mult = 0.0
             if opp:
                 size_mult = dynamic_size_multiplier(opp, capital_mode=self.capital_mode, regime=regime)
+                size_mult *= self.paper_feedback.size_multiplier_for(strategy_key)
+                size_mult = max(0.0, min(1.0, round(size_mult, 3)))
                 opp.position_size_mult = size_mult
+                if size_mult <= 0:
+                    strategy_blocked = True
 
             sell_pressure = score_sell(ind, quote.price, quote.volume, owned)
             decision = decide_matrix(
@@ -406,6 +458,7 @@ class TradingService:
                 news_block=news_block,
                 capital_mode=self.capital_mode,
                 regime=regime,
+                strategy_blocked=strategy_blocked,
             )
             if uni and not uni.eligible and decision in {SignalAction.BUY, SignalAction.STRONG_BUY}:
                 decision = SignalAction.NO_TRADE
@@ -423,7 +476,19 @@ class TradingService:
                 conflict=conflict,
                 mtf=mtf,
             )
+            # Paper calibration haircut — only after closed trades have recorded outcomes
+            ai_conf = self.paper_feedback.adjust_confidence(ai_conf)
+            cal_status = self.calibration.status().value
+            if cal_status == "OVERCONFIDENT":
+                ai_conf = max(5.0, ai_conf * 0.85)
             bundle.ai_confidence = ai_conf
+            # Re-gate BUY if confidence fell below threshold after haircut
+            if (
+                decision in {SignalAction.BUY, SignalAction.STRONG_BUY}
+                and ai_conf < settings.min_ai_confidence_to_trade
+            ):
+                decision = SignalAction.NO_TRADE
+                signal = _to_exec_signal(decision)
 
             reasons = tech_reasons + vol_notes + fund_notes + sector_notes + news_notes + liq_notes
             reasons.append(f"ensemble_bias={bias}")
@@ -431,6 +496,8 @@ class TradingService:
             reasons.append(f"capital_mode={self.capital_mode.value}")
             reasons.append(f"price_action={pa.pattern}")
             reasons.extend(alpha_notes[:2])
+            if strategy_blocked:
+                reasons.append(f"strategy_retired_or_zero_size:{strategy_key}")
             if opp:
                 reasons.append(f"EV={opp.expected_value:.3f} P(win)={opp.p_win:.2f}")
             risks = []
@@ -1078,6 +1145,23 @@ class TradingService:
             )
             result = self.broker.submit(order, quote.sector)
             self.pending_approvals.pop(symbol, None)
+            if result.ok:
+                stop = rd.stop_price
+                entry = quote.price
+                stop_dist = ((entry - stop) / entry * 100) if stop and entry else 0.0
+                alpha = d.alpha_summary or {}
+                self._entry_meta[symbol] = {
+                    "confidence": float(d.ai_confidence),
+                    "strategy": str(alpha.get("label") or "ensemble"),
+                    "regime": str(d.regime.value if d.regime else "NEUTRAL"),
+                    "entry_reason": d.explanation,
+                    "stop_distance_pct": stop_dist,
+                    "entry": entry,
+                    "stop": stop,
+                    "target": rd.target_price,
+                }
+                if stop:
+                    self._protect_state[symbol] = initial_protect(entry, float(stop))
             emit_order_lifecycle(
                 self.alerts,
                 symbol=symbol,
@@ -1100,6 +1184,30 @@ class TradingService:
             )
             result = self.broker.submit(order, quote.sector)
             self.pending_approvals.pop(symbol, None)
+            if result.ok:
+                meta = self._entry_meta.get(symbol, {})
+                pnl = 0.0
+                with self.ledger._connect() as conn:
+                    row = conn.execute(
+                        "SELECT pnl FROM trades WHERE side='SELL' AND symbol=? ORDER BY id DESC LIMIT 1",
+                        (symbol,),
+                    ).fetchone()
+                    if row:
+                        pnl = float(row["pnl"])
+                if self.ledger.get_position(symbol) is None:
+                    regime_now = detect_regime(self.provider)
+                    self.paper_feedback.on_closed_trade(
+                        symbol=symbol,
+                        pnl=pnl,
+                        entry_reason=str(meta.get("entry_reason") or d.explanation),
+                        regime_at_entry=str(meta.get("regime") or "NEUTRAL"),
+                        regime_at_exit=regime_now.value,
+                        stop_distance_pct=float(meta.get("stop_distance_pct") or 0),
+                        confidence=float(meta.get("confidence") or d.ai_confidence),
+                        strategy=str(meta.get("strategy") or (d.alpha_summary or {}).get("label") or "ensemble"),
+                    )
+                    self._entry_meta.pop(symbol, None)
+                    self._protect_state.pop(symbol, None)
             emit_order_lifecycle(
                 self.alerts,
                 symbol=symbol,
@@ -1112,16 +1220,63 @@ class TradingService:
         return {"ok": False, "message": f"no actionable signal ({d.decision.value})"}
 
     def monitor_exits(self) -> list[dict]:
-        """Check stop/target vs marks; on hit execute paper sell then emit EXECUTION alerts."""
+        """Check stop/target vs marks; on hit execute paper sell then emit EXECUTION alerts.
+
+        Also applies profit protection (breakeven / trail — never widen) and records
+        post-trade lessons + calibration + strategy feedback (paper only).
+        """
         out: list[dict] = []
         self.tick()
+        regime_now = detect_regime(self.provider)
         for pos in list(self.ledger.positions()):
             quote = self.provider.get_quote(pos.symbol)
             self.ledger.mark_prices[pos.symbol] = quote.price
+            bars = self.provider.get_bars(pos.symbol, 80)
+            ind = compute_indicators(bars)
+            meta = self._entry_meta.get(pos.symbol, {})
+            entry = float(meta.get("entry") or pos.avg_cost)
+            stop0 = float(meta.get("stop") or pos.stop_price or entry * 0.97)
+            t1 = float(meta.get("target") or pos.target_price or entry * 1.03)
+            # Synthetic T2/T3 for protection path when full plan not stored
+            risk = max(entry - stop0, entry * 0.01)
+            t2 = entry + risk * settings.preferred_risk_reward
+            t3 = entry + risk * 3.0
+
+            state = self._protect_state.get(pos.symbol)
+            if state is None:
+                state = initial_protect(entry, stop0)
+                self._protect_state[pos.symbol] = state
+            if ind is not None:
+                momentum_ok = ind.ema9 >= ind.ema21
+                state, exit_pct = update_profit_protection(
+                    entry=entry,
+                    price=quote.price,
+                    stop=stop0,
+                    ind=ind,
+                    t1=t1,
+                    t2=t2,
+                    t3=t3,
+                    state=state,
+                    momentum_ok=momentum_ok,
+                )
+                self._protect_state[pos.symbol] = state
+                if state.stop and (pos.stop_price is None or state.stop > float(pos.stop_price)):
+                    self.ledger.update_stop(pos.symbol, state.stop)
+                    pos = self.ledger.get_position(pos.symbol) or pos
+            else:
+                exit_pct = None
+
             kind = None
             tp_level = None
+            qty = pos.quantity
             if pos.stop_price is not None and quote.price <= pos.stop_price:
                 kind = "STOP_LOSS"
+            elif exit_pct and exit_pct > 0 and quote.price >= t1:
+                kind = "TAKE_PROFIT"
+                tp_level = 1
+                qty = max(1.0, round(pos.quantity * float(exit_pct), 4))
+                if qty >= pos.quantity:
+                    qty = pos.quantity
             elif pos.target_price is not None and quote.price >= pos.target_price:
                 kind = "TAKE_PROFIT"
                 tp_level = 1
@@ -1130,10 +1285,10 @@ class TradingService:
             order = OrderRequest(
                 symbol=pos.symbol,
                 side="SELL",
-                quantity=pos.quantity,
+                quantity=qty,
                 price=quote.price,
                 reason=f"auto_exit:{kind}",
-                client_order_id=f"EXIT:{kind}:{pos.symbol}:{quote.price}",
+                client_order_id=f"EXIT:{kind}:{pos.symbol}:{quote.price}:{qty}",
             )
             result = self.broker.submit(order, pos.sector)
             emit_order_lifecycle(
@@ -1143,7 +1298,46 @@ class TradingService:
                 emit_execution_exit(
                     self.alerts, symbol=pos.symbol, kind=kind, price=quote.price, tp_level=tp_level
                 )
-            out.append({"symbol": pos.symbol, "kind": kind, "ok": result.ok, "status": result.status})
+                # Paper feedback evaluation (CalibrationMonitor + lessons + strategy ranking)
+                pnl = float(getattr(result, "pnl", 0) or 0)
+                if pnl == 0:
+                    # Broker may not echo pnl — approximate from ledger last sell
+                    with self.ledger._connect() as conn:
+                        row = conn.execute(
+                            "SELECT pnl FROM trades WHERE side='SELL' AND symbol=? ORDER BY id DESC LIMIT 1",
+                            (pos.symbol,),
+                        ).fetchone()
+                        if row:
+                            pnl = float(row["pnl"])
+                remaining = self.ledger.get_position(pos.symbol)
+                if remaining is None:
+                    review = self.paper_feedback.on_closed_trade(
+                        symbol=pos.symbol,
+                        pnl=pnl,
+                        entry_reason=str(meta.get("entry_reason") or kind),
+                        regime_at_entry=str(meta.get("regime") or "NEUTRAL"),
+                        regime_at_exit=regime_now.value,
+                        stop_distance_pct=float(meta.get("stop_distance_pct") or 0),
+                        confidence=float(meta.get("confidence") or 50),
+                        strategy=str(meta.get("strategy") or "ensemble"),
+                    )
+                    self._entry_meta.pop(pos.symbol, None)
+                    self._protect_state.pop(pos.symbol, None)
+                    out.append(
+                        {
+                            "symbol": pos.symbol,
+                            "kind": kind,
+                            "ok": result.ok,
+                            "status": result.status,
+                            "pnl": pnl,
+                            "lessons": review.lessons,
+                            "calibration_haircut": self.calibration.confidence_haircut,
+                        }
+                    )
+                else:
+                    out.append({"symbol": pos.symbol, "kind": kind, "ok": result.ok, "status": result.status, "partial": True})
+            else:
+                out.append({"symbol": pos.symbol, "kind": kind, "ok": result.ok, "status": result.status})
         return out
 
     def daily_summary_alert(self) -> dict:
