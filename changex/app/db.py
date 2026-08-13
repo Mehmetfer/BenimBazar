@@ -348,11 +348,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
           uploader_id INTEGER NOT NULL REFERENCES users(id),
           bytes INTEGER NOT NULL DEFAULT 0,
           content_type TEXT NOT NULL DEFAULT '',
-          created_at REAL NOT NULL,
-          deleted_at REAL
+          created_at REAL NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_media_uploads_uploader ON media_uploads(uploader_id);
-        CREATE INDEX IF NOT EXISTS idx_media_uploads_deleted ON media_uploads(deleted_at);
         CREATE TABLE IF NOT EXISTS moderation_reviews (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           listing_id INTEGER NOT NULL REFERENCES trade_listings(id) ON DELETE CASCADE,
@@ -384,6 +382,21 @@ def _migrate(conn: sqlite3.Connection) -> None:
         );
         """
     )
+
+    # media_uploads soft-delete (existing DBs may lack deleted_at)
+    media_cols = _table_cols(conn, "media_uploads")
+    if media_cols is not None and "deleted_at" not in media_cols:
+        try:
+            conn.execute("ALTER TABLE media_uploads ADD COLUMN deleted_at REAL")
+        except sqlite3.OperationalError:
+            pass
+    try:
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_media_uploads_deleted ON media_uploads(deleted_at)"
+        )
+    except sqlite3.OperationalError:
+        pass
+
 
     item_cols = _table_cols(conn, "listing_items")
     if item_cols and "value_mandal" in item_cols and "mandal_units" not in item_cols:
@@ -569,20 +582,6 @@ def _seed_default_superadmin(conn: sqlite3.Connection) -> None:
     user_cols = _table_cols(conn, "users")
     if not user_cols:
         return
-
-    # media_uploads soft-delete column (storage cleanup)
-    media_cols = _table_cols(conn, "media_uploads")
-    if media_cols and "deleted_at" not in media_cols:
-        try:
-            conn.execute("ALTER TABLE media_uploads ADD COLUMN deleted_at REAL")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_media_uploads_deleted ON media_uploads(deleted_at)"
-            )
-        except sqlite3.OperationalError:
-            pass
 
     # Guarantee columns used below exist even if earlier migrate steps were skipped
     if "suspended" not in user_cols:
