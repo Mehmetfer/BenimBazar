@@ -8,6 +8,7 @@ Controlled cycles executed under `AutonomyBudget(max_iterations=5)`.
 | cycle_cce4e235 | LEARNED | TEST_FAILURE → rollback |
 | cycle_35dc8353 | LEARNED | VERIFICATION_FAILURE → rollback |
 | cycle_47ba40b9 | PAUSED_FOR_REVIEW | Repeat proposal blocked / budget guard |
+| cycle_2d03b9a5 | PAUSED_FOR_REVIEW | Learning memory blocked identical proposal |
 
 Markdown artifacts: `reports/autonomy/cycle_*.md`  
 Learning: `reports/autonomy/learning.jsonl`  

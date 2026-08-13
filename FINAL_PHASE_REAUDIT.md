@@ -23,7 +23,7 @@
 | SUPERADMIN APPROVAL | **10/10** |
 | PUBLIC VERIFICATION | **10/10** |
 | IMAGE VERIFICATION | **10/10** |
-| FLUTTER | **PASS** (analyze clean, 16 tests) |
+| FLUTTER | **PASS** (analyze clean, **17** tests) |
 | CHANGE X | **PASS** (259) |
 | F6 | **78/100** |
 | F7 | **84/100** |
@@ -38,7 +38,7 @@
 - self_verification: **16**
 - autonomy: **5**
 - companion: **2**
-- flutter test: **16**
+- flutter test: **17**
 
 ## Hard boundaries held
 No LIVE trading · no production auto-deploy · no fake listings/approvals · no test delete/skip/relax · no auth bypass.
