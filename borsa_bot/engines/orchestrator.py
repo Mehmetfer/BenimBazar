@@ -35,11 +35,17 @@ def _ser_opp(o: HorizonOpportunity) -> dict:
 class MultiHorizonOrchestrator:
     """Runs LONG / SWING / DAY engines separately; does not mix capital sleeves."""
 
-    def __init__(self, provider: MarketDataProvider, equity: float = 100_000.0) -> None:
+    def __init__(
+        self,
+        provider: MarketDataProvider,
+        equity: float = 100_000.0,
+        calibration: CalibrationMonitor | None = None,
+    ) -> None:
         self.provider = provider
         self.equity = equity
         self.day_risk = DayTradingRiskState()
-        self.calibration = CalibrationMonitor()
+        # Shared with TradingService when provided so paper closes update haircuts
+        self.calibration = calibration or CalibrationMonitor()
 
     def run(self) -> dict:
         self.provider.tick()

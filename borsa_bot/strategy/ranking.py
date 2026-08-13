@@ -104,7 +104,11 @@ def rank_strategies(perfs: list[StrategyPerf]) -> list[StrategyPerf]:
 
 
 def example_ranking_report() -> list[dict]:
-    """Illustrative ranking used in docs/tests — not live auto-switch."""
+    """DEAD / ILLUSTRATIVE ONLY — static samples for docs/tests.
+
+    Production paper feedback uses analytics.paper_feedback.PaperDecisionFeedback.ranking_report().
+    Do not treat this as live strategy championship or auto-switch.
+    """
     samples = [
         StrategyPerf("A_aggressive", 80, 45, 0.8, 1.0, 1.8, 1.4, 120),
         StrategyPerf("B_balanced", 45, 12, 1.4, 1.8, 3.7, 1.7, 90),
@@ -118,6 +122,7 @@ def example_ranking_report() -> list[dict]:
             "return": s.net_return,
             "max_dd": s.max_drawdown,
             "risk_adjusted_score": s.risk_adjusted_score,
+            "dead_illustrative": True,
         }
         for i, s in enumerate(ranked)
     ]

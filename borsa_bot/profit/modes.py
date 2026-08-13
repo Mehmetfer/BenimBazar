@@ -11,6 +11,7 @@ def select_capital_mode(
     regime: MarketRegime,
     atr_index_pct: float,
     liquidity_ok: bool,
+    force_defensive: bool = False,
     cfg: Settings | None = None,
 ) -> CapitalMode:
     """
@@ -37,7 +38,12 @@ def select_capital_mode(
         return CapitalMode.CAPITAL_PROTECTION
     if dd >= cfg.high_risk_dd_pct or regime == MarketRegime.BEAR or atr_index_pct >= 4.0:
         return CapitalMode.HIGH_RISK
-    if dd >= cfg.defensive_dd_pct or losses >= cfg.consecutive_loss_reduce or atr_index_pct >= 3.2:
+    if (
+        dd >= cfg.defensive_dd_pct
+        or losses >= cfg.consecutive_loss_reduce
+        or atr_index_pct >= 3.2
+        or force_defensive
+    ):
         return CapitalMode.DEFENSIVE
     return CapitalMode.NORMAL
 
