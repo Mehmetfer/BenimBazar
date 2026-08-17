@@ -1,0 +1,58 @@
+# FLUTTER KALDIR — PHP TAM GECIS
+
+Giris calisiyor (superadmin). Ana sayfa hala Flutter ise bu adimlari yapin.
+
+## cPanel File Manager -> changex.mehmetfer.com.tr
+
+### SIL (Flutter + eski API)
+
+  main.dart.js
+  flutter.js
+  flutter_bootstrap.js
+  flutter_service_worker.js
+  manifest.json
+  version.json
+  .last_build_id
+  passenger_wsgi.py
+  requirements*.txt
+  canvaskit/     (klasor)
+  icons/         (klasor)
+  php/           (proxy — klasor)
+  changex/       (Python API — klasor)
+  api/           (varsa)
+
+  Flutter assets/ klasoru (icinde AssetManifest, fonts varsa SIL)
+  PHP assets/style.css kalacak — zip yukleyince gelir
+
+### DEGISTIR / YUKLE
+
+  index.html  -> zip icindeki ile degistir (PHP yonlendirme)
+  .htaccess   -> zip icindeki ile degistir
+
+  changex-php-YAYIN-*.zip veya login-fix.zip icerigini kok klasore ac
+
+### SILME
+
+  config/database.php   (MySQL sifreniz)
+  uploads/              (fotograflar)
+  storage/
+
+### TEŞHIS DOSYALARI (giris calistiktan sonra)
+
+  test.php
+  kurulum.php
+  install.php
+
+---
+
+## Kontrol
+
+1. https://changex.mehmetfer.com.tr/
+   -> PHP sayfa (ustte "CHANGE X", Flutter degil)
+
+2. https://changex.mehmetfer.com.tr/login.php
+   -> superadmin / 14531453
+
+3. https://changex.mehmetfer.com.tr/admin/
+
+Flutter "Yonetim girisi" ve "Takas kayitlari" ekrani gitmeli.

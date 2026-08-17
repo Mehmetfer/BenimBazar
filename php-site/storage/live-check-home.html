@@ -1,0 +1,1661 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>İlanlar — BenimBazar</title>
+    <link rel="icon" href="/assets/branding/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="/assets/branding/favicon-512.png" type="image/png" sizes="512x512">
+  <link rel="apple-touch-icon" href="/assets/branding/favicon-512.png">
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/style.css?v=20260815bb8">
+  <style>
+    body{margin:0;background:#0d0f14;color:#f5f5f5;font-family:Montserrat,system-ui,sans-serif}
+    a{color:#6fbf4a}
+  </style>
+</head>
+<body class="page-home-market page-vehicle-browse">
+<div class="app-shell">
+  <main class="app-main">
+            <a href="/index.php" class="brand-mark brand-mark--compact brand-mark__link" aria-label="BenimBazar — Ana sayfa">
+    <img
+    class="brand-mark__icon"
+    src="/assets/branding/logo-icon.png"
+    width="28"
+    height="28"
+    alt=""
+    decoding="async"
+  >
+    <div class="brand-mark__text">
+  <div class="brand-mark__title">
+    <span class="brand-mark__benim">Benim</span><span class="brand-mark__bazar">Bazar</span>
+  </div>
+    </div>
+</a>
+
+<div class="home-greet-row home-greet-row--market">
+
+  <span class="home-greet">Hoş geldiniz</span>
+
+  <span class="spacer"></span>
+
+  
+    <a class="link-gold" href="/login.php">Giriş</a>
+
+    <a class="link-gold" href="/register.php">Kayıt ol</a>
+
+  
+</div>
+
+
+
+<section class="home-market" aria-label="Pazar yeri">
+  <div class="home-market__top">
+        <span class="home-market__top-spacer" aria-hidden="true"></span>
+        <span class="home-market__date">15 Ağustos, 2026</span>
+  </div>
+
+  <form class="home-market__search" method="get">
+          <input type="hidden" name="veh" value="otomobil">
+        <input class="home-market__search-input" type="search" name="q" value="" placeholder="Marka, model veya ilan no ara…">
+    <button class="home-market__search-btn" type="submit" aria-label="Ara">Ara</button>
+  </form>
+
+  <div id="kategoriler" class="home-market__icon-grid" role="navigation" aria-label="Kategoriler">
+                <a class="home-market__icon-item is-active" href="/index.php?veh=otomobil">
+        <span class="home-market__icon-circle" aria-hidden="true">🚗</span>
+        <span class="home-market__icon-label">Otomobil</span>
+      </a>
+                <a class="home-market__icon-item" href="/index.php?veh=motosiklet">
+        <span class="home-market__icon-circle" aria-hidden="true">🏍️</span>
+        <span class="home-market__icon-label">Motosiklet</span>
+      </a>
+                <a class="home-market__icon-item" href="/index.php?veh=bisiklet">
+        <span class="home-market__icon-circle" aria-hidden="true">🚲</span>
+        <span class="home-market__icon-label">Bisiklet</span>
+      </a>
+                <a class="home-market__icon-item" href="/index.php?veh=ticari">
+        <span class="home-market__icon-circle" aria-hidden="true">🚚</span>
+        <span class="home-market__icon-label">Ticari Araç</span>
+      </a>
+                <a class="home-market__icon-item" href="/index.php?veh=antika-arac">
+        <span class="home-market__icon-circle" aria-hidden="true">🏛️</span>
+        <span class="home-market__icon-label">Antika Araç</span>
+      </a>
+      </div>
+</section>
+
+
+
+
+<div class="home-market__feed home-market__feed--vehicle">
+    <button type="button" class="vehicle-filters-toggle" data-vehicle-filters-open>
+    ☰ Filtreler •  </button>
+  <div class="vehicle-browse">
+    
+<aside class="vehicle-filters" aria-label="Araç filtreleri">
+
+  <div class="vehicle-filters__head">
+
+    <div class="vehicle-filters__head-text">
+
+      <h2 class="vehicle-filters__title">Araç arama</h2>
+
+      <p class="vehicle-filters__subtitle">Otomobil — marka sağ alanda</p>
+
+    </div>
+
+    <button type="button" class="vehicle-filters__close" data-vehicle-filters-close aria-label="Filtreleri kapat">✕</button>
+
+  </div>
+
+  <a
+    class="vehicle-filters__all-vehicles"
+    href="/index.php?veh=tum-araclar"
+  >TÜM ARAÇLAR</a>
+
+
+
+  <form class="vehicle-filters__form" method="get" action="/index.php">
+
+    <input type="hidden" name="veh" value="otomobil">
+
+    
+
+
+    
+
+
+    
+    
+    
+  </form>
+
+</aside>
+
+    <div class="vehicle-browse__results">
+  
+  <div class="home-market__feed-head">
+    <h2 class="home-market__feed-title">Otomobil — marka seçin</h2>
+        <a class="home-market__feed-clear" href="/index.php?veh=otomobil&amp;show_sold=1">Satilmis ilanlari goster</a>
+          <a class="home-market__feed-clear" href="/index.php?veh=otomobil">Tümünü göster</a>
+      </div>
+
+
+
+  <div class="vehicle-brand-main" data-brand-main>
+  <div class="vehicle-brand-main__head">
+    <div>
+      <p class="vehicle-brand-main__step">1 / 2 — Marka</p>
+      <h3 class="vehicle-brand-main__title">Otomobil — marka seçin</h3>
+      <p class="vehicle-brand-main__hint">Markaya tıklayınca o markanın modelleri listelenir.</p>
+    </div>
+    <a class="vehicle-brand-main__back" href="/index.php?veh=otomobil">← Kategoriye dön</a>
+  </div>
+
+  <div class="vehicle-brand-main__search-wrap">
+    <input
+      type="search"
+      class="vehicle-brand-main__search"
+      data-brand-main-search
+      placeholder="Hangi markayı arıyorsunuz?"
+      autocomplete="off"
+    >
+  </div>
+
+    <div class="vehicle-brand-main__section">
+    <p class="vehicle-brand-main__section-title">Popüler markalar</p>
+    <div class="vehicle-brand-main__grid">
+                      <a
+          class="vehicle-brand-main__logo-card"
+          href="/index.php?veh=otomobil&amp;make%5B0%5D=Toyota"
+          data-brand-main-item
+          data-brand-name="toyota"
+          title="Toyota"
+        >
+          <span class="vehicle-brand-main__logo-box">
+                        <img
+              src="/assets/brands/toyota.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=toyota.com&amp;sz=128|https://icons.duckduckgo.com/ip3/toyota.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"              alt=""
+              loading="lazy"
+            >
+                        <span class="vehicle-brand-picker__logo-fallback" style="display:none">T</span>
+          </span>
+          <span class="vehicle-brand-main__logo-name">Toyota</span>
+                      <span class="vehicle-brand-main__logo-count">(16)</span>
+                  </a>
+                      <a
+          class="vehicle-brand-main__logo-card"
+          href="/index.php?veh=otomobil&amp;make%5B0%5D=Suzuki"
+          data-brand-main-item
+          data-brand-name="suzuki"
+          title="Suzuki"
+        >
+          <span class="vehicle-brand-main__logo-box">
+                        <img
+              src="/assets/brands/suzuki.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=suzuki.com&amp;sz=128|https://icons.duckduckgo.com/ip3/suzuki.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"              alt=""
+              loading="lazy"
+            >
+                        <span class="vehicle-brand-picker__logo-fallback" style="display:none">S</span>
+          </span>
+          <span class="vehicle-brand-main__logo-name">Suzuki</span>
+                      <span class="vehicle-brand-main__logo-count">(9)</span>
+                  </a>
+                      <a
+          class="vehicle-brand-main__logo-card"
+          href="/index.php?veh=otomobil&amp;make%5B0%5D=Mercedes-Benz"
+          data-brand-main-item
+          data-brand-name="mercedes-benz"
+          title="Mercedes-Benz"
+        >
+          <span class="vehicle-brand-main__logo-box">
+                        <img
+              src="/assets/brands/mercedes.png?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=mercedes-benz.com&amp;sz=128|https://icons.duckduckgo.com/ip3/mercedes-benz.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"              alt=""
+              loading="lazy"
+            >
+                        <span class="vehicle-brand-picker__logo-fallback" style="display:none">M</span>
+          </span>
+          <span class="vehicle-brand-main__logo-name">Mercedes-Benz</span>
+                      <span class="vehicle-brand-main__logo-count">(8)</span>
+                  </a>
+                      <a
+          class="vehicle-brand-main__logo-card"
+          href="/index.php?veh=otomobil&amp;make%5B0%5D=Nissan"
+          data-brand-main-item
+          data-brand-name="nissan"
+          title="Nissan"
+        >
+          <span class="vehicle-brand-main__logo-box">
+                        <img
+              src="/assets/brands/nissan.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=nissan.com&amp;sz=128|https://icons.duckduckgo.com/ip3/nissan.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"              alt=""
+              loading="lazy"
+            >
+                        <span class="vehicle-brand-picker__logo-fallback" style="display:none">N</span>
+          </span>
+          <span class="vehicle-brand-main__logo-name">Nissan</span>
+                      <span class="vehicle-brand-main__logo-count">(8)</span>
+                  </a>
+                      <a
+          class="vehicle-brand-main__logo-card"
+          href="/index.php?veh=otomobil&amp;make%5B0%5D=Audi"
+          data-brand-main-item
+          data-brand-name="audi"
+          title="Audi"
+        >
+          <span class="vehicle-brand-main__logo-box">
+                        <img
+              src="/assets/brands/audi.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=audi.com&amp;sz=128|https://icons.duckduckgo.com/ip3/audi.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"              alt=""
+              loading="lazy"
+            >
+                        <span class="vehicle-brand-picker__logo-fallback" style="display:none">A</span>
+          </span>
+          <span class="vehicle-brand-main__logo-name">Audi</span>
+                      <span class="vehicle-brand-main__logo-count">(6)</span>
+                  </a>
+                      <a
+          class="vehicle-brand-main__logo-card"
+          href="/index.php?veh=otomobil&amp;make%5B0%5D=Volkswagen"
+          data-brand-main-item
+          data-brand-name="volkswagen"
+          title="Volkswagen"
+        >
+          <span class="vehicle-brand-main__logo-box">
+                        <img
+              src="/assets/brands/volkswagen.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=volkswagen.com&amp;sz=128|https://icons.duckduckgo.com/ip3/volkswagen.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"              alt=""
+              loading="lazy"
+            >
+                        <span class="vehicle-brand-picker__logo-fallback" style="display:none">V</span>
+          </span>
+          <span class="vehicle-brand-main__logo-name">Volkswagen</span>
+                      <span class="vehicle-brand-main__logo-count">(6)</span>
+                  </a>
+                      <a
+          class="vehicle-brand-main__logo-card"
+          href="/index.php?veh=otomobil&amp;make%5B0%5D=BMW"
+          data-brand-main-item
+          data-brand-name="bmw"
+          title="BMW"
+        >
+          <span class="vehicle-brand-main__logo-box">
+                        <img
+              src="/assets/brands/bmw.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=bmw.com&amp;sz=128|https://icons.duckduckgo.com/ip3/bmw.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"              alt=""
+              loading="lazy"
+            >
+                        <span class="vehicle-brand-picker__logo-fallback" style="display:none">B</span>
+          </span>
+          <span class="vehicle-brand-main__logo-name">BMW</span>
+                      <span class="vehicle-brand-main__logo-count">(3)</span>
+                  </a>
+                      <a
+          class="vehicle-brand-main__logo-card"
+          href="/index.php?veh=otomobil&amp;make%5B0%5D=Ford"
+          data-brand-main-item
+          data-brand-name="ford"
+          title="Ford"
+        >
+          <span class="vehicle-brand-main__logo-box">
+                        <img
+              src="/assets/brands/ford.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=ford.com&amp;sz=128|https://icons.duckduckgo.com/ip3/ford.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"              alt=""
+              loading="lazy"
+            >
+                        <span class="vehicle-brand-picker__logo-fallback" style="display:none">F</span>
+          </span>
+          <span class="vehicle-brand-main__logo-name">Ford</span>
+                      <span class="vehicle-brand-main__logo-count">(2)</span>
+                  </a>
+                      <a
+          class="vehicle-brand-main__logo-card"
+          href="/index.php?veh=otomobil&amp;make%5B0%5D=Hyundai"
+          data-brand-main-item
+          data-brand-name="hyundai"
+          title="Hyundai"
+        >
+          <span class="vehicle-brand-main__logo-box">
+                        <img
+              src="/assets/brands/hyundai.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=hyundai.com&amp;sz=128|https://icons.duckduckgo.com/ip3/hyundai.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"              alt=""
+              loading="lazy"
+            >
+                        <span class="vehicle-brand-picker__logo-fallback" style="display:none">H</span>
+          </span>
+          <span class="vehicle-brand-main__logo-name">Hyundai</span>
+                      <span class="vehicle-brand-main__logo-count">(2)</span>
+                  </a>
+                      <a
+          class="vehicle-brand-main__logo-card"
+          href="/index.php?veh=otomobil&amp;make%5B0%5D=Mini"
+          data-brand-main-item
+          data-brand-name="mini"
+          title="Mini"
+        >
+          <span class="vehicle-brand-main__logo-box">
+                        <img
+              src="/assets/brands/mini.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=mini.com&amp;sz=128|https://icons.duckduckgo.com/ip3/mini.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"              alt=""
+              loading="lazy"
+            >
+                        <span class="vehicle-brand-picker__logo-fallback" style="display:none">M</span>
+          </span>
+          <span class="vehicle-brand-main__logo-name">Mini</span>
+                      <span class="vehicle-brand-main__logo-count">(1)</span>
+                  </a>
+          </div>
+  </div>
+  
+  <div class="vehicle-brand-main__section">
+    <p class="vehicle-brand-main__section-title">Tüm markalar</p>
+    <ul class="vehicle-brand-main__list">
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="toyota"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Toyota">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/toyota.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=toyota.com&amp;sz=128|https://icons.duckduckgo.com/ip3/toyota.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">T</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Toyota              <span class="vehicle-brand-main__row-count">(16)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="mazda"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Mazda">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/mazda.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=mazda.com&amp;sz=128|https://icons.duckduckgo.com/ip3/mazda.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">M</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Mazda              <span class="vehicle-brand-main__row-count">(10)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="honda"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Honda">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/honda.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=honda.com&amp;sz=128|https://icons.duckduckgo.com/ip3/honda.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">H</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Honda              <span class="vehicle-brand-main__row-count">(9)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="suzuki"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Suzuki">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/suzuki.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=suzuki.com&amp;sz=128|https://icons.duckduckgo.com/ip3/suzuki.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">S</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Suzuki              <span class="vehicle-brand-main__row-count">(9)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="mercedes-benz"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Mercedes-Benz">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/mercedes.png?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=mercedes-benz.com&amp;sz=128|https://icons.duckduckgo.com/ip3/mercedes-benz.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">M</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Mercedes-Benz              <span class="vehicle-brand-main__row-count">(8)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="nissan"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Nissan">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/nissan.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=nissan.com&amp;sz=128|https://icons.duckduckgo.com/ip3/nissan.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">N</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Nissan              <span class="vehicle-brand-main__row-count">(8)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="audi"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Audi">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/audi.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=audi.com&amp;sz=128|https://icons.duckduckgo.com/ip3/audi.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">A</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Audi              <span class="vehicle-brand-main__row-count">(6)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="volkswagen"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Volkswagen">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/volkswagen.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=volkswagen.com&amp;sz=128|https://icons.duckduckgo.com/ip3/volkswagen.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">V</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Volkswagen              <span class="vehicle-brand-main__row-count">(6)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="mitsubishi"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Mitsubishi">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/mitsubishi.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=mitsubishi.com&amp;sz=128|https://icons.duckduckgo.com/ip3/mitsubishi.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">M</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Mitsubishi              <span class="vehicle-brand-main__row-count">(4)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="bmw"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=BMW">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/bmw.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=bmw.com&amp;sz=128|https://icons.duckduckgo.com/ip3/bmw.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">B</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              BMW              <span class="vehicle-brand-main__row-count">(3)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="ford"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Ford">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/ford.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=ford.com&amp;sz=128|https://icons.duckduckgo.com/ip3/ford.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">F</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Ford              <span class="vehicle-brand-main__row-count">(2)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="hyundai"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Hyundai">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/hyundai.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=hyundai.com&amp;sz=128|https://icons.duckduckgo.com/ip3/hyundai.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">H</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Hyundai              <span class="vehicle-brand-main__row-count">(2)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="kia"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Kia">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/kia.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=kia.com&amp;sz=128|https://icons.duckduckgo.com/ip3/kia.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">K</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Kia              <span class="vehicle-brand-main__row-count">(2)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="lexus"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Lexus">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/lexus.png?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=lexus.com&amp;sz=128|https://icons.duckduckgo.com/ip3/lexus.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">L</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Lexus              <span class="vehicle-brand-main__row-count">(2)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="jeep"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Jeep">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/jeep.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=jeep.com&amp;sz=128|https://icons.duckduckgo.com/ip3/jeep.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">J</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Jeep              <span class="vehicle-brand-main__row-count">(1)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="land rover"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Land%20Rover">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/landrover.png?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=landrover.com&amp;sz=128|https://icons.duckduckgo.com/ip3/landrover.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">L</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Land Rover              <span class="vehicle-brand-main__row-count">(1)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="mini"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Mini">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/mini.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=mini.com&amp;sz=128|https://icons.duckduckgo.com/ip3/mini.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">M</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Mini              <span class="vehicle-brand-main__row-count">(1)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="porsche"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Porsche">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/porsche.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=porsche.com&amp;sz=128|https://icons.duckduckgo.com/ip3/porsche.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">P</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Porsche              <span class="vehicle-brand-main__row-count">(1)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item"
+          data-brand-main-item
+          data-brand-name="volvo"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Volvo">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/volvo.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=volvocars.com&amp;sz=128|https://icons.duckduckgo.com/ip3/volvocars.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">V</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Volvo              <span class="vehicle-brand-main__row-count">(1)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="abarth"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Abarth">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/abarth.png?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=abarth.com&amp;sz=128|https://icons.duckduckgo.com/ip3/abarth.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">A</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Abarth              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="alfa romeo"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Alfa%20Romeo">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/alfaromeo.png?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=alfaromeo.com&amp;sz=128|https://icons.duckduckgo.com/ip3/alfaromeo.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">A</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Alfa Romeo              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="aston martin"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Aston%20Martin">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/astonmartin.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=astonmartin.com&amp;sz=128|https://icons.duckduckgo.com/ip3/astonmartin.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">A</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Aston Martin              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="bentley"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Bentley">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/bentley.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=bentley.com&amp;sz=128|https://icons.duckduckgo.com/ip3/bentley.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">B</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Bentley              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="byd"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=BYD">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/byd.png?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=byd.com&amp;sz=128|https://icons.duckduckgo.com/ip3/byd.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">B</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              BYD              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="cadillac"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Cadillac">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/cadillac.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=cadillac.com&amp;sz=128|https://icons.duckduckgo.com/ip3/cadillac.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">C</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Cadillac              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="chevrolet"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Chevrolet">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/chevrolet.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=chevrolet.com&amp;sz=128|https://icons.duckduckgo.com/ip3/chevrolet.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">C</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Chevrolet              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="chrysler"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Chrysler">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/chrysler.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=chrysler.com&amp;sz=128|https://icons.duckduckgo.com/ip3/chrysler.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">C</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Chrysler              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="citroën"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Citro%C3%ABn">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/citroen.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=citroen.com&amp;sz=128|https://icons.duckduckgo.com/ip3/citroen.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">C</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Citroën              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="cupra"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Cupra">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/cupra.png?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=cupra.com&amp;sz=128|https://icons.duckduckgo.com/ip3/cupra.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">C</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Cupra              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="dacia"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Dacia">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/dacia.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=dacia.com&amp;sz=128|https://icons.duckduckgo.com/ip3/dacia.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">D</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Dacia              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="daewoo"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Daewoo">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/daewoo.png?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=daewoo.com&amp;sz=128|https://icons.duckduckgo.com/ip3/daewoo.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">D</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Daewoo              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="daihatsu"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Daihatsu">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="https://cdn.simpleicons.org/daihatsu/406367" data-fallbacks="https://www.google.com/s2/favicons?domain=daihatsu.com&amp;sz=128|https://icons.duckduckgo.com/ip3/daihatsu.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">D</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Daihatsu              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="diğer"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Di%C4%9Fer">
+            <span class="vehicle-brand-picker__row-logo">
+                            <span class="vehicle-brand-picker__logo-fallback">D</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Diğer              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="dodge"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Dodge">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/dodge.png?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=dodge.com&amp;sz=128|https://icons.duckduckgo.com/ip3/dodge.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">D</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Dodge              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="ds"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=DS">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/dsautomobiles.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=dsautomobiles.com&amp;sz=128|https://icons.duckduckgo.com/ip3/dsautomobiles.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">D</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              DS              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="ferrari"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Ferrari">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/ferrari.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=ferrari.com&amp;sz=128|https://icons.duckduckgo.com/ip3/ferrari.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">F</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Ferrari              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="fiat"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Fiat">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/fiat.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=fiat.com&amp;sz=128|https://icons.duckduckgo.com/ip3/fiat.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">F</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Fiat              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="hummer"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Hummer">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/hummer.png?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=hummer.com&amp;sz=128|https://icons.duckduckgo.com/ip3/hummer.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">H</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Hummer              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="infiniti"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Infiniti">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/infiniti.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=infiniti.com&amp;sz=128|https://icons.duckduckgo.com/ip3/infiniti.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">I</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Infiniti              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="isuzu"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Isuzu">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="https://cdn.simpleicons.org/isuzu/406367" data-fallbacks="https://www.google.com/s2/favicons?domain=isuzu.com&amp;sz=128|https://icons.duckduckgo.com/ip3/isuzu.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">I</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Isuzu              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="jaguar"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Jaguar">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/jaguar.png?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=jaguar.com&amp;sz=128|https://icons.duckduckgo.com/ip3/jaguar.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">J</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Jaguar              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="lada"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Lada">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/lada.png?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=lada.ru&amp;sz=128|https://icons.duckduckgo.com/ip3/lada.ru.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">L</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Lada              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="lamborghini"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Lamborghini">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/lamborghini.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=lamborghini.com&amp;sz=128|https://icons.duckduckgo.com/ip3/lamborghini.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">L</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Lamborghini              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="lancia"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Lancia">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/lancia.png?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=lancia.com&amp;sz=128|https://icons.duckduckgo.com/ip3/lancia.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">L</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Lancia              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="maserati"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Maserati">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/maserati.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=maserati.com&amp;sz=128|https://icons.duckduckgo.com/ip3/maserati.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">M</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Maserati              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="mclaren"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=McLaren">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/mclaren.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=mclaren.com&amp;sz=128|https://icons.duckduckgo.com/ip3/mclaren.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">M</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              McLaren              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="mg"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=MG">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/mg.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=mg.co.uk&amp;sz=128|https://icons.duckduckgo.com/ip3/mg.co.uk.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">M</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              MG              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="opel"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Opel">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/opel.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=opel.com&amp;sz=128|https://icons.duckduckgo.com/ip3/opel.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">O</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Opel              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="peugeot"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Peugeot">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/peugeot.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=peugeot.com&amp;sz=128|https://icons.duckduckgo.com/ip3/peugeot.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">P</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Peugeot              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="renault"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Renault">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/renault.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=renault.com&amp;sz=128|https://icons.duckduckgo.com/ip3/renault.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">R</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Renault              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="rolls royce"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Rolls%20Royce">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/rollsroyce.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=rolls-royce.com&amp;sz=128|https://icons.duckduckgo.com/ip3/rolls-royce.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">R</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Rolls Royce              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="rover"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Rover">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/rover.png?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=rover.com&amp;sz=128|https://icons.duckduckgo.com/ip3/rover.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">R</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Rover              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="saab"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Saab">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/saab.png?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=saab.com&amp;sz=128|https://icons.duckduckgo.com/ip3/saab.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">S</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Saab              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="seat"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Seat">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/seat.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=seat.com&amp;sz=128|https://icons.duckduckgo.com/ip3/seat.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">S</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Seat              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="skoda"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Skoda">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/skoda.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=skoda-auto.com&amp;sz=128|https://icons.duckduckgo.com/ip3/skoda-auto.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">S</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Skoda              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="smart"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Smart">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/smart.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=smart.com&amp;sz=128|https://icons.duckduckgo.com/ip3/smart.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">S</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Smart              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="subaru"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Subaru">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/subaru.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=subaru.com&amp;sz=128|https://icons.duckduckgo.com/ip3/subaru.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">S</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Subaru              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="tesla"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Tesla">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/tesla.svg?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=tesla.com&amp;sz=128|https://icons.duckduckgo.com/ip3/tesla.com.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">T</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Tesla              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+                      <li
+          class="vehicle-brand-main__item is-empty"
+          data-brand-main-item
+          data-brand-name="togg"
+        >
+          <a class="vehicle-brand-main__row" href="/index.php?veh=otomobil&amp;make%5B0%5D=Togg">
+            <span class="vehicle-brand-picker__row-logo">
+                            <img
+                src="/assets/brands/togg.png?v=20260814" data-fallbacks="https://www.google.com/s2/favicons?domain=togg.com.tr&amp;sz=128|https://icons.duckduckgo.com/ip3/togg.com.tr.ico" data-fallback-idx="0" onerror="cxBrandLogoFallback(this)"                alt=""
+                loading="lazy"
+              >
+                            <span class="vehicle-brand-picker__logo-fallback" style="display:none">T</span>
+            </span>
+            <span class="vehicle-brand-main__row-name">
+              Togg              <span class="vehicle-brand-main__row-count">(0)</span>
+            </span>
+            <span class="vehicle-brand-main__row-arrow" aria-hidden="true">›</span>
+          </a>
+        </li>
+          </ul>
+  </div>
+</div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+function cxBrandLogoFallback(img) {
+  if (!img) return;
+  var list = (img.getAttribute('data-fallbacks') || '').split('|').filter(Boolean);
+  var idx = parseInt(img.getAttribute('data-fallback-idx') || '0', 10);
+  if (idx >= list.length) {
+    img.style.display = 'none';
+    var fb = img.nextElementSibling;
+    if (fb && fb.classList.contains('vehicle-brand-picker__logo-fallback')) {
+      fb.style.display = 'flex';
+    }
+    return;
+  }
+  img.setAttribute('data-fallback-idx', String(idx + 1));
+  img.src = list[idx];
+}
+(function () {
+  var panel = document.querySelector('.vehicle-filters');
+  var openBtn = document.querySelector('[data-vehicle-filters-open]');
+  var closeBtn = document.querySelector('[data-vehicle-filters-close]');
+  if (panel && openBtn) {
+    openBtn.addEventListener('click', function () {
+      panel.classList.add('is-open');
+      if (closeBtn) closeBtn.style.display = 'inline-flex';
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function () {
+        panel.classList.remove('is-open');
+      });
+    }
+  }
+
+  var picker = document.querySelector('[data-brand-picker]');
+  if (picker) {
+  var brandRow = picker.closest('.vehicle-brand-row');
+  var trigger = picker.querySelector('[data-brand-trigger]');
+  var panelEl = picker.querySelector('[data-brand-panel]');
+  var searchInput = picker.querySelector('[data-brand-search]');
+  var summaryEl = picker.querySelector('[data-brand-summary]');
+  var modelInput = document.querySelector('[data-brand-model]');
+  var checkboxes = picker.querySelectorAll('[data-brand-checkbox]');
+
+  function selectedNames() {
+    var out = [];
+    checkboxes.forEach(function (cb) {
+      if (cb.checked && !cb.disabled) out.push(cb.value);
+    });
+    return out;
+  }
+
+  function updateSummary() {
+    var sel = selectedNames();
+    var text = 'Marka';
+    if (sel.length === 1) text = sel[0];
+    else if (sel.length > 1) text = sel[0] + ' +' + (sel.length - 1);
+    if (summaryEl) summaryEl.textContent = text;
+    if (trigger) trigger.classList.toggle('is-filled', sel.length > 0);
+    if (modelInput) {
+      modelInput.disabled = sel.length === 0;
+      modelInput.classList.toggle('is-disabled', sel.length === 0);
+      if (sel.length === 0) modelInput.value = '';
+    }
+    picker.querySelectorAll('[data-brand-logo-toggle]').forEach(function (btn) {
+      var name = btn.getAttribute('data-brand-name');
+      btn.classList.toggle('is-selected', sel.indexOf(name) !== -1);
+    });
+  }
+
+  function closePanel() {
+    if (!panelEl || !trigger) return;
+    panelEl.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+    picker.classList.remove('is-open');
+    if (brandRow) brandRow.classList.remove('is-brand-open');
+  }
+
+  function openPanel() {
+    if (!panelEl || !trigger) return;
+    panelEl.hidden = false;
+    trigger.setAttribute('aria-expanded', 'true');
+    picker.classList.add('is-open');
+    if (brandRow) brandRow.classList.add('is-brand-open');
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.select();
+    }
+  }
+
+  if (trigger && panelEl) {
+    trigger.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (panelEl.hidden) openPanel();
+      else closePanel();
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    if (!picker.contains(e.target)) closePanel();
+  });
+
+  if (searchInput) {
+    searchInput.addEventListener('input', function () {
+      var q = searchInput.value.trim().toLowerCase();
+      picker.querySelectorAll('[data-brand-item]').forEach(function (item) {
+        var name = item.getAttribute('data-brand-name') || '';
+        item.hidden = q !== '' && name.indexOf(q) === -1;
+      });
+    });
+  }
+
+  checkboxes.forEach(function (cb) {
+    cb.addEventListener('change', updateSummary);
+  });
+
+  picker.querySelectorAll('[data-brand-logo-toggle]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var name = btn.getAttribute('data-brand-name');
+      checkboxes.forEach(function (cb) {
+        if (cb.value === name && !cb.disabled) {
+          cb.checked = !cb.checked;
+        }
+      });
+      updateSummary();
+    });
+  });
+
+  updateSummary();
+  }
+
+  var brandMain = document.querySelector('[data-brand-main]');
+  if (brandMain) {
+    var mainSearch = brandMain.querySelector('[data-brand-main-search]');
+    if (mainSearch) {
+      mainSearch.addEventListener('input', function () {
+        var q = mainSearch.value.trim().toLowerCase();
+        brandMain.querySelectorAll('[data-brand-main-item]').forEach(function (item) {
+          var name = item.getAttribute('data-brand-name') || '';
+          item.hidden = q !== '' && name.indexOf(q) === -1;
+        });
+      });
+    }
+  }
+
+  var modelMain = document.querySelector('[data-model-main]');
+  if (modelMain) {
+    var modelSearch = modelMain.querySelector('[data-model-main-search]');
+    if (modelSearch) {
+      modelSearch.addEventListener('input', function () {
+        var q = modelSearch.value.trim().toLowerCase();
+        modelMain.querySelectorAll('[data-model-main-item]').forEach(function (item) {
+          var name = item.getAttribute('data-model-name') || '';
+          item.hidden = q !== '' && name.indexOf(q) === -1;
+        });
+      });
+    }
+  }
+})();
+</script>
+
+  </main>
+      
+<nav class="bottom-nav" aria-label="Alt menu">
+
+  <a class="bottom-nav__cta" href="/login.php?next=%2Fcreate-listing.php&reason=%C4%B0lan+vermek+i%C3%A7in+giri%C5%9F+yap%C4%B1n">
+
+    <span class="bottom-nav__cta-icon">📷</span>
+
+    Fotoğraflı ilan ver
+
+  </a>
+
+  <div class="bottom-nav__row">
+
+    <a class="bottom-nav__item active" href="/index.php">
+
+      <span>🏠</span> Ana sayfa
+
+    </a>
+
+    
+    
+  </div>
+
+</nav>
+
+  </div>
+</body>
+</html>

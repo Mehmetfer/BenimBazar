@@ -1,0 +1,73 @@
+# 404 HATASI — DOSYALAR YANLIS KLASORDE
+
+404 = sunucu hic PHP dosyasi bulamiyor.
+Genelde zip yanlis yere acilir veya kok klasor bos kalir.
+
+## DOGRU YOL (cPanel)
+
+Subdomain document root:
+
+  changex.mehmetfer.com.tr
+
+Tam sunucu yolu:
+
+  /home/u2759108/changex.mehmetfer.com.tr
+
+File Manager'da BU klasore girin (ust klasor degil).
+
+---
+
+## DOGRU KLASOR YAPISI (kokte olmali)
+
+changex.mehmetfer.com.tr/
+  index.php          <- ZORUNLU
+  login.php
+  bootstrap.php
+  .htaccess
+  config/
+    database.php
+  app/
+  assets/
+  admin/
+  ...
+
+YANLIS (404 verir):
+
+  changex.mehmetfer.com.tr/php-site/index.php
+  changex.mehmetfer.com.tr/deploy-pack/index.php
+  changex.mehmetfer.com.tr/changex-php-YAYIN-.../index.php
+
+Zip acinca ic klasor gelirse: icindekileri BIR UST klasore tasiyin.
+
+---
+
+## ADIM ADIM
+
+1. File Manager -> changex.mehmetfer.com.tr
+2. Iceride index.php var mi bakin — YOKSA 404 normal
+3. Zip yukle -> Extract
+4. Extract sonrasi tek klasor acildiysa (deploy-pack vb):
+   - O klasorun ICINDEKI tum dosyalari sec
+   - Move -> changex.mehmetfer.com.tr kokune
+   - Bos kalan alt klasoru sil
+5. info.php yukleyin -> tarayici:
+   https://changex.mehmetfer.com.tr/info.php
+   "CHANGE X OK" gormelisiniz
+6. config/database.php sifreyi tekrar yazin (sildiyse)
+7. https://changex.mehmetfer.com.tr/login.php
+
+---
+
+## config/database.php (hatirlatma)
+
+  username: u2759108_hd7d1
+  database: u2759108_changex
+  password: (MySQL sifreniz)
+
+---
+
+## Hala 404
+
+cPanel -> Domains / Subdomains ->
+changex.mehmetfer.com.tr document root ne yaziyor?
+File Manager'daki klasor adi ile AYNI olmali.

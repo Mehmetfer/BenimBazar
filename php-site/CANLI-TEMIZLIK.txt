@@ -1,0 +1,61 @@
+# CANLI SUNUCU TEMIZLIK — cPanel File Manager
+
+Subdomain kok: changex.mehmetfer.com.tr
+(Tam yol: /home/u2759108/changex.mehmetfer.com.tr)
+
+FTP 421 aliyorsaniz bu listeyi File Manager ile silin.
+Sonra changex-canli-temizlik.zip icerigini ayni klasore yukleyin.
+
+---
+
+## SIL (eski Flutter + API + proxy)
+
+Dosyalar:
+  index.html
+  main.dart.js
+  flutter.js
+  flutter_bootstrap.js
+  flutter_service_worker.js
+  manifest.json
+  version.json
+  passenger_wsgi.py
+  requirements.lock.txt
+  requirements.hosting.txt
+  requirements.txt
+  .last_build_id
+  .htaccess          (zip'teki yenisi gelecek)
+
+Klasorler:
+  canvaskit/
+  icons/
+  php/               (proxy.php — artik yok)
+  changex/           (Python API kaynak)
+  api/
+  public/
+
+Flutter assets/ klasoru varsa ve icinde AssetManifest / fonts varsa SIL.
+PHP assets/style.css kalacak — zip yukleyince gelir.
+
+---
+
+## KORU (silme)
+
+  config/database.php     (MySQL sifreniz)
+  uploads/                (ilan fotograflari varsa)
+
+---
+
+## YUKLE
+
+changex-canli-temizlik.zip -> kok klasore cikar (ustune yaz)
+
+---
+
+## SONRA
+
+1. phpMyAdmin -> u2759108_changex -> Import -> database/phpmyadmin-kurulum.sql
+2. https://changex.mehmetfer.com.tr/test.php
+3. https://changex.mehmetfer.com.tr/  (PHP sayfa, Flutter degil)
+4. login.php -> superadmin / 14531453
+
+Kurulumdan sonra sil: test.php, kurulum.php, install.php

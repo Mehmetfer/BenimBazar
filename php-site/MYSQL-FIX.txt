@@ -1,0 +1,41 @@
+# MySQL 1045 Access denied — cozum
+
+Zip yukleyince config/database.php SABLON ile ezilmis olabilir.
+Sifre yanlis veya BURAYA_MYSQL_SIFRENIZI_YAZIN kalmis.
+
+## Hizli cozum (cPanel File Manager)
+
+### Yol A — database.local.php (ONERILEN, zip bir daha ezmez)
+
+1. config/database.local.php.example dosyasini kopyala
+2. Adini database.local.php yap
+3. Icerik:
+
+<?php
+return [
+    'password' => 'GERCEK_MYSQL_SIFRENIZ',
+];
+
+4. Kaydet -> test.php yenile
+
+### Yol B — database.php duzenle
+
+config/database.php satir 8:
+  'password' => 'GERCEK_MYSQL_SIFRENIZ',
+
+## Bilgiler (dogru kullanici)
+
+  username: u2759108_hd7d1
+  database: u2759108_changex
+  host: localhost
+
+u2759108_mehmetfer DEGIL.
+
+## Sifreyi unuttum
+
+cPanel -> MySQL Veritabanlari -> u2759108_hd7d1 -> Sifre degistir
+Yeni sifreyi database.local.php ye yaz.
+
+## Test
+
+test.php -> [OK] MySQL baglanti

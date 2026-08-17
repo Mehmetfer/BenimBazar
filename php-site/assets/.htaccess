@@ -1,0 +1,5 @@
+<?php
+# CSS dosyasi
+<IfModule mod_mime.c>
+  AddType text/css .css
+</IfModule>

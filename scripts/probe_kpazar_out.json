@@ -1,0 +1,65 @@
+{
+  "url": "https://kpazar.com/ilan/41-2003-mitsubishi-outlander/",
+  "len": 92635,
+  "title": "2003 Model Otomatik Mitsubishi Outlander",
+  "spec_İlan Tarihi": "19 Temmuz 2026",
+  "spec_Yıl": "2003",
+  "spec_Kilometre": null,
+  "spec_Vites": "",
+  "spec_Yakıt": "Multipoint Injection",
+  "spec_Kasa": "SUV",
+  "spec_Renk": "Gri",
+  "has_sterlin": true,
+  "has_try": true,
+  "photos": [
+    "https://kpazar.com/wp-content/uploads/2026/07/6nj8FGkkMimrQd2Wa2S4s2DdtwwHRnFf6RkSUdlY.webp",
+    "https://kpazar.com/wp-content/uploads/2026/07/GKjIhguGYwYY8H5ciafa5Y2cgOAUhPMl14TB4tFf.webp",
+    "https://kpazar.com/wp-content/uploads/2026/07/LDkUT9aQkwqjNw4WOn0NrYNFwzA7BzDk4OZKdQTL.webp",
+    "https://kpazar.com/wp-content/uploads/2026/07/O6ybptPaf2ZFDqI6lhzKGEr6WHuWYhH1hSdn2OyW.webp",
+    "https://kpazar.com/wp-content/uploads/2026/07/YzmE7lnrTQ7Gofg6KEJjOMnlT8312SsP4sGl53l2.webp",
+    "https://kpazar.com/wp-content/uploads/2026/07/h34n270LM5unLegYJVB4E5ijvjefG6dgKmE90A5Q.webp",
+    "https://kpazar.com/wp-content/uploads/2026/07/pm5DEBoiJ4c2xuAOUNgCDraNgr0jZN9vTyInu9fw.webp"
+  ],
+  "match_Bireysel Satıcı|Bireysel satic": "Bireysel Satıcı",
+  "match_Üye\\s*20\\d{2}": "Üye 2026",
+  "match_class=\"[^\"]*seller[^\"]*\"[^>]*>": "class=\"ls-seller\"> <a href=\"https://kpazar.com/uye/vis-motors-trading-ltd\" class=\"ls-seller__avatar\"> V </a> <div class=\"ls-seller__info\"> <a href=\"https://kpazar.com/uye/vis-motors-trading-ltd\" class",
+  "price_tokens": [],
+  "js_price": null,
+  "archives": {
+    "https://kpazar.com/": {
+      "count": 12,
+      "sample": [
+        "29",
+        "30",
+        "31",
+        "32",
+        "33",
+        "35",
+        "36",
+        "37"
+      ],
+      "max": "41"
+    },
+    "https://kpazar.com/ikinci-el-araba/": {
+      "error": "HTTP Error 404: Not Found"
+    },
+    "https://kpazar.com/kktc-araba-ilanlari/": {
+      "count": 21,
+      "sample": [
+        "19",
+        "20",
+        "21",
+        "22",
+        "23",
+        "24",
+        "25",
+        "27"
+      ],
+      "max": "41"
+    },
+    "https://kpazar.com/araclar/": {
+      "error": "HTTP Error 404: Not Found"
+    }
+  },
+  "seller_snippet": "tıcı                                &middot; Üye 2026                                &middot; 76 görüntülenme\n                            </div>\n                        </div>\n                    </div>\n\n                                            <div class=\"ls-seller__actions\" data-role=\"contact-actions\" data-listing-id=\"36\">\n                                                            <button ty"
+}

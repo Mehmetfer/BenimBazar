@@ -1,0 +1,25 @@
+# CHANGE X — PHP + MySQL (Flutter / API proxy YOK)
+DirectoryIndex index.php index.html
+
+<IfModule mod_php.c>
+  php_flag display_errors Off
+  php_flag log_errors On
+</IfModule>
+<IfModule mod_php8.c>
+  php_flag display_errors Off
+  php_flag log_errors On
+</IfModule>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Eski Flutter SPA -> PHP
+  RewriteRule ^index\.html$ /index.php [R=302,L]
+
+  RewriteRule \.php$ - [L]
+
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.php [L]
+</IfModule>

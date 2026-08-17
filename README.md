@@ -1,68 +1,40 @@
-# CHANGE X
+# BenimBazar (PHP)
 
-Para yok. Satın alma yok. **Sadece takas.**
+KKTC odaklı araç marketplace — **PHP 8.1+ / MySQL** (Natro / cPanel).
 
-Platform birimleri: **Mandal · Dirhem · Madalyon**  
-(1 Madalyon = 254 Dirhem = 64.516 Mandal — gerçek para değildir)
+Canlı: http://changex.mehmetfer.com.tr
 
-[![CI](https://github.com/Mehmetfer/Koca_Kafa/actions/workflows/ci.yml/badge.svg)](https://github.com/Mehmetfer/Koca_Kafa/actions/workflows/ci.yml)
+## Proje yapısı
 
-## Çalıştır
-
-```bash
-bash scripts/install.sh
-bash scripts/start.sh
+```
+php-site/          Kaynak kod (cPanel köküne yüklenir)
+scripts/           Deploy, canlıdan çekme, import araçları
+docs/              Audit ve teknik notlar
 ```
 
-Aç: http://127.0.0.1:8000
+## Yerel geliştirme
 
-## CI
-
-Pull request’lerde GitHub Actions şunları çalıştırır:
-
-- CHANGE X `pytest` (`changex/tests`)
-- Security regresyon suite
-- Image E2E + API E2E suite’leri
-- Flutter `analyze` + `test` (`changex_app`)
-- Düz `pytest --collect-only` (borsa_bot `PYTHONPATH` dahil collection hatası olmamalı)
-
-Tek kontrol noktası: workflow job **`CI Gate`**.  
-Merge’i kilitlemek için GitHub’da `main` branch protection’da **Require status checks → `CI Gate`** seçilmelidir (Actions’ın en az bir kez çalışmış olması gerekir).
-
-Python bağımlılıkları `requirements.lock.txt` ile pin’lidir. Flutter için `changex_app/pubspec.lock` commit’lidir. Secret / production credential commit edilmez (`.env` gitignore’dadır; örnek: `borsa_bot/.env.example`).
-
-## Self-verification (F7 foundation)
-
-Controlled sandbox loop only — **no production mutate, no self-deploy, no LIVE autonomy**:
-
-```bash
-bash scripts/self_verify.sh
-pytest self_verification/tests -q
+```powershell
+cd D:\changex\php-site
+php -S localhost:8080
 ```
 
-Stages: OBSERVE → DETECT → DIAGNOSE → PLAN → PROPOSE → SANDBOX APPLY → TEST → VERIFY → ROLLBACK|READY_FOR_REVIEW → REPORT (audit JSONL).
+- `config/database.local.php` — yerel MySQL (git'e eklenmez)
+- `config/google.local.php` — OAuth (git'e eklenmez)
+- Canlı senkron: `python scripts/pull_live_http.py`
 
-## Test (lokal)
+## cPanel kurulum
 
-```bash
-bash scripts/install.sh
-source .venv/bin/activate
-pytest                 # kök pytest.ini: pythonpath=. borsa_bot
-pytest changex/tests -q
-cd changex_app && flutter pub get && flutter analyze && flutter test
+1. `php-site/` dosyalarını site köküne yükleyin
+2. `kurulum.php` ile kurulum / migrate (production'da dikkatli kullanın)
+3. `config/database.php` sunucuda oluşturulur (repoda yok)
+
+Ayrıntı: `php-site/KURULUM.txt`
+
+## Deploy
+
+```powershell
+python scripts/deploy_rebrand_http.py
 ```
 
-## API (özet)
-
-- `POST /api/auth/register|login`
-- `GET /api/listings` (ziyaretçi OK)
-- `POST /api/listings` (login)
-- `POST /api/trades/offer` (login)
-- Değer hesabı sunucuda (`changex/app/value.py`)
-
-## Mimari
-
-Detay: `docs/CHANGE_X_ARCHITECTURE.md`
-
-Flutter kaynak: `changex_app/`  
-Backend: `changex/`
+Deploy doğrulama: `php-site/deploy-ping.txt` → `deploy-021525`
