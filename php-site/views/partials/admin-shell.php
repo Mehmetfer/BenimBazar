@@ -33,6 +33,7 @@ $roleLabel = cx_admin_role_label($user);
   <a class="admin-tabs__item<?= $adminTab === 'users' ? ' active' : '' ?>" href="/admin/users.php">Kullanıcılar</a>
   <?php endif; ?>
   <?php if (cx_is_superadmin($user)): ?>
+  <a class="admin-tabs__item<?= $adminTab === 'vip' ? ' active' : '' ?>" href="/admin/vip-kurumsal.php">VIP Kurumsal</a>
   <a class="admin-tabs__item<?= $adminTab === 'watermark' ? ' active' : '' ?>" href="/admin/watermark-batch.php">Filigran</a>
   <?php endif; ?>
 </nav>

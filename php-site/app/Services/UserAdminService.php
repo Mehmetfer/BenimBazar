@@ -32,6 +32,186 @@ final class UserAdminService
         return self::roleLabels()[$role] ?? $role;
     }
 
+    /**
+     * VIP Kurumsal üyelik özeti (admin paneli).
+     *
+     * @return array{total:int,active:int,expired:int,expiring:int,upcoming:int,nodates:int}
+     */
+    public static function vipMembershipStats(): array
+    {
+        $rows = self::searchVipKurumsal('', 'all', 500);
+        $stats = [
+            'total' => count($rows),
+            'active' => 0,
+            'expired' => 0,
+            'expiring' => 0,
+            'upcoming' => 0,
+            'nodates' => 0,
+        ];
+        foreach ($rows as $row) {
+            $summary = cx_vip_membership_summary($row);
+            if (!$summary['has_dates']) {
+                $stats['nodates']++;
+            } elseif ($summary['expired']) {
+                $stats['expired']++;
+            } elseif ($summary['starts_ymd'] !== '' && $summary['starts_ymd'] > date('Y-m-d')) {
+                $stats['upcoming']++;
+            } else {
+                $stats['active']++;
+                if ($summary['ends_ymd'] !== '') {
+                    $daysLeft = (int) floor((strtotime($summary['ends_ymd']) - strtotime(date('Y-m-d'))) / 86400);
+                    if ($daysLeft >= 0 && $daysLeft <= 30) {
+                        $stats['expiring']++;
+                    }
+                }
+            }
+        }
+
+        return $stats;
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    public static function searchVipKurumsal(string $q = '', string $filter = 'all', int $limit = 120): array
+    {
+        $pdo = Database::pdo();
+        ListingSchemaService::ensureUserColumns();
+        $cols = self::userSelectColumns($pdo);
+        foreach (['gallery_name', 'gallery_banner', 'avatar_url'] as $extra) {
+            if (self::columnExists($pdo, $extra) && !in_array($extra, $cols, true)) {
+                $cols[] = $extra;
+            }
+        }
+
+        $sql = 'SELECT ' . implode(', ', $cols) . ' FROM users WHERE role = ?';
+        $args = ['vip_kurumsal'];
+
+        if ($q !== '') {
+            $where = ['username LIKE ?', 'email LIKE ?'];
+            $like = '%' . $q . '%';
+            $args[] = $like;
+            $args[] = $like;
+            if (in_array('gallery_name', $cols, true)) {
+                $where[] = 'gallery_name LIKE ?';
+                $args[] = $like;
+            }
+            if (in_array('phone', $cols, true)) {
+                $where[] = 'phone LIKE ?';
+                $args[] = $like;
+            }
+            if (in_array('city', $cols, true)) {
+                $where[] = 'city LIKE ?';
+                $args[] = $like;
+            }
+            $sql .= ' AND (' . implode(' OR ', $where) . ')';
+        }
+
+        $sql .= ' ORDER BY id DESC LIMIT ' . max(1, min($limit, 300));
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($args);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        foreach ($rows as &$row) {
+            $row['country'] = cx_normalize_country((string) ($row['country'] ?? 'tr'));
+        }
+        unset($row);
+        $rows = self::attachListingCounts($rows);
+
+        $filter = strtolower(trim($filter));
+        if ($filter === 'all') {
+            return $rows;
+        }
+
+        return array_values(array_filter($rows, static function (array $row) use ($filter): bool {
+            $summary = cx_vip_membership_summary($row);
+
+            return match ($filter) {
+                'active' => $summary['active'],
+                'expired' => $summary['expired'],
+                'upcoming' => $summary['starts_ymd'] !== '' && $summary['starts_ymd'] > date('Y-m-d'),
+                'expiring' => self::vipIsExpiringSoon($summary),
+                'nodates' => !$summary['has_dates'],
+                default => true,
+            };
+        }));
+    }
+
+    /** @param array<string,mixed> $summary */
+    private static function vipIsExpiringSoon(array $summary): bool
+    {
+        if ($summary['expired'] || !$summary['active'] || ($summary['ends_ymd'] ?? '') === '') {
+            return false;
+        }
+        $daysLeft = (int) floor((strtotime((string) $summary['ends_ymd']) - strtotime(date('Y-m-d'))) / 86400);
+
+        return $daysLeft >= 0 && $daysLeft <= 30;
+    }
+
+    public static function extendVipMembership(int $targetId, int $days, int $actorId): void
+    {
+        if ($days < 1 || $days > 730) {
+            throw new \RuntimeException('Uzatma süresi 1–730 gün arasında olmalı.');
+        }
+        $pdo = Database::pdo();
+        ListingSchemaService::ensureUserColumns();
+        $stmt = $pdo->prepare('SELECT id, username, role, vip_starts_at, vip_ends_at FROM users WHERE id = ? LIMIT 1');
+        $stmt->execute([$targetId]);
+        $target = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$target || (string) ($target['role'] ?? '') !== 'vip_kurumsal') {
+            throw new \RuntimeException('Yalnızca VIP Kurumsal hesaplar uzatılabilir.');
+        }
+
+        $today = date('Y-m-d');
+        $starts = cx_ymd_date($target['vip_starts_at'] ?? null);
+        if ($starts === '') {
+            $starts = $today;
+        }
+        $ends = cx_ymd_date($target['vip_ends_at'] ?? null);
+        if ($ends === '' || $ends < $today) {
+            $ends = $today;
+        }
+        $newEnds = date('Y-m-d', strtotime($ends . ' +' . $days . ' days'));
+        self::updateVipMembershipDates($targetId, $starts, $newEnds, $actorId);
+    }
+
+    /** @return list<array<string,mixed>> */
+    public static function searchPromotable(string $q, int $limit = 12): array
+    {
+        $q = trim($q);
+        if ($q === '') {
+            return [];
+        }
+        $pdo = Database::pdo();
+        ListingSchemaService::ensureUserColumns();
+        $cols = self::userSelectColumns($pdo);
+        if (self::columnExists($pdo, 'gallery_name') && !in_array('gallery_name', $cols, true)) {
+            $cols[] = 'gallery_name';
+        }
+        $like = '%' . $q . '%';
+        $where = ['username LIKE ?', 'email LIKE ?'];
+        $args = [$like, $like];
+        if (in_array('gallery_name', $cols, true)) {
+            $where[] = 'gallery_name LIKE ?';
+            $args[] = $like;
+        }
+        $sql = 'SELECT ' . implode(', ', $cols) . '
+                FROM users
+                WHERE role IN (\'user\', \'dealer\')
+                  AND COALESCE(suspended, 0) = 0
+                  AND (' . implode(' OR ', $where) . ')
+                ORDER BY id DESC
+                LIMIT ' . max(1, min($limit, 20));
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($args);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        foreach ($rows as &$row) {
+            $row['country'] = cx_normalize_country((string) ($row['country'] ?? 'tr'));
+        }
+        unset($row);
+
+        return $rows;
+    }
+
     /** @return list<array<string,mixed>> */
     public static function search(string $q = '', int $limit = 100): array
     {

@@ -1,13 +1,17 @@
-# BenimBazar (PHP)
+# BenimBazar
 
 KKTC odaklı araç marketplace — **PHP 8.1+ / MySQL** (Natro / cPanel).
 
-Canlı: http://changex.mehmetfer.com.tr
+| | |
+|---|---|
+| **Marka** | BenimBazar (eski ad: ChangeX) |
+| **Canlı** | http://changex.mehmetfer.com.tr |
+| **Kaynak** | `php-site/` |
 
 ## Proje yapısı
 
 ```
-php-site/          Kaynak kod (cPanel köküne yüklenir)
+php-site/          Canlı site kaynak kodu (cPanel public_html)
 scripts/           Deploy, canlıdan çekme, import araçları
 docs/              Audit ve teknik notlar
 ```
@@ -21,7 +25,13 @@ php -S localhost:8080
 
 - `config/database.local.php` — yerel MySQL (git'e eklenmez)
 - `config/google.local.php` — OAuth (git'e eklenmez)
-- Canlı senkron: `python scripts/pull_live_http.py`
+- Canlıdan çekme: `python scripts/pull_live_http.py`
+
+## Admin
+
+- `/admin/` — ilan moderasyonu
+- `/admin/users.php` — kullanıcılar / roller
+- `/admin/vip-kurumsal.php` — VIP Kurumsal galeri yönetimi (superadmin)
 
 ## cPanel kurulum
 
@@ -37,4 +47,8 @@ Ayrıntı: `php-site/KURULUM.txt`
 python scripts/deploy_rebrand_http.py
 ```
 
-Deploy doğrulama: `php-site/deploy-ping.txt` → `deploy-021525`
+Deploy doğrulama: `php-site/deploy-ping.txt`
+
+## GitHub
+
+Repo geçmişinde **ChangeX / Koca_Kafa** (Flutter + Python) vardı; aktif ürün **BenimBazar PHP** sitesidir (`php-site/`).
