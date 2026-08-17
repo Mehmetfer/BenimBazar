@@ -4,9 +4,10 @@ KKTC odaklı araç marketplace — **PHP 8.1+ / MySQL** (Natro / cPanel).
 
 | | |
 |---|---|
-| **Marka** | BenimBazar (eski ad: ChangeX) |
+| **Marka** | BenimBazar |
 | **Canlı** | http://changex.mehmetfer.com.tr |
 | **Kaynak** | `php-site/` |
+| **Stack** | Sunucu tarafı PHP sayfaları — **Flutter ve ayrı REST API yok** |
 
 ## Proje yapısı
 
@@ -35,11 +36,11 @@ php -S localhost:8080
 
 ## cPanel kurulum
 
-1. `php-site/` dosyalarını site köküne yükleyin
-2. `kurulum.php` ile kurulum / migrate (production'da dikkatli kullanın)
-3. `config/database.php` sunucuda oluşturulur (repoda yok)
-
 Ayrıntı: `php-site/KURULUM.txt`
+
+1. `php-site/` dosyalarını site köküne yükleyin
+2. `kurulum.php` veya SQL import ile migrate
+3. `config/database.php` sunucuda oluşturulur
 
 ## Deploy
 
@@ -49,6 +50,17 @@ python scripts/deploy_rebrand_http.py
 
 Deploy doğrulama: `php-site/deploy-ping.txt`
 
-## GitHub
+## Canlı denetim (2026-08-17)
 
-Repo geçmişinde **ChangeX / Koca_Kafa** (Flutter + Python) vardı; aktif ürün **BenimBazar PHP** sitesidir (`php-site/`).
+| URL | Beklenen |
+|-----|----------|
+| `/` | PHP ana sayfa, başlık **BenimBazar** |
+| `/main.dart.js`, `/api/` | **410 Gone** (yeni `.htaccess` deploy sonrası) |
+| `/php/proxy.php` | 404 |
+| `/info.php` | 404 (production) |
+
+Canlıda Flutter dosyası yok; eski yollar rewrite ile ana sayfaya düşüyordu — `.htaccess` güncellemesi 410 döndürür.
+
+## Geçmiş
+
+Repo geçmişinde ChangeX / Koca_Kafa (Flutter + Python) vardı; **aktif ürün yalnızca BenimBazar PHP** sitesidir.

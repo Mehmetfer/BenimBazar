@@ -52,7 +52,7 @@ Zip acinca ic klasor gelirse: icindekileri BIR UST klasore tasiyin.
    - Bos kalan alt klasoru sil
 5. info.php yukleyin -> tarayici:
    https://changex.mehmetfer.com.tr/info.php
-   "CHANGE X OK" gormelisiniz
+   "BenimBazar OK" gormelisiniz
 6. config/database.php sifreyi tekrar yazin (sildiyse)
 7. https://changex.mehmetfer.com.tr/login.php
 

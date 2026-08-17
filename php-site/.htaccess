@@ -1,5 +1,5 @@
-# CHANGE X — PHP + MySQL (Flutter / API proxy YOK)
-DirectoryIndex index.php index.html
+# BenimBazar — PHP + MySQL (Flutter / REST API yok)
+DirectoryIndex index.php
 
 <IfModule mod_php.c>
   php_flag display_errors Off
@@ -14,8 +14,13 @@ DirectoryIndex index.php index.html
   RewriteEngine On
   RewriteBase /
 
-  # Eski Flutter SPA -> PHP
-  RewriteRule ^index\.html$ /index.php [R=302,L]
+  # Eski Flutter / Python API kalintilari — kaldirildi
+  RewriteRule ^(main\.dart\.js|flutter\.js|flutter_bootstrap\.js|flutter_service_worker\.js|manifest\.json|version\.json)$ - [R=410,L]
+  RewriteRule ^api(/|$) - [R=410,L]
+  RewriteRule ^php/proxy\.php$ - [R=410,L]
+
+  # Eski index.html yer imi
+  RewriteRule ^index\.html$ /index.php [R=301,L]
 
   RewriteRule \.php$ - [L]
 

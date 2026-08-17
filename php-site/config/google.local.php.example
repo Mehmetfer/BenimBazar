@@ -6,7 +6,7 @@ return [
     'client_secret' => 'GOCSPX-xxxx',
     // redirect_uri otomatik: config/app.php url + /auth/google-callback.php
     //
-    // Google Cloud Console -> Credentials -> Web application (CHANGE X Web):
+    // Google Cloud Console -> Credentials -> Web application (BenimBazar Web):
     // https://console.cloud.google.com/apis/credentials?project=enduring-honor-435820-v7
     //
     // Authorized JavaScript origins (TAM):
