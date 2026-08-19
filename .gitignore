@@ -16,6 +16,8 @@ _live_zip_extract/
 # Generated deploy staging
 deploy-pack/
 *.zip
+backups/*.zip
+backups/_staging-*/
 
 # PHP runtime
 php-site/uploads/*

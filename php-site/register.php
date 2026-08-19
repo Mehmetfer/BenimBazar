@@ -48,24 +48,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($errors !== []) {
-        cx_flash('error', implode(' ', $errors));
-        cx_redirect('/register.php?country=' . rawurlencode($country));
-    }
+        $registerError = implode(' ', $errors);
+        $registerPrefill = compact('username', 'email', 'phone', 'city', 'country');
+        // hata: redirect yok, değerleri koru — aşağıda form tekrar çizilir
+    } else {
 
     try {
         ListingSchemaService::ensureUserColumns();
     } catch (Throwable $e) {
-        cx_flash('error', 'Veritabani guncellemesi gerekli: ' . $e->getMessage());
-        cx_redirect('/register.php?country=' . rawurlencode($country));
+        $registerError = 'Veritabani guncellemesi gerekli: ' . $e->getMessage();
+        $registerPrefill = compact('username', 'email', 'phone', 'city', 'country');
     }
 
+    if (!isset($registerError)) {
     $pdo = Database::pdo();
     $exists = $pdo->prepare('SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1');
     $exists->execute([$username, $email]);
     if ($exists->fetch()) {
-        cx_flash('error', 'Bu kullanici adi veya e-posta zaten kayitli.');
-        cx_redirect('/register.php?country=' . rawurlencode($country));
+        $registerError = 'Bu kullanici adi veya e-posta zaten kayitli.';
+        $registerPrefill = compact('username', 'email', 'phone', 'city', 'country');
     }
+    }
+    if (!isset($registerError)) {
 
     $now = microtime(true);
     $hash = Auth::hashPassword($password);
@@ -83,39 +87,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              VALUES (?,?,?,?,?,?,?,?)'
         )->execute([$username, $hash, 'user', $country, $email, $phone, $city, $now]);
     } catch (Throwable $e) {
-        cx_flash('error', 'Kayit basarisiz: ' . $e->getMessage() . ' — Superadmin /migrate-user-columns.php?secret=... calistirin veya phpMyAdmin: ALTER TABLE users ADD country VARCHAR(8) NOT NULL DEFAULT \'tr\';');
-        cx_redirect('/register.php?country=' . rawurlencode($country));
+        $registerError = 'Kayit basarisiz: ' . $e->getMessage();
+        $registerPrefill = compact('username', 'email', 'phone', 'city', 'country');
     }
 
-    $uid = (int) $pdo->lastInsertId();
-    try {
-        $pdo->prepare('UPDATE users SET country = ?, email = ?, phone = ?, city = ? WHERE id = ?')
-            ->execute([$country, $email, $phone, $city, $uid]);
-    } catch (Throwable) {
+    if (!isset($registerError)) {
+        $uid = (int) $pdo->lastInsertId();
         try {
-            $pdo->prepare('UPDATE users SET country = ?, email = ? WHERE id = ?')
-                ->execute([$country, $email, $uid]);
+            $pdo->prepare('UPDATE users SET country = ?, email = ?, phone = ?, city = ? WHERE id = ?')
+                ->execute([$country, $email, $phone, $city, $uid]);
         } catch (Throwable) {
-            // ignore
+            try {
+                $pdo->prepare('UPDATE users SET country = ?, email = ? WHERE id = ?')
+                    ->execute([$country, $email, $uid]);
+            } catch (Throwable) {}
         }
-    }
 
-    $token = Auth::newSession($uid);
-    Auth::setTokenCookie($token);
-    cx_flash('ok', $country === 'kktc'
-        ? 'Hesap olusturuldu. Simdi telefonunuzu dogrulayin.'
-        : 'Hesap olusturuldu. Simdi telefonunuzu dogrulayin.');
-    cx_redirect('/verify-phone.php');
+        $token = Auth::newSession($uid);
+        Auth::setTokenCookie($token);
+        cx_flash('ok', 'Hesap olusturuldu. Simdi telefonunuzu dogrulayin.');
+        cx_redirect('/verify-phone.php');
+    } // !isset($registerError) — insert ok
+    } // !isset($registerError) — pre-insert check
+    } // $errors === [] else
 }
 
 $googleOn = cx_google_enabled();
-$preCountry = cx_normalize_country((string) ($_GET['country'] ?? 'tr'));
+$preCountry = cx_normalize_country((string) ($registerPrefill['country'] ?? $_GET['country'] ?? 'tr'));
+$pre = $registerPrefill ?? [];
 
 ob_start();
 ?>
 <p style="margin:0 0 16px"><a class="link-gold" href="/index.php">← Ilanlara don</a></p>
 <?php $compact = false; require __DIR__ . '/views/partials/brand.php'; ?>
 <h1 style="text-align:center;font-size:22px;font-weight:800;margin:24px 0 20px">Kayit ol</h1>
+
+<?php if (isset($registerError)): ?>
+<div class="alert alert-error" style="margin-bottom:16px"><?= cx_e($registerError) ?></div>
+<?php endif; ?>
 
 <?php if ($googleOn): ?>
 <a class="btn-google" id="google_register_btn" href="/auth/google-login.php?next=<?= rawurlencode($preCountry === 'kktc' ? '/index.php?region=kktc' : '/index.php?region=all') ?>&country=<?= cx_e($preCountry) ?>">
@@ -130,7 +139,7 @@ ob_start();
   <p class="auth-country__label">Nereden kayit oluyorsunuz? *</p>
   <div class="auth-country__flags" role="radiogroup" aria-label="Ulke / bolge">
     <label class="auth-country__opt">
-      <input type="radio" name="country" value="kktc" <?= $preCountry === 'kktc' ? 'checked' : '' ?> required>
+      <input type="radio" name="country" value="kktc" <?= ($pre['country'] ?? $preCountry) === 'kktc' ? 'checked' : '' ?> required>
       <span class="auth-country__card">
         <svg class="site-flags__svg" viewBox="0 0 36 24" width="40" height="26" aria-hidden="true">
           <rect width="36" height="24" fill="#fff"/>
@@ -145,7 +154,7 @@ ob_start();
       </span>
     </label>
     <label class="auth-country__opt">
-      <input type="radio" name="country" value="tr" <?= $preCountry === 'tr' ? 'checked' : '' ?> required>
+      <input type="radio" name="country" value="tr" <?= ($pre['country'] ?? $preCountry) === 'tr' ? 'checked' : '' ?> required>
       <span class="auth-country__card">
         <svg class="site-flags__svg" viewBox="0 0 36 24" width="40" height="26" aria-hidden="true">
           <rect width="36" height="24" fill="#e30a17"/>
@@ -160,17 +169,17 @@ ob_start();
   </div>
 
   <label>Kullanici adi *</label>
-  <input name="username" required minlength="3" autocomplete="username" maxlength="64">
+  <input name="username" required minlength="3" autocomplete="username" maxlength="64" value="<?= cx_e((string) ($pre['username'] ?? '')) ?>">
 
   <label>E-posta *</label>
-  <input name="email" type="email" required autocomplete="email" placeholder="ornek@mail.com">
+  <input name="email" type="email" required autocomplete="email" placeholder="ornek@mail.com" value="<?= cx_e((string) ($pre['email'] ?? '')) ?>">
 
   <label>GSM *</label>
-  <input name="phone" type="tel" required autocomplete="tel" placeholder="0533 123 45 67" inputmode="tel">
+  <input name="phone" type="tel" required autocomplete="tel" placeholder="0533 123 45 67" inputmode="tel" value="<?= cx_e((string) ($pre['phone'] ?? '')) ?>">
   <p class="auth-hint" style="margin-top:-8px">Kayit sonrasi SMS veya WhatsApp ile dogrulama yapilir.</p>
 
   <label>Konum / sehir *</label>
-  <input name="city" required autocomplete="address-level2" placeholder="<?= $preCountry === 'kktc' ? 'Girne / Mağusa / Lefkoşa' : 'İstanbul / Ankara' ?>" id="register_city">
+  <input name="city" required autocomplete="address-level2" placeholder="<?= $preCountry === 'kktc' ? 'Girne / Mağusa / Lefkoşa' : 'İstanbul / Ankara' ?>" id="register_city" value="<?= cx_e((string) ($pre['city'] ?? '')) ?>">
 
   <label>Sifre *</label>
   <input name="password" type="password" required minlength="6" autocomplete="new-password">

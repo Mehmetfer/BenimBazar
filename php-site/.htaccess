@@ -1,4 +1,4 @@
-# BenimBazar — PHP + MySQL (Flutter / REST API yok)
+# BenimBazar — PHP + MySQL + Mobil REST API (/api/v1/)
 DirectoryIndex index.php
 
 <IfModule mod_php.c>
@@ -14,10 +14,24 @@ DirectoryIndex index.php
   RewriteEngine On
   RewriteBase /
 
-  # Eski Flutter / Python API kalintilari — kaldirildi
+  # Eski Flutter / Python dosya kalıntıları
   RewriteRule ^(main\.dart\.js|flutter\.js|flutter_bootstrap\.js|flutter_service_worker\.js|manifest\.json|version\.json)$ - [R=410,L]
-  RewriteRule ^api(/|$) - [R=410,L]
   RewriteRule ^php/proxy\.php$ - [R=410,L]
+
+  # Mobil REST API — /api/v1/* doğrudan PHP dosyalarına gider
+  RewriteRule ^api/v1/auth/login/?$         api/v1/auth/login.php [L,QSA]
+  RewriteRule ^api/v1/auth/register/?$      api/v1/auth/register.php [L,QSA]
+  RewriteRule ^api/v1/auth/logout/?$        api/v1/auth/logout.php [L,QSA]
+  RewriteRule ^api/v1/auth/me/?$            api/v1/auth/me.php [L,QSA]
+  RewriteRule ^api/v1/listings/?$           api/v1/listings/index.php [L,QSA]
+  RewriteRule ^api/v1/listings/detail/?$    api/v1/listings/detail.php [L,QSA]
+  RewriteRule ^api/v1/listings/favorites/?$ api/v1/listings/favorites.php [L,QSA]
+  RewriteRule ^api/v1/listings/my/?$        api/v1/listings/my.php [L,QSA]
+  RewriteRule ^api/v1/messages/?$           api/v1/messages/index.php [L,QSA]
+  RewriteRule ^api/v1/user/notifications/?$ api/v1/user/notifications.php [L,QSA]
+  RewriteRule ^api/v1/user/profile/?$       api/v1/user/profile.php [L,QSA]
+  # Bilinmeyen /api/v1/* — 404
+  RewriteRule ^api/v1/ - [R=404,L]
 
   # Eski index.html yer imi
   RewriteRule ^index\.html$ /index.php [R=301,L]

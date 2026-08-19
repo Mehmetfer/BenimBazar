@@ -84,4 +84,12 @@ final class SeoSettingsService
             throw new \RuntimeException('SEO ayarları kaydedilemedi.');
         }
     }
+
+    public static function reset(): void
+    {
+        $file = self::filePath();
+        if (is_file($file) && !@unlink($file)) {
+            throw new \RuntimeException('SEO ayarları sıfırlanamadı.');
+        }
+    }
 }

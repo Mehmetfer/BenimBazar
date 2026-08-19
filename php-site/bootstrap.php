@@ -57,6 +57,7 @@ require_once __DIR__ . '/app/Helpers/price-drop.php';
 require_once __DIR__ . '/app/Helpers/price-history.php';
 require_once __DIR__ . '/app/Helpers/gallery-hours.php';
 require_once __DIR__ . '/app/Helpers/market-compare.php';
+require_once __DIR__ . '/app/Helpers/feed-ads.php';
 require_once __DIR__ . '/app/Helpers/vehicle-commercial.php';
 require_once __DIR__ . '/app/Helpers/vehicle-model-catalog-data.php';
 require_once __DIR__ . '/app/Helpers/vehicle-models.php';

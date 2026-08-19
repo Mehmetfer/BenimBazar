@@ -115,13 +115,35 @@ $bodyClass = $bodyClass ?? '';
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/style.css?v=20260818mkt1">
+  <link rel="stylesheet" href="/assets/style.css?v=20260819splash">
   <style>
     body{margin:0;background:var(--bg);color:var(--ink);font-family:Montserrat,system-ui,sans-serif}
     a{color:var(--gold)}
   </style>
 </head>
 <body class="<?= cx_e(trim($bodyClass)) ?>">
+<div id="cx-splash" class="cx-splash" aria-hidden="true">
+  <img class="cx-splash__logo" src="/assets/branding/logo-splash.png" alt="">
+</div>
+<script>
+(function(){
+  var splash = document.getElementById('cx-splash');
+  if (!splash) { return; }
+  var key = 'cx_splash_seen';
+  try {
+    if (sessionStorage.getItem(key)) {
+      splash.style.display = 'none';
+      return;
+    }
+    sessionStorage.setItem(key, '1');
+  } catch(e) {}
+  splash.classList.add('is-visible');
+  setTimeout(function () {
+    splash.classList.add('is-done');
+    setTimeout(function () { splash.style.display = 'none'; }, 500);
+  }, 1800);
+})();
+</script>
 <button type="button" class="cx-theme-toggle" id="cx-theme-toggle" data-theme-state="light" aria-label="Karanlık moda geç" title="Karanlık mod">
   <svg data-icon="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
     <circle cx="12" cy="12" r="4"/>

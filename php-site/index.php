@@ -461,37 +461,20 @@ if ($error !== null) {
 
 <?php
 
+  $feedAds = cx_feed_ads_for_grid($user, $createHref);
+  $feedAdInsertAt = cx_feed_ad_insert_after() + 1;
   $ctaInserted = false;
-
   $i = 0;
 
   foreach ($listings as $item):
 
     $i++;
 
-    if (!$ctaInserted && $i === 5):
+    if (!$ctaInserted && $feedAds !== [] && $i === $feedAdInsertAt):
 
       $ctaInserted = true;
 
-?>
-
-  <article class="market-card market-card--cta">
-
-    <p class="market-card__cta-text">
-
-      Ürünlerini burada görmek ister misin? BenimBazar'da yerini al — al, sat, kazançlı çık!
-
-    </p>
-
-    <a class="market-card__cta-btn" href="<?= $user ? cx_e($createHref) : cx_login_url($createHref, 'İlan vermek için giriş yapın') ?>">
-
-      İlan ver
-
-    </a>
-
-  </article>
-
-<?php
+      require __DIR__ . '/views/partials/market-feed-ad-slot.php';
 
     endif;
 
@@ -597,23 +580,9 @@ if ($error !== null) {
 
 <?php endforeach; ?>
 
-<?php if (!$ctaInserted): ?>
+<?php if (!$ctaInserted && $feedAds !== []): ?>
 
-  <article class="market-card market-card--cta">
-
-    <p class="market-card__cta-text">
-
-      Ürünlerini burada görmek ister misin? BenimBazar'da yerini al — al, sat, kazançlı çık!
-
-    </p>
-
-    <a class="market-card__cta-btn" href="<?= $user ? cx_e($createHref) : cx_login_url($createHref, 'İlan vermek için giriş yapın') ?>">
-
-      İlan ver
-
-    </a>
-
-  </article>
+  <?php require __DIR__ . '/views/partials/market-feed-ad-slot.php'; ?>
 
 <?php endif; ?>
 
@@ -795,6 +764,9 @@ function cxBrandLogoFallback(img) {
 }
 
 $content = ob_get_clean();
+if (!empty(cx_feed_ads_settings()['enabled'])) {
+    $content .= '<script src="/assets/feed-ad-slot.js?v=1" defer></script>';
+}
 
 if ($seoRoute !== null) {
     $seoMeta = cx_seo_meta_for_route($seoRoute, isset($listings) ? count($listings) : 0);

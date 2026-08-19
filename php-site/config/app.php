@@ -116,4 +116,13 @@ return [
         'default_description' => 'BenimBazar ile Türkiye ve KKTC\'de otomobil, motosiklet, bisiklet ve ticari araç ilanlarını keşfedin. Araç ilanı verin, satın veya takas seçeneklerini değerlendirin.',
         'search_url_template' => '/index.php?q={search_term_string}',
     ],
+    /**
+     * Ana sayfa ilan grid reklam slotu.
+     * sponsored: storage/feed-ads.json veya buradan — kullanici/sponsor reklamlari.
+     */
+    'feed_ads' => [
+        'enabled' => true,
+        'insert_after' => 4,
+        'rotate_interval_ms' => 7000,
+    ],
 ];

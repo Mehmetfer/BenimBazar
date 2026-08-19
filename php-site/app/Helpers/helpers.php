@@ -2091,7 +2091,9 @@ function cx_listing_characteristics(array $item, int $no, bool $isSale): array
         }
         $rows[] = ['label' => $label, 'value' => (string) $val];
     }
-    $rows[] = ['label' => 'İlan no', 'value' => (string) $no];
+    if (!cx_is_vehicle_listing($item)) {
+        $rows[] = ['label' => 'İlan no', 'value' => (string) $no];
+    }
     $sub = trim((string) ($item['subcategory'] ?? ''));
     $cat = trim((string) ($item['category'] ?? ''));
     if ($sub !== '') {

@@ -230,10 +230,21 @@ $listingBreadcrumbs = $listingBreadcrumbs ?? [];
       <div class="listing-detail__body">
 
       <?php if ($isVehicle): ?>
+      <?php
+        $specMain = [];
+        $specColor = null;
+        foreach ($quickSpecs as $spec) {
+            if (($spec['label'] ?? '') === 'Renk') {
+                $specColor = $spec;
+            } else {
+                $specMain[] = $spec;
+            }
+        }
+      ?>
 
       <div class="listing-price-spec" aria-label="Araç özellikleri">
 
-        <?php foreach ($quickSpecs as $spec): ?>
+        <?php foreach ($specMain as $spec): ?>
 
           <div class="listing-price-spec__item">
 
@@ -250,6 +261,34 @@ $listingBreadcrumbs = $listingBreadcrumbs ?? [];
           </div>
 
         <?php endforeach; ?>
+
+        <div class="listing-price-spec__item listing-price-spec__item--footer">
+
+          <?php if ($specColor !== null): ?>
+
+            <div class="listing-price-spec__footer-spec">
+
+              <span class="listing-price-spec__icon" aria-hidden="true"><?= $specColor['icon'] ?></span>
+
+              <div class="listing-price-spec__body">
+
+                <div class="listing-price-spec__label"><?= cx_e($specColor['label']) ?></div>
+
+                <div class="listing-price-spec__value"><?= cx_e($specColor['value']) ?></div>
+
+              </div>
+
+            </div>
+
+          <?php else: ?>
+
+            <span class="listing-price-spec__footer-spacer" aria-hidden="true"></span>
+
+          <?php endif; ?>
+
+          <div class="listing-price-spec__ilan-no">İLAN NO: <span>#<?= (int) $no ?></span></div>
+
+        </div>
 
       </div>
 
