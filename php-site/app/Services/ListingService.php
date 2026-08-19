@@ -60,7 +60,9 @@ final class ListingService
 
         bool $includeSold = false,
 
-        string $region = ''
+        string $region = '',
+        string $kktcCity = '',
+        string $sort = 'new'
 
     ): array {
 
@@ -121,13 +123,23 @@ final class ListingService
 
         }
 
-        [$regionSql, $regionArgs] = cx_region_sql($region);
+        [$regionSql, $regionArgs] = cx_region_sql($region, 'l', $kktcCity);
         $sql .= $regionSql;
         foreach ($regionArgs as $ra) {
             $args[] = $ra;
         }
 
-        $sql .= ' ORDER BY l.created_at DESC LIMIT ' . $this->feedLimit;
+        [$qualitySql, $qualityArgs] = $this->feedQualitySql($subEntry !== null);
+        $sql .= $qualitySql;
+        foreach ($qualityArgs as $qa) {
+            $args[] = $qa;
+        }
+
+        $fetchLimit = cx_listing_sort_needs_expanded_fetch($sort)
+            ? min(200, $this->feedLimit * 2)
+            : $this->feedLimit;
+
+        $sql .= ' ORDER BY l.created_at DESC LIMIT ' . $fetchLimit;
 
         $stmt = $this->pdo->prepare($sql);
 
@@ -135,9 +147,16 @@ final class ListingService
 
         $rows = $stmt->fetchAll();
 
+        $rows = $this->filterFeedQualityRows($rows);
 
+        $rows = $this->enrichMany($rows, $viewerId);
 
-        return $this->enrichMany($rows, $viewerId);
+        if (cx_listing_sort_needs_php($sort)) {
+            $rows = cx_listing_sort_items($rows, $sort);
+            $rows = array_slice($rows, 0, $this->feedLimit);
+        }
+
+        return $rows;
 
     }
 
@@ -151,7 +170,7 @@ final class ListingService
 
      */
 
-    public function vehicleBrowseFeed(?string $q, ?int $viewerId, string $veh, array $filters, bool $includeSold = false, string $region = ''): array
+    public function vehicleBrowseFeed(?string $q, ?int $viewerId, string $veh, array $filters, bool $includeSold = false, string $region = '', string $kktcCity = '', string $sort = 'new'): array
 
     {
 
@@ -218,10 +237,16 @@ final class ListingService
 
         }
 
-        [$regionSql, $regionArgs] = cx_region_sql($region);
+        [$regionSql, $regionArgs] = cx_region_sql($region, 'l', $kktcCity);
         $sql .= $regionSql;
         foreach ($regionArgs as $ra) {
             $args[] = $ra;
+        }
+
+        [$qualitySql, $qualityArgs] = $this->feedQualitySql(true);
+        $sql .= $qualitySql;
+        foreach ($qualityArgs as $qa) {
+            $args[] = $qa;
         }
 
         $sql .= ' ORDER BY l.created_at DESC LIMIT ' . min(200, $this->feedLimit * 2);
@@ -232,7 +257,7 @@ final class ListingService
 
         $rows = $stmt->fetchAll();
 
-
+        $rows = $this->filterFeedQualityRows($rows);
 
         $out = [];
 
@@ -254,7 +279,9 @@ final class ListingService
 
         }
 
-
+        if (cx_listing_sort_needs_php($sort)) {
+            $out = cx_listing_sort_items($out, $sort);
+        }
 
         return array_slice($out, 0, $this->feedLimit);
 
@@ -264,7 +291,7 @@ final class ListingService
 
     /** @return array<string,int> */
 
-    public function vehicleBrandCounts(string $veh, ?string $commercialType = null): array
+    public function vehicleBrandCounts(string $veh, ?string $commercialType = null, string $region = '', string $kktcCity = ''): array
 
     {
 
@@ -300,9 +327,13 @@ final class ListingService
 
         }
 
+        [$regionSql, $regionArgs] = cx_region_sql($region, 'l', $kktcCity);
+        $sql .= $regionSql;
+        foreach ($regionArgs as $ra) {
+            $args[] = $ra;
+        }
 
-
-        $sql .= ' ORDER BY l.created_at DESC LIMIT ' . $this->feedLimit;
+        $sql .= ' ORDER BY l.created_at DESC LIMIT ' . min(200, $this->feedLimit * 2);
 
         $stmt = $this->pdo->prepare($sql);
 
@@ -536,6 +567,60 @@ final class ListingService
 
 
 
+    /** @return list<array<string,mixed>> */
+    public function findSimilarPublic(array $item, ?int $viewerId, ?int $limit = null): array
+    {
+        if (!cx_similar_listings_enabled()) {
+            return [];
+        }
+
+        $cfg = cx_similar_listings_settings();
+        $limit = $limit ?? $cfg['limit'];
+        $attrs = cx_listing_attrs($item);
+        $attrs['_title'] = (string) ($item['title'] ?? '');
+        $excludeId = (int) ($item['id'] ?? 0);
+        $matches = cx_listing_find_similar_public($attrs, $excludeId, $limit);
+        if ($matches === []) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($matches as $match) {
+            $ids[] = (int) ($match['id'] ?? 0);
+        }
+        $ids = array_values(array_filter($ids, static fn (int $v): bool => $v > 0));
+        if ($ids === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $this->pdo->prepare(
+            "SELECT l.*, u.username AS owner_username
+             FROM trade_listings l
+             JOIN users u ON u.id = l.owner_id
+             WHERE l.id IN ($placeholders)"
+        );
+        $stmt->execute($ids);
+
+        $rowsById = [];
+        foreach ($stmt->fetchAll() ?: [] as $row) {
+            if (is_array($row)) {
+                $rowsById[(int) $row['id']] = $row;
+            }
+        }
+
+        $ordered = [];
+        foreach ($ids as $lid) {
+            if (isset($rowsById[$lid])) {
+                $ordered[] = $rowsById[$lid];
+            }
+        }
+
+        return $this->enrichRows($ordered, $viewerId);
+    }
+
+
+
     /** @return array<string,mixed>|null */
 
     public function findById(int $id, ?int $viewerId = null): ?array
@@ -545,7 +630,7 @@ final class ListingService
         try {
             $stmt = $this->pdo->prepare(
                 'SELECT l.*, u.username AS owner_username, u.role AS owner_role,
-                        u.avatar_url AS owner_avatar_url, u.change_score
+                        u.avatar_url AS owner_avatar_url, u.change_score, u.phone_verified_at AS owner_phone_verified_at
                  FROM trade_listings l JOIN users u ON u.id = l.owner_id WHERE l.id = ?'
             );
             $stmt->execute([$id]);
@@ -715,6 +800,44 @@ final class ListingService
 
     }
 
+    /** @return array{0:string,1:list<string>} */
+    private function feedQualitySql(bool $subcategoryAlreadyFiltered): array
+    {
+        if (!cx_listing_quality_enabled() || !cx_listing_quality_settings()['feed_require_vehicle_attrs']) {
+            return ['', []];
+        }
+
+        $extraArgs = [];
+        $sql = " AND l.category = 'Araçlar'";
+        if (!$subcategoryAlreadyFiltered) {
+            $labels = cx_listing_quality_vehicle_subcategories();
+            if ($labels !== []) {
+                $sql .= ' AND l.subcategory IN (' . implode(',', array_fill(0, count($labels), '?')) . ')';
+                foreach ($labels as $label) {
+                    $extraArgs[] = $label;
+                }
+            }
+        }
+        $sql .= " AND l.attrs_json IS NOT NULL AND TRIM(l.attrs_json) <> '' AND l.attrs_json <> '[]'";
+
+        return [$sql, $extraArgs];
+    }
+
+    /** @param list<array<string,mixed>> $rows @return list<array<string,mixed>> */
+    private function filterFeedQualityRows(array $rows): array
+    {
+        if (!cx_listing_quality_enabled()) {
+            return $rows;
+        }
+
+        $out = [];
+        foreach ($rows as $row) {
+            if (cx_listing_passes_feed_quality($row)) {
+                $out[] = $row;
+            }
+        }
+
+        return $out;
+    }
+
 }
-
-

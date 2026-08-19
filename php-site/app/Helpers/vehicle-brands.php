@@ -317,15 +317,15 @@ function cx_listing_vehicle_make(array $item, ?string $veh = null): string
 }
 
 /** @return array<string,int> */
-function cx_vehicle_brand_counts(string $veh, ?string $commercialType = null): array
+function cx_vehicle_brand_counts(string $veh, ?string $commercialType = null, string $region = '', string $kktcCity = ''): array
 {
     static $cache = [];
-    $key = $veh . '|' . (string) $commercialType;
+    $key = $veh . '|' . (string) $commercialType . '|' . $region . '|' . $kktcCity;
     if (isset($cache[$key])) {
         return $cache[$key];
     }
     $svc = new ListingService();
-    $cache[$key] = $svc->vehicleBrandCounts($veh, $commercialType);
+    $cache[$key] = $svc->vehicleBrandCounts($veh, $commercialType, $region, $kktcCity);
     return $cache[$key];
 }
 
@@ -338,7 +338,12 @@ function cx_vehicle_brand_picker_data(string $veh, array $filters): array
     $commercialType = ($veh === 'ticari' && !empty($filters['commercial_type']))
         ? (string) $filters['commercial_type']
         : null;
-    $counts = cx_vehicle_brand_counts($veh, $commercialType);
+    $counts = cx_vehicle_brand_counts(
+        $veh,
+        $commercialType,
+        cx_region_from_request(null),
+        cx_kktc_city_from_request()
+    );
     $selected = [];
     $raw = $filters['make'] ?? [];
     if (!is_array($raw)) {

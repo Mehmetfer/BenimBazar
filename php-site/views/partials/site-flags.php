@@ -2,7 +2,9 @@
 declare(strict_types=1);
 $regionActive = cx_region_from_request($user ?? cx_current_user());
 $explicitRegion = strtolower(trim((string) ($_GET['region'] ?? '')));
-$kktcHref = '/index.php?region=kktc';
+$kktcParams = cx_region_query_params($user ?? null);
+unset($kktcParams['city']);
+$kktcHref = '/index.php?' . http_build_query(array_merge(['region' => 'kktc'], $kktcParams), '', '&', PHP_QUERY_RFC3986);
 $trHref = '/index.php?region=all';
 $kktcOn = $regionActive === 'kktc';
 $trOn = $explicitRegion === 'all' || $explicitRegion === 'tr' || ($regionActive === '' && $explicitRegion !== 'kktc');

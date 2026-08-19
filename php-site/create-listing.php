@@ -10,6 +10,10 @@ use App\Services\ListingWriteService;
 
 cx_bootstrap();
 $user = cx_require_user();
+if (cx_phone_verify_required() && !cx_user_phone_verified($user)) {
+    cx_flash('error', 'Ilan vermek icin telefon dogrulamasi gerekli.');
+    cx_redirect('/verify-phone.php');
+}
 $app = cx_app_config();
 $userIsKktc = cx_user_is_kktc($user);
 $quota = cx_user_listing_quota($user);
@@ -30,7 +34,7 @@ if ($prefillSegment !== '' && $prefillSubcat === '') {
 $formError = null;
 $prefillForm = [];
 $formTitle = '';
-$formDescription = '';
+$formDescription = cx_listing_default_description();
 $formLocation = '';
 $formWanted = '';
 $formMode = $userIsKktc ? 'SALE' : 'TRADE';
@@ -155,6 +159,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
+            $qualityErr = cx_listing_quality_validate([
+                'title' => trim((string) ($_POST['title'] ?? '')),
+                'description' => trim((string) ($_POST['description'] ?? '')),
+                'listing_mode' => $mode,
+                'price_tl' => $priceTl,
+                'price_amount' => $userIsKktc ? (float) ($_POST['price_amount'] ?? 0) : null,
+                'photo_urls' => $photos,
+                'attrs_json' => $attrs,
+                'location' => trim((string) ($_POST['location'] ?? '')),
+                'user_is_kktc' => $userIsKktc,
+            ]);
+            if ($qualityErr !== null) {
+                $formError = $qualityErr;
+                $cxPrefillCreateFromPost();
+            } else {
             try {
                 $writer = new ListingWriteService();
                 $id = $writer->create((int) $user['id'], [
@@ -176,6 +195,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Throwable $e) {
                 $formError = $e->getMessage();
             }
+            } // quality validate
             } // similar ack / create
         }
     }
@@ -230,7 +250,8 @@ ob_start();
   <input class="create-input" name="title" required maxlength="255" placeholder="Örn: Yamaha MT-07 2021 — 8.500 km" value="<?= cx_e($formTitle) ?>">
 
   <label>Açıklama</label>
-  <textarea class="create-input create-input--area" name="description" rows="4" required placeholder="Araç durumu, bakım geçmişi, aksesuarlar…"><?= cx_e($formDescription) ?></textarea>
+  <textarea class="create-input create-input--area" name="description" rows="4" required minlength="10" maxlength="5000"><?= cx_e($formDescription) ?></textarea>
+  <p class="muted" style="margin:4px 0 12px;font-size:12px">Klasik metni silebilirsiniz; en az 10 karakter yazın.</p>
 
   <label>Kategori</label>
   <select name="listing_subcat" id="listing_subcat" class="create-input" required>
@@ -259,7 +280,18 @@ ob_start();
   <div class="create-listing-step" data-listing-step="offer" hidden>
     <h3 class="create-listing-step__title">Satış / konum</h3>
     <label>Şehir</label>
-    <input class="create-input" name="location" placeholder="<?= $userIsKktc ? 'Girne / Mağusa / Lefkoşa' : 'İstanbul' ?>" value="<?= cx_e($formLocation) ?>">
+    <?php if ($userIsKktc): ?>
+      <?php require_once __DIR__ . '/app/Helpers/kktc-locations.php'; ?>
+      <select class="create-input" name="location" required>
+        <option value="">— Şehir seçin —</option>
+        <?php foreach (cx_kktc_cities() as $code => $row): ?>
+          <?php $cityLabel = (string) $row['label']; ?>
+          <option value="<?= cx_e($cityLabel) ?>"<?= $formLocation === $cityLabel ? ' selected' : '' ?>><?= cx_e($cityLabel) ?></option>
+        <?php endforeach; ?>
+      </select>
+    <?php else: ?>
+    <input class="create-input" name="location" placeholder="İstanbul" value="<?= cx_e($formLocation) ?>">
+    <?php endif; ?>
 
     <label>Mod</label>
     <select name="listing_mode" id="listing_mode" class="create-input">
@@ -280,11 +312,11 @@ ob_start();
         <option value="TRY"<?= $formPriceCurrency === 'TRY' ? ' selected' : '' ?>>Türk Lirası (₺)</option>
       </select>
       <label>Fiyat</label>
-      <input class="create-input" name="price_amount" type="number" min="0" step="1" placeholder="Örn: 12500" value="<?= cx_e($formPriceAmount) ?>">
+      <input class="create-input" name="price_amount" type="number" min="1" step="1" placeholder="Örn: 12500" value="<?= cx_e($formPriceAmount) ?>" data-quality-price>
       <input type="hidden" name="price_tl" id="price_tl_hidden" value="">
       <?php else: ?>
       <label>Fiyat (TL)</label>
-      <input class="create-input" name="price_tl" type="number" min="0" step="1" value="<?= cx_e($formPriceTl) ?>">
+      <input class="create-input" name="price_tl" type="number" min="1" step="1" value="<?= cx_e($formPriceTl) ?>" data-quality-price>
       <?php endif; ?>
       <label class="create-check"><input type="checkbox" name="price_negotiable" value="1"<?= $formPriceNegotiable ? ' checked' : '' ?>> Pazarlık yapılır</label>
     </div>
@@ -312,6 +344,14 @@ ob_start();
   </div>
 
   <div class="create-listing-step" data-listing-step="submit" hidden>
+    <?php if (cx_listing_quality_enabled()): ?>
+      <?php
+        $qualityPanelMode = 'create';
+        $qualityMinPhotos = cx_listing_quality_settings()['min_photos'];
+        require __DIR__ . '/views/partials/listing-quality-panel.php';
+      ?>
+    <?php endif; ?>
+
     <?php if ($needsSimilarAck): ?>
       <label class="create-check similar-listings__ack">
         <input type="checkbox" name="ack_similar" value="1" required>
@@ -329,6 +369,12 @@ window.cxVehicleFormPrefill = <?= json_encode($prefillForm, JSON_UNESCAPED_UNICO
 <script src="/assets/vehicle-form.js?v=3"></script>
 <script src="/assets/expertise-diagram.js?v=5"></script>
 <script src="/assets/listing-photos.js?v=1"></script>
+<?php if (cx_listing_quality_enabled()): ?>
+<script>
+window.cxListingQuality = <?= json_encode(cx_listing_quality_settings(), JSON_UNESCAPED_UNICODE) ?>;
+</script>
+<script src="/assets/create-listing-quality.js?v=2"></script>
+<?php endif; ?>
 <script>
 (function () {
   var modeSel = document.getElementById('listing_mode');

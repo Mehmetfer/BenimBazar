@@ -1,0 +1,54 @@
+{
+  "source": "kibrisarabaal.com",
+  "source_id": 1222,
+  "source_url": "https://kibrisarabaal.com/ilan/1222-2011-model-otomatik-toyota-vitz-326a57/",
+  "title": "2011 Model Otomatik Toyota Vitz",
+  "description": "Vade Olur, Takaslanabilir",
+  "location": "Girne ,  Karaoğlanoğlu",
+  "listed_at": "16 Ağustos 2026",
+  "listed_at_iso": "2026-08-16",
+  "price": {
+    "currency": "GBP",
+    "amount": 6999.0
+  },
+  "price_negotiable": true,
+  "subcategory": "Otomobil",
+  "segment": "otomobil",
+  "condition": "2.El",
+  "photo_urls": [
+    "https://kibrisarabaal.com/uploads/listings/1222/img_6a820341a84149.84358651.webp",
+    "https://kibrisarabaal.com/uploads/listings/1222/img_6a820342ddbe13.46483942.webp",
+    "https://kibrisarabaal.com/uploads/listings/1222/img_6a820344308fb4.19939431.webp",
+    "https://kibrisarabaal.com/uploads/listings/1222/img_6a8203454c6743.83793668.webp",
+    "https://kibrisarabaal.com/uploads/listings/1222/img_6a8203467c52c8.11797595.webp"
+  ],
+  "is_corporate": true,
+  "seller_key": "4x4-ozbek-motors",
+  "seller_name": "4X4 Ozbek Motors",
+  "seller_phone": "00",
+  "seller_type_label": "Kurumsal Galeri",
+  "seller_member_since": "",
+  "seller_member_date": "",
+  "seller_profile_url": "https://kibrisarabaal.com/galeri/4x4-ozbek-motors/",
+  "gallery_about": "",
+  "equipment": [],
+  "vehicle": {
+    "year": "2011",
+    "km": null,
+    "fuel": "Benzin",
+    "transmission": "Otomatik",
+    "body": "Hatchback 5 kapı",
+    "engine_cc": null,
+    "color": "Çelik Grisi",
+    "drive": "Sağ Direksiyon",
+    "make": "Toyota",
+    "model": "Vitz"
+  },
+  "local_photos": [
+    "kka_1222_0.webp",
+    "kka_1222_1.webp",
+    "kka_1222_2.webp",
+    "kka_1222_3.webp",
+    "kka_1222_4.webp"
+  ]
+}

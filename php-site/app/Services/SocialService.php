@@ -48,21 +48,29 @@ final class SocialService
         $st = $pdo->prepare('SELECT status FROM trade_listings WHERE id = ? LIMIT 1');
         $st->execute([$listingId]);
         $row = $st->fetch();
+        if (self::isFavorited($userId, $listingId)) {
+            $pdo->prepare('DELETE FROM listing_favorites WHERE user_id = ? AND listing_id = ?')
+                ->execute([$userId, $listingId]);
+
+            return ['favorited' => false, 'favorite_count' => self::favoriteCount($listingId)];
+        }
+
         if (!$row || !cx_listing_is_public((string) ($row['status'] ?? ''))) {
             throw new \RuntimeException('Bu ilan favorilere eklenemez.');
         }
 
-        if (self::isFavorited($userId, $listingId)) {
-            $pdo->prepare('DELETE FROM listing_favorites WHERE user_id = ? AND listing_id = ?')
-                ->execute([$userId, $listingId]);
-            $fav = false;
-        } else {
-            $pdo->prepare(
-                'INSERT IGNORE INTO listing_favorites (user_id, listing_id, created_at) VALUES (?,?,?)'
-            )->execute([$userId, $listingId, microtime(true)]);
-            $fav = true;
+        $pdo->prepare(
+            'INSERT IGNORE INTO listing_favorites (user_id, listing_id, created_at) VALUES (?,?,?)'
+        )->execute([$userId, $listingId, microtime(true)]);
+        $full = $pdo->prepare('SELECT * FROM trade_listings WHERE id = ? LIMIT 1');
+        $full->execute([$listingId]);
+        $listingRow = $full->fetch(\PDO::FETCH_ASSOC);
+        if (is_array($listingRow)) {
+            require_once __DIR__ . '/PriceDropAlertService.php';
+            (new PriceDropAlertService())->attachFavoriteSnapshot($userId, $listingId, $listingRow);
         }
-        return ['favorited' => $fav, 'favorite_count' => self::favoriteCount($listingId)];
+
+        return ['favorited' => true, 'favorite_count' => self::favoriteCount($listingId)];
     }
 
     /** @return list<array<string,mixed>> */

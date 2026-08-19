@@ -1,0 +1,54 @@
+{
+  "source": "kibrisarabaal.com",
+  "source_id": 1234,
+  "source_url": "https://kibrisarabaal.com/ilan/1234-2013-model-otomatik-mitsubishi-rvr-847188/",
+  "title": "2013 Model Otomatik Mitsubishi RVR",
+  "description": "-",
+  "location": "Girne ,  Karaoğlanoğlu",
+  "listed_at": "16 Ağustos 2026",
+  "listed_at_iso": "2026-08-16",
+  "price": {
+    "currency": "GBP",
+    "amount": 9999.0
+  },
+  "price_negotiable": false,
+  "subcategory": "Otomobil",
+  "segment": "otomobil",
+  "condition": "2.El (Plakasız)",
+  "photo_urls": [
+    "https://kibrisarabaal.com/uploads/listings/1234/img_6a82039fdfcd78.33768925.webp",
+    "https://kibrisarabaal.com/uploads/listings/1234/img_6a8203a0d98ba2.74428652.webp",
+    "https://kibrisarabaal.com/uploads/listings/1234/img_6a8203a1e2a594.42554288.webp",
+    "https://kibrisarabaal.com/uploads/listings/1234/img_6a8203a2b34768.00328200.webp",
+    "https://kibrisarabaal.com/uploads/listings/1234/img_6a8203a39a2d05.22748365.webp"
+  ],
+  "is_corporate": true,
+  "seller_key": "4x4-ozbek-motors",
+  "seller_name": "4X4 Ozbek Motors",
+  "seller_phone": "00",
+  "seller_type_label": "Kurumsal Galeri",
+  "seller_member_since": "",
+  "seller_member_date": "",
+  "seller_profile_url": "https://kibrisarabaal.com/galeri/4x4-ozbek-motors/",
+  "gallery_about": "",
+  "equipment": [],
+  "vehicle": {
+    "year": "2013",
+    "km": null,
+    "fuel": "Benzin",
+    "transmission": "Otomatik",
+    "body": "Suv",
+    "engine_cc": null,
+    "color": "Atlas Grisi",
+    "drive": "Sağ Direksiyon",
+    "make": "Mitsubishi",
+    "model": "RVR"
+  },
+  "local_photos": [
+    "kka_1234_0.webp",
+    "kka_1234_1.webp",
+    "kka_1234_2.webp",
+    "kka_1234_3.webp",
+    "kka_1234_4.webp"
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "source": "kibrisarabaal.com",
+  "source_id": 1215,
+  "source_url": "https://kibrisarabaal.com/ilan/1215-2015-model-otomatik-bmw-6-serisi-2e1d48/",
+  "title": "2015 Model Otomatik BMW 6 Serisi",
+  "description": "Vade Olur, Takaslanabilir",
+  "location": "Girne ,  Karaoğlanoğlu",
+  "listed_at": "16 Ağustos 2026",
+  "listed_at_iso": "2026-08-16",
+  "price": {
+    "currency": "GBP",
+    "amount": 27999.0
+  },
+  "price_negotiable": true,
+  "subcategory": "Otomobil",
+  "segment": "otomobil",
+  "condition": "2.El",
+  "photo_urls": [
+    "https://kibrisarabaal.com/uploads/listings/1215/img_6a8202f9dd7ba0.52399489.webp",
+    "https://kibrisarabaal.com/uploads/listings/1215/img_6a8202fb76fdd0.80564407.webp",
+    "https://kibrisarabaal.com/uploads/listings/1215/img_6a8202fcb329c8.16426760.webp",
+    "https://kibrisarabaal.com/uploads/listings/1215/img_6a8202fdf14ba4.88301667.webp",
+    "https://kibrisarabaal.com/uploads/listings/1215/img_6a8202ff508bb0.47180359.webp"
+  ],
+  "is_corporate": true,
+  "seller_key": "4x4-ozbek-motors",
+  "seller_name": "4X4 Ozbek Motors",
+  "seller_phone": "00",
+  "seller_type_label": "Kurumsal Galeri",
+  "seller_member_since": "",
+  "seller_member_date": "",
+  "seller_profile_url": "https://kibrisarabaal.com/galeri/4x4-ozbek-motors/",
+  "gallery_about": "",
+  "equipment": [],
+  "vehicle": {
+    "year": "2015",
+    "km": null,
+    "fuel": "Dizel",
+    "transmission": "Otomatik",
+    "body": "Sedan",
+    "engine_cc": "3000",
+    "color": "Beyaz",
+    "drive": "Sağ Direksiyon",
+    "make": "BMW 6",
+    "model": "Serisi"
+  },
+  "local_photos": [
+    "kka_1215_0.webp",
+    "kka_1215_1.webp",
+    "kka_1215_2.webp",
+    "kka_1215_3.webp",
+    "kka_1215_4.webp"
+  ]
+}

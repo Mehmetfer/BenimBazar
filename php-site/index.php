@@ -43,12 +43,35 @@ $veh = '';
 $vehicleBrowse = false;
 $showSold = false;
 $region = '';
+$kktcCity = '';
+$feedSort = 'date_desc';
+$seoRoute = null;
 
 
 
 try {
 
     cx_bootstrap();
+
+    $seoRoute = null;
+    if (cx_seo_landing_enabled() && !empty($_GET['__seo_path'])) {
+        $parsed = cx_seo_route_parse((string) $_GET['__seo_path']);
+        if ($parsed === null) {
+            http_response_code(404);
+            $title = 'Sayfa bulunamadı';
+            $layout = 'app';
+            $navActive = 'home';
+            $bodyClass = 'page-not-found';
+            ob_start();
+            echo '<section class="not-found"><h1>Sayfa bulunamadı</h1><p><a href="/index.php">Ana sayfaya dön</a></p></section>';
+            $content = ob_get_clean();
+            require __DIR__ . '/views/layout.php';
+            exit;
+        }
+        cx_seo_route_apply($parsed);
+        $seoRoute = $parsed;
+        unset($_GET['__seo_path']);
+    }
 
     $app = cx_app_config();
 
@@ -128,6 +151,8 @@ try {
     $showSold = !empty($_GET['show_sold']);
 
     $region = cx_region_from_request($user);
+    $kktcCity = cx_kktc_city_from_request();
+    $feedSort = cx_listing_sort_from_request();
 
     $svc = new ListingService($base);
 
@@ -147,7 +172,11 @@ try {
 
             $showSold,
 
-            $region
+            $region,
+
+            $kktcCity,
+
+            $feedSort
 
         );
 
@@ -165,7 +194,11 @@ try {
 
             $showSold,
 
-            $region
+            $region,
+
+            $kktcCity,
+
+            $feedSort
 
         );
 
@@ -226,7 +259,7 @@ if ($error !== null) {
     <?php endif; ?>
 
     <?php if (cx_is_vip_kurumsal($user)): ?>
-      <a class="link-gold" href="/gallery-panel.php">Galeri paneli</a>
+      <a class="link-gold" href="/gallery-panel.php">Mağaza paneli</a>
     <?php endif; ?>
 
     <a class="link-gold" href="/favorites.php">Favoriler</a>
@@ -247,10 +280,21 @@ if ($error !== null) {
 
 <?php require __DIR__ . '/views/partials/home-market.php'; ?>
 
+<?php if (!empty($region) && $region === 'kktc'): ?>
+  <?php require __DIR__ . '/views/partials/kktc-city-filter.php'; ?>
+<?php endif; ?>
+
 
 
 <?php if ($q !== '' && $galleryHits !== []): ?>
   <?php require __DIR__ . '/views/partials/home-galleries.php'; ?>
+<?php endif; ?>
+
+<?php if ($seoRoute !== null): ?>
+  <?php
+    $breadcrumbs = cx_seo_route_breadcrumbs($seoRoute);
+    require __DIR__ . '/views/partials/seo-breadcrumbs.php';
+  ?>
 <?php endif; ?>
 
 
@@ -261,7 +305,11 @@ if ($error !== null) {
   $vehicleBrowseStep = $vehicleBrowse ? cx_vehicle_browse_step($veh, $vehicleFilters) : 'listings';
   $feedTitle = 'Yeni öneriler';
   if (!empty($region) && $region === 'kktc') {
-      $feedTitle = 'KKTC · Girne / Mağusa / Sterlin (£) (' . $vehicleCount . ')';
+      require_once __DIR__ . '/app/Helpers/kktc-locations.php';
+      $cityLabel = cx_kktc_city_label($kktcCity);
+      $feedTitle = $cityLabel !== ''
+          ? 'KKTC · ' . $cityLabel . ' (' . $vehicleCount . ')'
+          : 'KKTC · Girne / Mağusa / Sterlin (£) (' . $vehicleCount . ')';
   } elseif ($vehicleBrowse) {
       if ($vehicleBrowseStep === 'type') {
           $feedTitle = 'Ticari Araç — tür seçin';
@@ -285,6 +333,10 @@ if ($error !== null) {
   } else {
       $label = cx_home_filter_label($subcat, '', $cat);
       $feedTitle = $label !== '' ? $label . ' (' . $vehicleCount . ')' : 'Yeni öneriler';
+  }
+  if ($seoRoute !== null && $vehicleBrowseStep === 'listings') {
+      $feedTitle = cx_seo_meta_for_route($seoRoute, $vehicleCount)['h1']
+          . ($vehicleCount > 0 ? ' (' . $vehicleCount . ')' : '');
   }
   $clearHref = $vehicleBrowse
       ? ($vehicleBrowseStep === 'model'
@@ -316,6 +368,17 @@ if ($error !== null) {
 
   <div class="home-market__feed-head">
     <h2 class="home-market__feed-title"><?= cx_e($feedTitle) ?></h2>
+    <div class="home-market__feed-tools">
+    <?php if (cx_listing_sort_enabled()): ?>
+      <label class="home-market__sort">
+        <span class="visually-hidden">Sıralama</span>
+        <select class="home-market__sort-select" aria-label="Sıralama" onchange="if(this.value){window.location.href=this.value;}">
+          <?php foreach (cx_listing_sort_options() as $sortCode => $sortLabel): ?>
+            <option value="<?= cx_e(cx_listing_sort_href($sortCode)) ?>"<?= $feedSort === $sortCode ? ' selected' : '' ?>><?= cx_e($sortLabel) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </label>
+    <?php endif; ?>
     <?php
       $soldQs = $_GET;
       if ($showSold) {
@@ -329,9 +392,22 @@ if ($error !== null) {
     ?>
     <a class="home-market__feed-clear" href="<?= cx_e($soldHref) ?>"><?= cx_e($soldLabel) ?></a>
     <?php if ($vehicleBrowse || $subcat !== '' || $cat !== 'TÜM TAKASLAR' || (!empty($region) && $region === 'kktc')): ?>
-      <a class="home-market__feed-clear" href="<?= cx_e((!empty($region) && $region === 'kktc' && !$vehicleBrowse && $subcat === '' && $cat === 'TÜM TAKASLAR') ? '/index.php' : $clearHref) ?>"><?php
-        if (!empty($region) && $region === 'kktc' && !$vehicleBrowse && $subcat === '' && $cat === 'TÜM TAKASLAR') {
+      <?php
+        $cityClearHref = '';
+        if (!empty($region) && $region === 'kktc' && $kktcCity !== '' && !$vehicleBrowse && $subcat === '' && $cat === 'TÜM TAKASLAR') {
+            $cityClearParams = cx_region_query_params();
+            unset($cityClearParams['city']);
+            $cityClearHref = '/index.php?' . http_build_query($cityClearParams, '', '&', PHP_QUERY_RFC3986);
+        }
+        $feedClearHref = (!empty($region) && $region === 'kktc' && !$vehicleBrowse && $subcat === '' && $cat === 'TÜM TAKASLAR' && $kktcCity === '')
+            ? cx_kktc_region_clear_href()
+            : ($cityClearHref !== '' ? $cityClearHref : $clearHref);
+      ?>
+      <a class="home-market__feed-clear" href="<?= cx_e($feedClearHref) ?>"><?php
+        if (!empty($region) && $region === 'kktc' && !$vehicleBrowse && $subcat === '' && $cat === 'TÜM TAKASLAR' && $kktcCity === '') {
             echo 'KKTC filtresini kaldır';
+        } elseif (!empty($region) && $region === 'kktc' && $kktcCity !== '' && !$vehicleBrowse && $subcat === '' && $cat === 'TÜM TAKASLAR') {
+            echo 'Şehir filtresini kaldır';
         } elseif ($vehicleBrowseStep === 'brand') {
             echo $veh === 'ticari' ? 'Türe dön' : 'Tümünü göster';
         } elseif ($vehicleBrowseStep === 'model') {
@@ -341,6 +417,7 @@ if ($error !== null) {
         }
       ?></a>
     <?php endif; ?>
+    </div>
   </div>
 
 
@@ -506,9 +583,9 @@ if ($error !== null) {
 
         <a class="market-card__action" href="/listing.php?id=<?= (int) $item['id'] ?>" title="Detay">👁</a>
 
-        <?php if ($user): ?>
+        <?php if ($user && cx_messages_enabled()): ?>
 
-        <a class="market-card__action" href="/messages.php" title="Mesaj">💬</a>
+        <a class="market-card__action" href="<?= cx_e(cx_message_listing_url((int) $item['id'])) ?>" title="Mesaj">💬</a>
 
         <?php endif; ?>
 
@@ -719,7 +796,21 @@ function cxBrandLogoFallback(img) {
 
 $content = ob_get_clean();
 
-$title = 'İlanlar';
+if ($seoRoute !== null) {
+    $seoMeta = cx_seo_meta_for_route($seoRoute, isset($listings) ? count($listings) : 0);
+    $title = $seoMeta['title'];
+    $metaDescription = $seoMeta['description'];
+    $canonicalUrl = $seoMeta['canonical'];
+    $jsonLd = $seoMeta['json_ld'];
+    $metaRobots = cx_seo_robots_index();
+} else {
+    $homeSeo = cx_seo_home_meta();
+    $title = $homeSeo['title'];
+    $titleStandalone = true;
+    $metaDescription = $homeSeo['description'];
+    $canonicalUrl = $homeSeo['canonical'];
+    $jsonLd = $homeSeo['json_ld'];
+}
 
 $layout = 'app';
 

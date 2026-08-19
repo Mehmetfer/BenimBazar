@@ -171,6 +171,25 @@ ob_start();
           <?php if ($rowHasSimilar): ?>
             <a class="admin-badge admin-badge--similar" href="/admin/listing-edit.php?id=<?= (int) $r['id'] ?>">Benzer?</a>
           <?php endif; ?>
+          <?php if (cx_listing_quality_enabled()): ?>
+            <?php
+              $rowQuality = cx_listing_quality_assess([
+                'title' => (string) ($r['title'] ?? ''),
+                'description' => (string) ($r['description'] ?? ''),
+                'listing_mode' => (string) ($r['listing_mode'] ?? 'TRADE'),
+                'price_tl' => $r['price_tl'] ?? null,
+                'photo_urls' => $r['photo_urls'] ?? '[]',
+                'attrs_json' => cx_listing_attrs($r),
+                'location' => (string) ($r['location'] ?? ''),
+                'user_is_kktc' => false,
+              ]);
+              $qClass = cx_listing_quality_score_class((int) $rowQuality['score']);
+            ?>
+            <span class="admin-badge admin-badge--quality admin-badge--quality-<?= cx_e($qClass) ?>">Kalite <?= (int) $rowQuality['score'] ?></span>
+            <?php foreach (cx_listing_quality_admin_flags($r) as $flag): ?>
+              <span class="admin-badge admin-badge--quality-flag"><?= cx_e($flag) ?></span>
+            <?php endforeach; ?>
+          <?php endif; ?>
           <?php if ($mode === 'SALE' && $price !== null && $price > 0): ?>
             <span class="admin-row__price"><?= cx_e(number_format($price, 0, ',', '.')) ?> TL</span>
           <?php else: ?>

@@ -25,8 +25,10 @@ if ($galleryHits === []) {
         $logo = cx_user_avatar_src((string) ($g['avatar_url'] ?? ''), $uploadsUrl);
         $city = trim((string) ($g['city'] ?? ''));
         $isVip = ((string) ($g['role'] ?? '')) === 'vip_kurumsal';
+        $verified = cx_gallery_is_verified($g);
         $st = is_array($g['stats'] ?? null) ? $g['stats'] : [];
         $listingN = (int) ($st['listings'] ?? 0);
+        $new30 = (int) ($st['new_last_30'] ?? 0);
         $url = (string) ($g['public_url'] ?? ('/galeri.php?id=' . $gid));
     ?>
     <a class="home-gallery-card<?= $isVip ? ' home-gallery-card--vip' : '' ?>" href="<?= cx_e($url) ?>">
@@ -40,12 +42,12 @@ if ($galleryHits === []) {
       <div class="home-gallery-card__body">
         <div class="home-gallery-card__top">
           <strong class="home-gallery-card__name"><?= cx_e($name) ?></strong>
-          <?php if ($isVip): ?><span class="home-gallery-card__badge">VIP</span><?php else: ?><span class="home-gallery-card__badge home-gallery-card__badge--corp">Kurumsal</span><?php endif; ?>
+          <?php if ($verified): ?><span class="home-gallery-card__badge">✓ Doğrulanmış</span><?php elseif ($isVip): ?><span class="home-gallery-card__badge">VIP</span><?php else: ?><span class="home-gallery-card__badge home-gallery-card__badge--corp">Kurumsal</span><?php endif; ?>
         </div>
         <?php if ($city !== ''): ?>
         <div class="home-gallery-card__meta">📍 <?= cx_e($city) ?></div>
         <?php endif; ?>
-        <div class="home-gallery-card__meta"><?= $listingN ?> yayındaki ilan · Mağazaya git →</div>
+        <div class="home-gallery-card__meta"><?= $listingN ?> aktif araç<?php if ($new30 > 0): ?> · <?= $new30 ?> yeni / 30g<?php endif; ?> · Mağazaya git →</div>
       </div>
     </a>
     <?php endforeach; ?>

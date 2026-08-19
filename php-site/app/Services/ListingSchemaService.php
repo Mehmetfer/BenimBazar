@@ -30,6 +30,7 @@ final class ListingSchemaService
             }
             // Her cagrida (idempotent): country/phone/city
             self::ensureUserProfileColumns($pdo);
+            self::ensurePriceHistory($pdo);
         } catch (Throwable) {
             // Kurulum / migrate
         }
@@ -46,6 +47,7 @@ final class ListingSchemaService
         $columns = [
             'country' => "VARCHAR(8) NOT NULL DEFAULT 'tr'",
             'phone' => 'VARCHAR(32) NULL DEFAULT NULL',
+            'phone_verified_at' => 'DOUBLE NULL DEFAULT NULL',
             'city' => 'VARCHAR(128) NULL DEFAULT NULL',
             'gallery_name' => 'VARCHAR(128) NULL DEFAULT NULL',
             'website' => 'VARCHAR(255) NULL DEFAULT NULL',
@@ -56,6 +58,7 @@ final class ListingSchemaService
             'email' => 'VARCHAR(255) NULL DEFAULT NULL',
             'vip_starts_at' => 'DATE NULL DEFAULT NULL',
             'vip_ends_at' => 'DATE NULL DEFAULT NULL',
+            'gallery_hours' => 'TEXT NULL DEFAULT NULL',
         ];
         foreach ($columns as $column => $definition) {
             if (self::columnExists($pdo, 'users', $column)) {
@@ -161,12 +164,84 @@ final class ListingSchemaService
             // listing_favorites
         }
 
+        self::ensurePriceDropAlerts($pdo);
+        self::ensurePriceHistory($pdo);
+
         self::ensureNotificationsTable($pdo);
 
         try {
             self::backfillPublishedDates($pdo);
         } catch (Throwable) {
             // backfill opsiyonel
+        }
+    }
+
+    public static function ensurePriceDropAlerts(?PDO $pdo = null): void
+    {
+        $pdo = $pdo ?? Database::pdo();
+        foreach ([
+            'alert_enabled' => 'TINYINT(1) NOT NULL DEFAULT 1',
+            'price_currency' => 'VARCHAR(8) NULL',
+            'price_amount' => 'DECIMAL(14,2) NULL',
+        ] as $col => $def) {
+            if (!self::columnExists($pdo, 'listing_favorites', $col)) {
+                try {
+                    $pdo->exec("ALTER TABLE listing_favorites ADD COLUMN `{$col}` {$def}");
+                } catch (Throwable) {
+                    // yetki / duplicate
+                }
+            }
+        }
+
+        try {
+            $pdo->exec(
+                'CREATE TABLE IF NOT EXISTS listing_price_drop_pending (
+                  listing_id INT UNSIGNED NOT NULL,
+                  old_currency VARCHAR(8) NOT NULL,
+                  old_amount DECIMAL(14,2) NOT NULL,
+                  new_currency VARCHAR(8) NOT NULL,
+                  new_amount DECIMAL(14,2) NOT NULL,
+                  old_photo_count INT UNSIGNED NOT NULL DEFAULT 0,
+                  new_photo_count INT UNSIGNED NOT NULL DEFAULT 0,
+                  created_at DOUBLE NOT NULL,
+                  PRIMARY KEY (listing_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+            );
+        } catch (Throwable) {
+            // yetki
+        }
+
+        foreach ([
+            'old_photo_count' => 'INT UNSIGNED NOT NULL DEFAULT 0',
+            'new_photo_count' => 'INT UNSIGNED NOT NULL DEFAULT 0',
+        ] as $col => $def) {
+            if (!self::columnExists($pdo, 'listing_price_drop_pending', $col)) {
+                try {
+                    $pdo->exec("ALTER TABLE listing_price_drop_pending ADD COLUMN `{$col}` {$def}");
+                } catch (Throwable) {
+                    // yetki / duplicate
+                }
+            }
+        }
+    }
+
+    public static function ensurePriceHistory(?PDO $pdo = null): void
+    {
+        $pdo = $pdo ?? Database::pdo();
+        try {
+            $pdo->exec(
+                'CREATE TABLE IF NOT EXISTS listing_price_history (
+                  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                  listing_id INT UNSIGNED NOT NULL,
+                  currency VARCHAR(8) NOT NULL,
+                  amount DECIMAL(14,2) NOT NULL,
+                  created_at DOUBLE NOT NULL,
+                  PRIMARY KEY (id),
+                  KEY idx_lph_listing_created (listing_id, created_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+            );
+        } catch (Throwable) {
+            // yetki
         }
     }
 

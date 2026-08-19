@@ -1,0 +1,15 @@
+# TEK ADIM YUKLEME (FTP calismiyorsa)
+
+1. cPanel File Manager -> changex.mehmetfer.com.tr
+2. changex-ftp-yukle.zip yukle -> Extract (Uzerine yaz: Evet)
+
+ONEMLI:
+- config/database.local.php DOKUNMA (sifren orada)
+- Zip database.php icermez
+
+3. Ac: https://changex.mehmetfer.com.tr/index.php
+
+CSS gelmezse: assets/style.css var mi kontrol et (File Manager)
+
+MySQL sifre: config/database.local.php
+  'password' => 'GERCEK_SIFRE'  (MYSQL_SIFRENIZ olmamali)

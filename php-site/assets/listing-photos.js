@@ -44,6 +44,7 @@
           ensureExistingCover(root);
         }
         syncCoverStyles(root);
+        document.dispatchEvent(new CustomEvent('listingPhotosChanged'));
         return;
       }
     });
@@ -103,6 +104,7 @@
       if (files.length === 0) {
         grid.hidden = true;
         if (hidden) hidden.value = '';
+        document.dispatchEvent(new CustomEvent('listingPhotosChanged'));
         return;
       }
       grid.hidden = false;
@@ -112,6 +114,7 @@
       if (hidden) hidden.value = '__new_0__';
       clearExistingCover(form);
       syncCoverStyles(grid);
+      document.dispatchEvent(new CustomEvent('listingPhotosChanged'));
     });
 
     grid.addEventListener('change', function (e) {

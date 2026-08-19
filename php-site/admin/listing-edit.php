@@ -150,6 +150,34 @@ ob_start();
   ?>
 <?php endif; ?>
 
+<?php if (cx_listing_quality_enabled()): ?>
+  <?php
+    $adminQuality = cx_listing_quality_assess([
+        'title' => (string) ($item['title'] ?? ''),
+        'description' => (string) ($item['description'] ?? ''),
+        'listing_mode' => (string) ($item['listing_mode'] ?? 'TRADE'),
+        'price_tl' => $item['price_tl'] ?? null,
+        'photo_urls' => $item['photo_urls'] ?? '[]',
+        'attrs_json' => is_array($attrsDecoded) ? $attrsDecoded : [],
+        'location' => (string) ($item['location'] ?? ''),
+        'user_is_kktc' => false,
+    ]);
+    $adminQClass = cx_listing_quality_score_class((int) $adminQuality['score']);
+  ?>
+  <div class="admin-quality-panel admin-quality-panel--<?= cx_e($adminQClass) ?>">
+    <strong>Kalite skoru: <?= (int) $adminQuality['score'] ?>/100</strong>
+    <?php if ($adminQuality['issues'] !== []): ?>
+      <ul class="admin-quality-panel__issues">
+        <?php foreach ($adminQuality['issues'] as $issue): ?>
+          <li><?= cx_e($issue) ?></li>
+        <?php endforeach; ?>
+      </ul>
+    <?php else: ?>
+      <p class="admin-quality-panel__ok">Temel kalite kriterleri karsilaniyor.</p>
+    <?php endif; ?>
+  </div>
+<?php endif; ?>
+
 <form class="admin-edit" method="post">
   <?= cx_csrf_field() ?>
 
@@ -182,7 +210,7 @@ ob_start();
 
         <label class="admin-edit__field admin-edit__field--wide">
           <span>Açıklama</span>
-          <textarea class="admin-edit__textarea" name="description" rows="6" required><?= cx_e((string) $item['description']) ?></textarea>
+          <textarea class="admin-edit__textarea" name="description" rows="6" required minlength="10"><?= cx_e((string) $item['description']) ?></textarea>
         </label>
 
         <label class="admin-edit__field">

@@ -1,0 +1,54 @@
+{
+  "source": "kibrisarabaal.com",
+  "source_id": 1240,
+  "source_url": "https://kibrisarabaal.com/ilan/1240-2016-model-otomatik-lexus-rc-200t-530dbe/",
+  "title": "2016 Model Otomatik Lexus RC 200t",
+  "description": "Vade Olur, Takaslanabilir",
+  "location": "Girne ,  Karaoğlanoğlu",
+  "listed_at": "16 Ağustos 2026",
+  "listed_at_iso": "2026-08-16",
+  "price": {
+    "currency": "GBP",
+    "amount": 21999.0
+  },
+  "price_negotiable": true,
+  "subcategory": "Otomobil",
+  "segment": "otomobil",
+  "condition": "2.El",
+  "photo_urls": [
+    "https://kibrisarabaal.com/uploads/listings/1240/img_6a8203c4b07309.33105067.webp",
+    "https://kibrisarabaal.com/uploads/listings/1240/img_6a8203c6a771c3.99544018.webp",
+    "https://kibrisarabaal.com/uploads/listings/1240/img_6a8203c7c040f1.14028084.webp",
+    "https://kibrisarabaal.com/uploads/listings/1240/img_6a8203c8c6d551.38300598.webp",
+    "https://kibrisarabaal.com/uploads/listings/1240/img_6a8203c9f09557.87694023.webp"
+  ],
+  "is_corporate": true,
+  "seller_key": "4x4-ozbek-motors",
+  "seller_name": "4X4 Ozbek Motors",
+  "seller_phone": "00",
+  "seller_type_label": "Kurumsal Galeri",
+  "seller_member_since": "",
+  "seller_member_date": "",
+  "seller_profile_url": "https://kibrisarabaal.com/galeri/4x4-ozbek-motors/",
+  "gallery_about": "",
+  "equipment": [],
+  "vehicle": {
+    "year": "2016",
+    "km": null,
+    "fuel": "Benzin",
+    "transmission": "Otomatik",
+    "body": "Coupe",
+    "engine_cc": "2000",
+    "color": "Bordo",
+    "drive": "Sağ Direksiyon",
+    "make": "Lexus RC",
+    "model": "200t"
+  },
+  "local_photos": [
+    "kka_1240_0.webp",
+    "kka_1240_1.webp",
+    "kka_1240_2.webp",
+    "kka_1240_3.webp",
+    "kka_1240_4.webp"
+  ]
+}

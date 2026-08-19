@@ -78,7 +78,7 @@ final class ExternalListingImportService
         ]);
 
         $listingId = (int) $this->pdo->lastInsertId();
-        $this->maybePromoteDealer($owner, $payload);
+        $this->ensureCorporateProfile($owner, $payload);
         (new ListingLifecycleService())->markPublished($listingId);
 
         return [
@@ -131,11 +131,17 @@ final class ExternalListingImportService
         $stmt->execute([$username]);
         $row = $stmt->fetch();
         if ($row) {
+            if (!empty($payload['is_corporate'])) {
+                $this->upgradeCorporateUser($row, $payload);
+                $stmt->execute([$username]);
+                $row = $stmt->fetch() ?: $row;
+            }
+
             return $row;
         }
 
         $isCorporate = !empty($payload['is_corporate']);
-        $role = $isCorporate ? 'dealer' : 'user';
+        $role = $isCorporate ? 'vip_kurumsal' : 'user';
         $hash = Auth::hashPassword(bin2hex(random_bytes(12)));
         $memberYear = trim((string) ($payload['seller_member_since'] ?? ''));
         $createdAt = microtime(true);
@@ -143,16 +149,21 @@ final class ExternalListingImportService
             $createdAt = (float) strtotime($memberYear . '-01-01 12:00:00');
         }
 
+        ListingSchemaService::ensureUserColumns();
+        $country = $this->sellerCountryFromPayload($payload);
         $this->pdo->prepare(
-            'INSERT INTO users (username, password_hash, role, email, change_score, created_at)
-             VALUES (?,?,?,?,?,?)'
+            'INSERT INTO users (username, password_hash, role, email, change_score, country, created_at, vip_starts_at, vip_ends_at)
+             VALUES (?,?,?,?,?,?,?,?,?)'
         )->execute([
             $username,
             $hash,
             $role,
             null,
             $isCorporate ? 78 : 55,
+            $country,
             $createdAt,
+            $isCorporate ? date('Y-m-d') : null,
+            $isCorporate ? date('Y-m-d', strtotime('+1 year')) : null,
         ]);
 
         $stmt->execute([$username]);
@@ -161,7 +172,93 @@ final class ExternalListingImportService
             throw new RuntimeException('Kullanici olusturulamadi: ' . $username);
         }
 
+        if ($isCorporate) {
+            $this->applyGalleryProfile((int) $row['id'], $payload);
+        }
+
         return $row;
+    }
+
+    /** @param array<string,mixed> $user @param array<string,mixed> $payload */
+    private function upgradeCorporateUser(array $user, array $payload): void
+    {
+        $userId = (int) ($user['id'] ?? 0);
+        if ($userId <= 0) {
+            return;
+        }
+        $role = (string) ($user['role'] ?? 'user');
+        if (!in_array($role, ['user', 'dealer'], true)) {
+            $this->applyGalleryProfile($userId, $payload);
+
+            return;
+        }
+        ListingSchemaService::ensureUserColumns();
+        $this->pdo->prepare(
+            'UPDATE users SET role = ?, country = ?, vip_starts_at = ?, vip_ends_at = ? WHERE id = ?'
+        )->execute([
+            'vip_kurumsal',
+            'kktc',
+            date('Y-m-d'),
+            date('Y-m-d', strtotime('+1 year')),
+            $userId,
+        ]);
+        $this->applyGalleryProfile($userId, $payload);
+    }
+
+    /** @param array<string,mixed> $owner @param array<string,mixed> $payload */
+    private function ensureCorporateProfile(array $owner, array $payload): void
+    {
+        if (empty($payload['is_corporate'])) {
+            return;
+        }
+        $this->applyGalleryProfile((int) ($owner['id'] ?? 0), $payload);
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function applyGalleryProfile(int $userId, array $payload): void
+    {
+        if ($userId <= 0) {
+            return;
+        }
+        require_once __DIR__ . '/SellerPublicService.php';
+        $city = $this->cityFromLocation((string) ($payload['location'] ?? ''));
+        $about = trim((string) ($payload['gallery_about'] ?? ''));
+        if ($about === '') {
+            $about = trim((string) ($payload['description'] ?? ''));
+        }
+        (new SellerPublicService())->updateCorporateProfile($userId, [
+            'gallery_name' => trim((string) ($payload['seller_name'] ?? '')),
+            'phone' => trim((string) ($payload['seller_phone'] ?? '')),
+            'city' => $city,
+            'website' => trim((string) ($payload['seller_profile_url'] ?? '')),
+            'about' => mb_substr($about, 0, 500),
+        ]);
+    }
+
+    private function cityFromLocation(string $location): string
+    {
+        $location = trim($location);
+        if ($location === '') {
+            return '';
+        }
+        $parts = preg_split('/\s*[,\/]\s*/u', $location) ?: [];
+        $first = trim((string) ($parts[0] ?? ''));
+
+        return mb_substr($first, 0, 128);
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function sellerCountryFromPayload(array $payload): string
+    {
+        if (!empty($payload['is_corporate'])) {
+            return 'kktc';
+        }
+        $price = $payload['price'] ?? null;
+        if (is_array($price) && strtoupper((string) ($price['currency'] ?? '')) === 'GBP') {
+            return 'kktc';
+        }
+
+        return 'tr';
     }
 
     private function sourcePrefix(string $source): string
@@ -337,23 +434,10 @@ final class ExternalListingImportService
         return 'good';
     }
 
-    /** @param array<string,mixed> $owner @param array<string,mixed> $payload */
+    /** @deprecated Galeri importunda vip_kurumsal kullaniliyor */
     private function maybePromoteDealer(array $owner, array $payload): void
     {
-        if (empty($payload['is_corporate'])) {
-            return;
-        }
-        if (($owner['role'] ?? '') === 'dealer') {
-            return;
-        }
-
-        $stmt = $this->pdo->prepare('SELECT COUNT(*) c FROM trade_listings WHERE owner_id = ?');
-        $stmt->execute([(int) $owner['id']]);
-        $count = (int) ($stmt->fetch()['c'] ?? 0);
-        if ($count >= 3) {
-            $this->pdo->prepare('UPDATE users SET role = ? WHERE id = ?')
-                ->execute(['dealer', (int) $owner['id']]);
-        }
+        // no-op — kurumsal aktarimda resolveOwner vip_kurumsal atar
     }
 
     /** @return array{total:int,done:int,pending:int,next:?array<string,mixed>,source:string} */

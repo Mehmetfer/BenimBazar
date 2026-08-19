@@ -30,7 +30,7 @@ final class SellerPublicService
             return null;
         }
 
-        $optional = ['avatar_url', 'country', 'phone', 'city', 'email', 'gallery_name', 'website', 'about', 'gallery_banner', 'vip_starts_at', 'vip_ends_at'];
+        $optional = ['avatar_url', 'country', 'phone', 'phone_verified_at', 'city', 'email', 'gallery_name', 'website', 'about', 'gallery_banner', 'gallery_hours', 'vip_starts_at', 'vip_ends_at'];
         $cols = ['id', 'username', 'role', 'change_score', 'created_at', 'suspended'];
         foreach ($optional as $col) {
             if ($this->columnExists('users', $col)) {
@@ -54,6 +54,7 @@ final class SellerPublicService
         $row['gallery_name'] = trim((string) ($row['gallery_name'] ?? ''));
         $row['website'] = trim((string) ($row['website'] ?? ''));
         $row['about'] = trim((string) ($row['about'] ?? ''));
+        $row['gallery_hours'] = cx_gallery_hours_normalize($row['gallery_hours'] ?? '');
         $row['display_name'] = $this->resolveDisplayName(
             $ownerId,
             $row['gallery_name'] !== '' ? $row['gallery_name'] : (string) ($row['username'] ?? 'Üye')
@@ -65,7 +66,7 @@ final class SellerPublicService
             ? '/galeri.php?id=' . $ownerId
             : '/satici.php?id=' . $ownerId;
         $row['hover_hint'] = $row['is_corporate']
-            ? 'Galerisine bak'
+            ? 'Mağazasına bak'
             : 'Kullanıcının diğer ilanlarını gör';
 
         return $row;
@@ -86,7 +87,7 @@ final class SellerPublicService
         ListingSchemaService::ensureUserColumns();
         $this->forgetColumnCache('users');
 
-        $optional = ['avatar_url', 'country', 'phone', 'city', 'email', 'gallery_name', 'website', 'about', 'gallery_banner', 'vip_starts_at', 'vip_ends_at'];
+        $optional = ['avatar_url', 'country', 'phone', 'phone_verified_at', 'city', 'email', 'gallery_name', 'website', 'about', 'gallery_banner', 'gallery_hours', 'vip_starts_at', 'vip_ends_at'];
         $cols = ['u.id', 'u.username', 'u.role', 'u.change_score', 'u.created_at', 'u.suspended'];
         foreach ($optional as $col) {
             if ($this->columnExists('users', $col)) {
@@ -139,6 +140,134 @@ final class SellerPublicService
     }
 
     /**
+     * Galeri dizini — kurumsal / VIP mağazalar.
+     *
+     * @param array{city?:string,role?:string,q?:string,min_listings?:int} $filters
+     * @return array{items:list<array<string,mixed>>,total:int,page:int,pages:int}
+     */
+    public function listGalleries(array $filters = [], int $page = 1, int $limit = 24): array
+    {
+        ListingSchemaService::ensureUserColumns();
+        $page = max(1, $page);
+        $limit = max(1, min(48, $limit));
+        $offset = ($page - 1) * $limit;
+
+        $where = ['COALESCE(u.suspended, 0) = 0', "u.role IN ('dealer', 'vip_kurumsal')"];
+        $args = [];
+
+        $city = trim((string) ($filters['city'] ?? ''));
+        if ($city !== '') {
+            $where[] = 'COALESCE(u.city, \'\') LIKE ?';
+            $args[] = '%' . $city . '%';
+        }
+
+        $role = trim((string) ($filters['role'] ?? ''));
+        if ($role === 'vip') {
+            $where[] = "u.role = 'vip_kurumsal'";
+        } elseif ($role === 'dealer') {
+            $where[] = "u.role = 'dealer'";
+        }
+
+        $q = trim((string) ($filters['q'] ?? ''));
+        if ($q !== '') {
+            $like = '%' . $q . '%';
+            $or = ['u.username LIKE ?'];
+            $args[] = $like;
+            if ($this->columnExists('users', 'gallery_name')) {
+                $or[] = 'u.gallery_name LIKE ?';
+                $args[] = $like;
+            }
+            if ($this->columnExists('users', 'about')) {
+                $or[] = 'u.about LIKE ?';
+                $args[] = $like;
+            }
+            $where[] = '(' . implode(' OR ', $or) . ')';
+        }
+
+        $minListings = max(0, (int) ($filters['min_listings'] ?? 0));
+        $liveSql = "(SELECT COUNT(*) FROM trade_listings l
+            WHERE l.owner_id = u.id AND UPPER(l.status) IN ('APPROVED','ACTIVE'))";
+        if ($minListings > 0) {
+            $where[] = $liveSql . ' >= ' . $minListings;
+        }
+
+        $whereSql = implode(' AND ', $where);
+
+        $countStmt = $this->pdo->prepare("SELECT COUNT(*) FROM users u WHERE {$whereSql}");
+        $countStmt->execute($args);
+        $total = (int) $countStmt->fetchColumn();
+
+        $optional = ['avatar_url', 'city', 'gallery_name', 'about', 'gallery_banner'];
+        $cols = ['u.id', 'u.username', 'u.role'];
+        foreach ($optional as $col) {
+            if ($this->columnExists('users', $col)) {
+                $cols[] = 'u.' . $col;
+            }
+        }
+        $cols[] = $liveSql . ' AS live_count';
+        $since = microtime(true) - (30 * 86400);
+        $cols[] = '(SELECT COUNT(*) FROM trade_listings nl WHERE nl.owner_id = u.id AND nl.created_at >= ' . $this->pdo->quote((string) $since) . " AND UPPER(nl.status) IN ('APPROVED','ACTIVE','SOLD')) AS new_last_30";
+
+        $sql = 'SELECT ' . implode(', ', $cols) . "
+                FROM users u
+                WHERE {$whereSql}
+                ORDER BY
+                  CASE WHEN u.role = 'vip_kurumsal' THEN 0 ELSE 1 END,
+                  live_count DESC,
+                  COALESCE(u.gallery_name, u.username) ASC
+                LIMIT {$limit} OFFSET {$offset}";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($args);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $items = [];
+        foreach ($rows as $row) {
+            $owner = $this->findOwner((int) ($row['id'] ?? 0));
+            if ($owner === null || empty($owner['is_corporate'])) {
+                continue;
+            }
+            $owner['live_count'] = (int) ($row['live_count'] ?? 0);
+            $owner['stats'] = [
+                'listings' => $owner['live_count'],
+                'new_last_30' => (int) ($row['new_last_30'] ?? 0),
+            ];
+            $items[] = $owner;
+        }
+
+        $pages = $total > 0 ? (int) ceil($total / $limit) : 1;
+
+        return [
+            'items' => $items,
+            'total' => $total,
+            'page' => $page,
+            'pages' => $pages,
+        ];
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    public function featuredGalleries(int $vipLimit = 6, int $dealerLimit = 6): array
+    {
+        $out = [];
+        if ($vipLimit > 0) {
+            $vip = $this->listGalleries(['role' => 'vip', 'min_listings' => 1], 1, $vipLimit);
+            foreach ($vip['items'] as $item) {
+                $out[] = $item;
+            }
+        }
+        if ($dealerLimit > 0) {
+            $dealers = $this->listGalleries(['role' => 'dealer', 'min_listings' => 1], 1, $dealerLimit);
+            foreach ($dealers['items'] as $item) {
+                $out[] = $item;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * @return list<array<string,mixed>>
      */
     public function publicListings(int $ownerId, ?int $viewerId = null, bool $includeSold = true): array
@@ -183,7 +312,7 @@ final class SellerPublicService
     /**
      * @param list<array<string,mixed>> $items
      * @return array{
-     *   listings:int,active:int,favorites:int,views:int,member_year:int,banner:string,is_following:bool
+     *   listings:int,active:int,favorites:int,views:int,member_year:int,banner:string,is_following:bool,new_last_30:int
      * }
      */
     public function galleryStats(array $owner, array $items, ?int $viewerId = null): array
@@ -191,6 +320,8 @@ final class SellerPublicService
         $active = 0;
         $favorites = 0;
         $views = 0;
+        $newLast30 = 0;
+        $since = microtime(true) - (30 * 86400);
         $banner = trim((string) ($owner['gallery_banner'] ?? ''));
         if ($banner === '') {
             foreach ($items as $item) {
@@ -207,6 +338,9 @@ final class SellerPublicService
             $st = strtoupper((string) ($item['status'] ?? ''));
             if (in_array($st, ['APPROVED', 'ACTIVE'], true)) {
                 $active++;
+            }
+            if ((float) ($item['created_at'] ?? 0) >= $since) {
+                $newLast30++;
             }
             $favorites += (int) ($item['favorite_count'] ?? 0);
             $views += (int) ($item['view_count'] ?? 0);
@@ -230,6 +364,7 @@ final class SellerPublicService
             'member_year' => $memberYear,
             'banner' => $banner,
             'is_following' => $isFollowing,
+            'new_last_30' => $newLast30,
         ];
     }
 
@@ -263,7 +398,7 @@ final class SellerPublicService
      *
      * @param array{
      *   gallery_name?:string,phone?:string,city?:string,email?:string,
-     *   website?:string,about?:string
+     *   website?:string,about?:string,gallery_hours?:string
      * } $data
      */
     public function updateCorporateProfile(int $userId, array $data): bool
@@ -281,6 +416,13 @@ final class SellerPublicService
         $email = mb_substr(trim((string) ($data['email'] ?? '')), 0, 255);
         $website = mb_substr(trim((string) ($data['website'] ?? '')), 0, 255);
         $about = mb_substr(trim((string) ($data['about'] ?? '')), 0, 500);
+        $hours = trim((string) ($data['gallery_hours'] ?? ''));
+        if ($hours !== '') {
+            $hoursNorm = cx_gallery_hours_normalize($hours);
+            $hours = cx_gallery_hours_has_any($hoursNorm)
+                ? (json_encode($hoursNorm, JSON_UNESCAPED_UNICODE) ?: '')
+                : '';
+        }
 
         if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return false;
@@ -301,6 +443,7 @@ final class SellerPublicService
             'email' => $email !== '' ? $email : null,
             'website' => $website !== '' ? $website : null,
             'about' => $about !== '' ? $about : null,
+            'gallery_hours' => $hours !== '' ? $hours : null,
         ];
         foreach ($map as $col => $val) {
             if (!$this->columnExists('users', $col)) {

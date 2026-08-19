@@ -1,0 +1,54 @@
+{
+  "source": "kibrisarabaal.com",
+  "source_id": 1213,
+  "source_url": "https://kibrisarabaal.com/ilan/1213-2012-model-otomatik-nissan-juke-69880a/",
+  "title": "2012 Model Otomatik Nissan Juke",
+  "description": "Vade Olur, Takaslanabilir",
+  "location": "Girne ,  Karaoğlanoğlu",
+  "listed_at": "16 Ağustos 2026",
+  "listed_at_iso": "2026-08-16",
+  "price": {
+    "currency": "GBP",
+    "amount": 7499.0
+  },
+  "price_negotiable": true,
+  "subcategory": "Otomobil",
+  "segment": "otomobil",
+  "condition": "2.El (Plakasız)",
+  "photo_urls": [
+    "https://kibrisarabaal.com/uploads/listings/1213/img_6a8202c058f164.70341402.webp",
+    "https://kibrisarabaal.com/uploads/listings/1213/img_6a8202c4405c22.92457949.webp",
+    "https://kibrisarabaal.com/uploads/listings/1213/img_6a8202c6d2d349.51458821.webp",
+    "https://kibrisarabaal.com/uploads/listings/1213/img_6a8202c9400270.48932187.webp",
+    "https://kibrisarabaal.com/uploads/listings/1213/img_6a8202cb404061.74289393.webp"
+  ],
+  "is_corporate": true,
+  "seller_key": "4x4-ozbek-motors",
+  "seller_name": "4X4 Ozbek Motors",
+  "seller_phone": "00",
+  "seller_type_label": "Kurumsal Galeri",
+  "seller_member_since": "",
+  "seller_member_date": "",
+  "seller_profile_url": "https://kibrisarabaal.com/galeri/4x4-ozbek-motors/",
+  "gallery_about": "",
+  "equipment": [],
+  "vehicle": {
+    "year": "2012",
+    "km": "135000",
+    "fuel": "Benzin",
+    "transmission": "Otomatik",
+    "body": "Suv",
+    "engine_cc": "1500",
+    "color": "Bordo",
+    "drive": "Sağ Direksiyon",
+    "make": "Nissan",
+    "model": "Juke"
+  },
+  "local_photos": [
+    "kka_1213_0.webp",
+    "kka_1213_1.webp",
+    "kka_1213_2.webp",
+    "kka_1213_3.webp",
+    "kka_1213_4.webp"
+  ]
+}

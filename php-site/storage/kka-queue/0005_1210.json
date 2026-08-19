@@ -1,0 +1,54 @@
+{
+  "source": "kibrisarabaal.com",
+  "source_id": 1210,
+  "source_url": "https://kibrisarabaal.com/ilan/1210-2010-model-otomatik-toyota-iq-328a1c/",
+  "title": "2010 Model Otomatik Toyota iQ",
+  "description": "-",
+  "location": "Lefkoşa ,  Hamitköy",
+  "listed_at": "16 Ağustos 2026",
+  "listed_at_iso": "2026-08-16",
+  "price": {
+    "currency": "GBP",
+    "amount": 6900.0
+  },
+  "price_negotiable": false,
+  "subcategory": "Otomobil",
+  "segment": "otomobil",
+  "condition": "2.El",
+  "photo_urls": [
+    "https://kibrisarabaal.com/uploads/listings/1210/img_6a82012ada53e1.05363827.webp",
+    "https://kibrisarabaal.com/uploads/listings/1210/img_6a82012c3861f2.52618396.webp",
+    "https://kibrisarabaal.com/uploads/listings/1210/img_6a82012da81965.89477993.webp",
+    "https://kibrisarabaal.com/uploads/listings/1210/img_6a82012ecbde80.90914261.webp",
+    "https://kibrisarabaal.com/uploads/listings/1210/img_6a8201300856b5.04590919.webp"
+  ],
+  "is_corporate": true,
+  "seller_key": "daksi-autos",
+  "seller_name": "Daksi Autos",
+  "seller_phone": "00",
+  "seller_type_label": "Kurumsal Galeri",
+  "seller_member_since": "",
+  "seller_member_date": "",
+  "seller_profile_url": "https://kibrisarabaal.com/galeri/daksi-autos/",
+  "gallery_about": "",
+  "equipment": [],
+  "vehicle": {
+    "year": "2010",
+    "km": "135000",
+    "fuel": "Benzin",
+    "transmission": "Otomatik",
+    "body": "Hatchback 3 kapı",
+    "engine_cc": "1300",
+    "color": "Sarı",
+    "drive": "Sağ Direksiyon",
+    "make": "Toyota",
+    "model": "iQ"
+  },
+  "local_photos": [
+    "kka_1210_0.webp",
+    "kka_1210_1.webp",
+    "kka_1210_2.webp",
+    "kka_1210_3.webp",
+    "kka_1210_4.webp"
+  ]
+}

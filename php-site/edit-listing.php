@@ -12,6 +12,7 @@ use App\Services\ListingWriteService;
 cx_bootstrap();
 $user = cx_require_user();
 $app = cx_app_config();
+$userIsKktc = cx_user_is_kktc($user);
 $id = (int) ($_GET['id'] ?? 0);
 if ($id <= 0) {
     cx_redirect('/my-listings.php');
@@ -74,13 +75,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $post = $_POST;
         $post['vehicle_segment'] = $resolved['veh'];
-        $vehiclePack = cx_vehicle_attrs_merge_admin($post, $attrsDecoded);
+        if ($userIsKktc && in_array($resolved['veh'], ['otomobil', 'motosiklet', 'ticari', 'antika-arac'], true)) {
+            $post['require_steering'] = '1';
+        }
+        if (cx_listing_quality_enabled()) {
+            $vehiclePack = cx_vehicle_attrs_from_post($post);
+        } else {
+            $vehiclePack = cx_vehicle_attrs_merge_admin($post, $attrsDecoded);
+        }
         if ($vehiclePack['error'] !== null) {
             $formError = $vehiclePack['error'];
         } elseif ($vehiclePack['attrs'] === null) {
-            $formError = 'Arac markasi secin.';
+            $formError = cx_listing_quality_enabled()
+                ? 'Arac teknik bilgilerini doldurun.'
+                : 'Arac markasi secin.';
         } else {
             $attrsOut = $vehiclePack['attrs'];
+            if ($mode === 'SALE') {
+                if ($userIsKktc) {
+                    $cur = strtoupper(trim((string) ($_POST['price_currency'] ?? 'GBP')));
+                    if (!in_array($cur, ['GBP', 'TRY', 'EUR'], true)) {
+                        $cur = 'GBP';
+                    }
+                    $amount = (float) ($_POST['price_amount'] ?? 0);
+                    if ($amount > 0) {
+                        $attrsOut['price'] = ['currency' => $cur, 'amount' => $amount];
+                    } else {
+                        unset($attrsOut['price']);
+                    }
+                }
+            }
             if (($resolved['veh'] ?? '') === 'otomobil') {
                 $existingExpertise = cx_listing_expertise($listing);
                 $keptExpertise = cx_listing_expertise_kept_from_post($_POST, $existingExpertise['photos']);
@@ -94,6 +118,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 unset($attrsOut['expertise']);
             }
+
+            $priceTl = $mode === 'SALE' ? (float) ($_POST['price_tl'] ?? 0) : null;
+            $qualityErr = cx_listing_quality_validate([
+                'title' => trim((string) ($_POST['title'] ?? '')),
+                'description' => trim((string) ($_POST['description'] ?? '')),
+                'listing_mode' => $mode,
+                'price_tl' => $priceTl,
+                'price_amount' => $userIsKktc ? (float) ($_POST['price_amount'] ?? 0) : null,
+                'photo_urls' => $photos,
+                'attrs_json' => $attrsOut,
+                'location' => trim((string) ($_POST['location'] ?? '')),
+                'user_is_kktc' => $userIsKktc,
+            ]);
+            if ($qualityErr !== null) {
+                $formError = $qualityErr;
+            } else {
             try {
                 $writer = new ListingWriteService();
                 $writer->updateForOwner($id, (int) $user['id'], [
@@ -104,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'location' => trim((string) ($_POST['location'] ?? '')),
                     'wanted_items' => trim((string) ($_POST['wanted_items'] ?? '')),
                     'listing_mode' => $mode,
-                    'price_tl' => $mode === 'SALE' ? (float) ($_POST['price_tl'] ?? 0) : null,
+                    'price_tl' => $priceTl,
                     'price_negotiable' => !empty($_POST['price_negotiable']),
                     'photo_urls' => $photos,
                     'attrs_json' => $attrsOut,
@@ -114,13 +154,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Throwable $e) {
                 $formError = $e->getMessage();
             }
+            }
         }
     }
 }
 
 $listingMode = strtoupper((string) ($listing['listing_mode'] ?? 'TRADE'));
-$vehicleFormRelaxed = true;
+$vehicleFormRelaxed = !cx_listing_quality_enabled();
 $photoStubs = cx_listing_photo_stubs($listing['photo_urls'] ?? '[]');
+$existingPhotoCount = count($photoStubs);
 $coverStub = $photoStubs[0] ?? '';
 $prefillMake = trim((string) ($prefillForm['vehicle_make'] ?? ''));
 $prefillModel = trim((string) ($prefillForm['vehicle_model'] ?? ''));
@@ -150,7 +192,14 @@ ob_start();
   <input class="create-input" name="title" required maxlength="255" value="<?= cx_e((string) ($listing['title'] ?? '')) ?>">
 
   <label>Aciklama</label>
-  <textarea class="create-input create-input--area" name="description" rows="4" required><?= cx_e((string) ($listing['description'] ?? '')) ?></textarea>
+  <?php
+    $editDesc = trim((string) ($listing['description'] ?? ''));
+    if ($editDesc === '') {
+        $editDesc = cx_listing_default_description();
+    }
+  ?>
+  <textarea class="create-input create-input--area" name="description" rows="4" required minlength="10" maxlength="5000"><?= cx_e($editDesc) ?></textarea>
+  <p class="muted" style="margin:4px 0 12px;font-size:12px">Klasik metni silebilirsiniz; en az 10 karakter yazın.</p>
 
   <label>Kategori</label>
   <select name="listing_subcat" id="listing_subcat" class="create-input" required>
@@ -169,10 +218,24 @@ ob_start();
     <?php endforeach; ?>
   </select>
 
-  <?php require __DIR__ . '/views/partials/create-vehicle-fields.php'; ?>
+  <?php
+    $showSteeringField = $userIsKktc;
+    require __DIR__ . '/views/partials/create-vehicle-fields.php';
+  ?>
 
   <label>Sehir</label>
+  <?php if ($userIsKktc): ?>
+    <?php require_once __DIR__ . '/app/Helpers/kktc-locations.php'; ?>
+    <select class="create-input" name="location" required>
+      <option value="">— Sehir secin —</option>
+      <?php foreach (cx_kktc_cities() as $code => $row): ?>
+        <?php $cityLabel = (string) $row['label']; ?>
+        <option value="<?= cx_e($cityLabel) ?>"<?= ((string) ($listing['location'] ?? '') === $cityLabel) ? ' selected' : '' ?>><?= cx_e($cityLabel) ?></option>
+      <?php endforeach; ?>
+    </select>
+  <?php else: ?>
   <input class="create-input" name="location" value="<?= cx_e((string) ($listing['location'] ?? '')) ?>">
+  <?php endif; ?>
 
   <label>Mod</label>
   <select name="listing_mode" id="listing_mode" class="create-input">
@@ -186,8 +249,25 @@ ob_start();
   </div>
 
   <div id="sale_fields"<?= $listingMode !== 'SALE' ? ' hidden' : '' ?>>
+    <?php
+      $fx = cx_listing_price_currency($listing);
+      $editPriceAmount = $fx !== null ? (string) (int) $fx['amount'] : '';
+      $editPriceCurrency = $fx['currency'] ?? 'GBP';
+    ?>
+    <?php if ($userIsKktc): ?>
+    <label>Para birimi</label>
+    <select name="price_currency" class="create-input">
+      <option value="GBP"<?= $editPriceCurrency === 'GBP' ? ' selected' : '' ?>>Sterlin (£)</option>
+      <option value="TRY"<?= $editPriceCurrency === 'TRY' ? ' selected' : '' ?>>Turk Lirasi (₺)</option>
+      <option value="EUR"<?= $editPriceCurrency === 'EUR' ? ' selected' : '' ?>>Euro (€)</option>
+    </select>
+    <label>Fiyat</label>
+    <input class="create-input" name="price_amount" type="number" min="1" step="1" value="<?= cx_e($editPriceAmount) ?>" data-quality-price>
+    <input type="hidden" name="price_tl" value="<?= cx_e((string) ($listing['price_tl'] ?? '')) ?>">
+    <?php else: ?>
     <label>Fiyat (TL)</label>
-    <input class="create-input" name="price_tl" type="number" min="0" step="1" value="<?= cx_e((string) ($listing['price_tl'] ?? '')) ?>">
+    <input class="create-input" name="price_tl" type="number" min="1" step="1" value="<?= cx_e((string) ($listing['price_tl'] ?? '')) ?>" data-quality-price>
+    <?php endif; ?>
     <label class="create-check"><input type="checkbox" name="price_negotiable" value="1"<?= !empty($listing['price_negotiable']) ? ' checked' : '' ?>> Pazarlik yapilir</label>
   </div>
 
@@ -213,6 +293,14 @@ ob_start();
     endif;
   ?>
 
+  <?php if (cx_listing_quality_enabled()): ?>
+    <?php
+      $qualityPanelMode = 'edit';
+      $qualityMinPhotos = cx_listing_quality_settings()['min_photos'];
+      require __DIR__ . '/views/partials/listing-quality-panel.php';
+    ?>
+  <?php endif; ?>
+
   <button class="btn-primary" type="submit">Kaydet</button>
 </form>
 
@@ -224,6 +312,12 @@ window.cxVehicleFormPrefill = <?= json_encode($prefillForm, JSON_UNESCAPED_UNICO
 <script src="/assets/expertise-diagram.js?v=5"></script>
 <?php endif; ?>
 <script src="/assets/listing-photos.js?v=1"></script>
+<?php if (cx_listing_quality_enabled()): ?>
+<script>
+window.cxListingQuality = <?= json_encode(array_merge(cx_listing_quality_settings(), ['existing_photos' => $existingPhotoCount]), JSON_UNESCAPED_UNICODE) ?>;
+</script>
+<script src="/assets/create-listing-quality.js?v=2"></script>
+<?php endif; ?>
 <script>
 (function () {
   var modeSel = document.getElementById('listing_mode');

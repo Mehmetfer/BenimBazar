@@ -47,10 +47,17 @@ ob_start();
         $type = (string) ($n['type'] ?? '');
         $isReject = $type === 'admin_rejected';
         $isApproved = $type === 'admin_approved';
+        $isPriceDrop = $type === 'price_drop';
+        $isFavWatch = in_array($type, ['price_rise', 'listing_removed', 'listing_sold', 'fav_photos', 'fav_seller_reply'], true);
         $entityId = (int) ($n['entity_id'] ?? 0);
-        $href = ($n['entity_type'] ?? '') === 'trade_listing' && $entityId > 0
-            ? '/listing.php?id=' . $entityId
-            : '/my-listings.php';
+        $entityType = (string) ($n['entity_type'] ?? '');
+        $href = '/my-listings.php';
+        if ($entityType === 'trade_listing' && $entityId > 0) {
+            $href = '/listing.php?id=' . $entityId;
+        } elseif ($entityType === 'conversation' && $entityId > 0) {
+            $href = '/conversation.php?id=' . $entityId;
+        }
+        $linkLabel = $entityType === 'conversation' ? 'Sohbet' : 'İlan';
         $bodyRaw = rtrim((string) ($n['body'] ?? ''));
         if ($bodyRaw !== '' && !str_ends_with($bodyRaw, '🤲')) {
             $bodyRaw .= "\n\n🤲";
@@ -64,13 +71,17 @@ ob_start();
             $itemClass .= ' notify-item--reject';
         } elseif ($isApproved) {
             $itemClass .= ' notify-item--approved';
+        } elseif ($isPriceDrop || $type === 'price_rise') {
+            $itemClass .= ' notify-item--price-drop';
+        } elseif ($isFavWatch) {
+            $itemClass .= ' notify-item--fav-watch';
         }
       ?>
       <article class="<?= $itemClass ?>">
         <div class="notify-item__title"><?= cx_e((string) ($n['title'] ?? '')) ?></div>
         <div class="notify-item__body"><?= $bodyHtml ?></div>
         <div class="notify-item__actions">
-          <a class="btn-sm" href="<?= cx_e($href) ?>">Ilan</a>
+          <a class="btn-sm" href="<?= cx_e($href) ?>"><?= cx_e($linkLabel) ?></a>
           <?php if ($isUnread): ?>
           <form method="post" style="display:inline">
             <?= cx_csrf_field() ?>

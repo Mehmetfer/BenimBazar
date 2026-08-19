@@ -112,12 +112,26 @@ final class ListingWriteService
                 $now,
             ]);
         }
-        return (int) $this->pdo->lastInsertId();
+        $newId = (int) $this->pdo->lastInsertId();
+        if ($newId > 0) {
+            try {
+                $seed = $this->pdo->prepare('SELECT * FROM trade_listings WHERE id = ? LIMIT 1');
+                $seed->execute([$newId]);
+                $seedRow = $seed->fetch(PDO::FETCH_ASSOC);
+                if (is_array($seedRow)) {
+                    (new PriceHistoryService())->seedInitial($newId, $seedRow);
+                }
+            } catch (\Throwable) {
+                // fiyat gecmisi opsiyonel
+            }
+        }
+
+        return $newId;
     }
 
     public function cancel(int $listingId, int $userId, bool $isStaff): bool
     {
-        $stmt = $this->pdo->prepare('SELECT owner_id, status FROM trade_listings WHERE id = ?');
+        $stmt = $this->pdo->prepare('SELECT owner_id, status, title FROM trade_listings WHERE id = ?');
         $stmt->execute([$listingId]);
         $row = $stmt->fetch();
         if (!$row) {
@@ -132,6 +146,14 @@ final class ListingWriteService
         $this->pdo->prepare(
             'UPDATE trade_listings SET status = ?, updated_at = ? WHERE id = ?'
         )->execute(['CANCELLED', microtime(true), $listingId]);
+        require_once __DIR__ . '/PriceDropAlertService.php';
+        (new PriceDropAlertService())->notifyListingGone(
+            $listingId,
+            'removed',
+            (string) ($row['title'] ?? ''),
+            (int) $row['owner_id']
+        );
+
         return true;
     }
 
@@ -173,17 +195,17 @@ final class ListingWriteService
      */
     public function updateForOwner(int $listingId, int $userId, array $data): void
     {
-        $stmt = $this->pdo->prepare('SELECT owner_id, status FROM trade_listings WHERE id = ? LIMIT 1');
+        $stmt = $this->pdo->prepare('SELECT * FROM trade_listings WHERE id = ? LIMIT 1');
         $stmt->execute([$listingId]);
-        $row = $stmt->fetch();
-        if (!$row) {
+        $oldRow = $stmt->fetch();
+        if (!$oldRow) {
             throw new \RuntimeException('Ilan bulunamadi.');
         }
-        if ((int) $row['owner_id'] !== $userId) {
+        if ((int) $oldRow['owner_id'] !== $userId) {
             throw new \RuntimeException('Bu ilani duzenleyemezsiniz.');
         }
 
-        $oldStatus = strtoupper((string) ($row['status'] ?? ''));
+        $oldStatus = strtoupper((string) ($oldRow['status'] ?? ''));
         if ($oldStatus === 'CANCELLED' || $oldStatus === 'SOLD') {
             throw new \RuntimeException('Iptal edilmis veya satilmis ilan duzenlenemez.');
         }
@@ -256,5 +278,116 @@ final class ListingWriteService
                  WHERE id = ? AND owner_id = ?'
             )->execute(array_merge($base, [$now, $listingId, $userId]));
         }
+
+        $newStmt = $this->pdo->prepare('SELECT * FROM trade_listings WHERE id = ? LIMIT 1');
+        $newStmt->execute([$listingId]);
+        $newRow = $newStmt->fetch();
+        if (is_array($newRow)) {
+            require_once __DIR__ . '/PriceDropAlertService.php';
+            (new PriceDropAlertService())->handleListingPriceChange($listingId, $oldRow, $newRow, true);
+        }
+    }
+
+    /**
+     * Sadece fiyatı değiştirir; ilan yayında kalır (moderasyona düşmez).
+     *
+     * @return array{old:array{currency:string,amount:float}|null,new:array{currency:string,amount:float}}
+     */
+    public function adjustPriceForOwner(int $listingId, int $userId, string $op, float $exactAmount = 0): array
+    {
+        require_once __DIR__ . '/../Helpers/price-drop.php';
+
+        $stmt = $this->pdo->prepare('SELECT * FROM trade_listings WHERE id = ? LIMIT 1');
+        $stmt->execute([$listingId]);
+        $oldRow = $stmt->fetch();
+        if (!$oldRow) {
+            throw new \RuntimeException('İlan bulunamadı.');
+        }
+        if ((int) $oldRow['owner_id'] !== $userId) {
+            throw new \RuntimeException('Bu ilanın fiyatını değiştiremezsiniz.');
+        }
+        if (!cx_listing_can_adjust_price($oldRow)) {
+            throw new \RuntimeException('Bu ilanda fiyat değiştirilemez.');
+        }
+
+        $oldPrice = cx_listing_effective_price($oldRow);
+        $op = strtolower(trim($op));
+        if (!in_array($op, ['up', 'down', 'set'], true)) {
+            throw new \RuntimeException('Geçersiz fiyat işlemi.');
+        }
+
+        $max = 99999999.0;
+        if ($op === 'set') {
+            $amount = round($exactAmount);
+            $currency = $oldPrice['currency'] ?? 'TRY';
+        } else {
+            if ($oldPrice === null) {
+                throw new \RuntimeException('Önce bir fiyat girin.');
+            }
+            $currency = $oldPrice['currency'];
+            $step = cx_listing_price_step($oldPrice['amount'], $currency);
+            $amount = round($oldPrice['amount'] + ($op === 'up' ? $step : -$step));
+        }
+
+        if ($amount < 1) {
+            throw new \RuntimeException('Fiyat 1’in altına inemez.');
+        }
+        if ($amount > $max) {
+            throw new \RuntimeException('Fiyat çok yüksek.');
+        }
+        if ($oldPrice !== null && (int) round($oldPrice['amount']) === (int) $amount && $oldPrice['currency'] === $currency) {
+            throw new \RuntimeException('Fiyat zaten bu tutarda.');
+        }
+
+        $attrs = cx_listing_attrs($oldRow);
+        $hasFx = isset($attrs['price']) && is_array($attrs['price']);
+        $priceTl = $oldRow['price_tl'] ?? null;
+
+        if ($hasFx || in_array($currency, ['GBP', 'EUR'], true)) {
+            $attrs['price'] = ['currency' => $currency, 'amount' => $amount];
+            $priceTl = $currency === 'TRY' ? $amount : $priceTl;
+        } else {
+            $priceTl = $amount;
+            if ($hasFx && strtoupper((string) ($attrs['price']['currency'] ?? '')) === 'TRY') {
+                $attrs['price']['amount'] = $amount;
+            }
+        }
+
+        $attrsJson = json_encode($attrs, JSON_UNESCAPED_UNICODE);
+        $now = microtime(true);
+        $hasAttrs = false;
+        try {
+            $hasAttrs = (bool) $this->pdo->query("SHOW COLUMNS FROM trade_listings LIKE 'attrs_json'")->fetch();
+        } catch (\Throwable) {
+            $hasAttrs = false;
+        }
+
+        if ($hasAttrs) {
+            $this->pdo->prepare(
+                'UPDATE trade_listings SET price_tl = ?, attrs_json = ?, updated_at = ? WHERE id = ? AND owner_id = ?'
+            )->execute([$priceTl, $attrsJson, $now, $listingId, $userId]);
+        } else {
+            $this->pdo->prepare(
+                'UPDATE trade_listings SET price_tl = ?, updated_at = ? WHERE id = ? AND owner_id = ?'
+            )->execute([$priceTl, $now, $listingId, $userId]);
+        }
+
+        $newStmt = $this->pdo->prepare('SELECT * FROM trade_listings WHERE id = ? LIMIT 1');
+        $newStmt->execute([$listingId]);
+        $newRow = $newStmt->fetch();
+        if (!is_array($newRow)) {
+            throw new \RuntimeException('Fiyat kaydedilemedi.');
+        }
+
+        $newPrice = cx_listing_effective_price($newRow);
+        if ($newPrice === null) {
+            throw new \RuntimeException('Fiyat kaydedilemedi.');
+        }
+
+        require_once __DIR__ . '/PriceDropAlertService.php';
+        $public = function_exists('cx_listing_is_public') && cx_listing_is_public((string) ($newRow['status'] ?? ''));
+        (new PriceDropAlertService())->handleListingPriceChange($listingId, $oldRow, $newRow, !$public);
+
+        return ['old' => $oldPrice, 'new' => $newPrice];
     }
 }

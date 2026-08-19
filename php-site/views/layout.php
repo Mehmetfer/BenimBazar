@@ -6,10 +6,21 @@ declare(strict_types=1);
 /** @var string|null $mainContent listing sayfasi icin guvenli govde (ogMeta dongusu $content ezmesin) */
 /** @var string $layout layout: app|auth|plain */
 /** @var string $bodyClass */
+/** @var string|null $metaDescription */
+/** @var string|null $canonicalUrl */
+/** @var string|null $jsonLd */
 /** @var array<string,string>|null $ogMeta */
+/** @var string|null $metaRobots */
+/** @var bool|null $titleStandalone */
+$metaDescription = $metaDescription ?? null;
+$canonicalUrl = $canonicalUrl ?? null;
+$jsonLd = $jsonLd ?? null;
+$metaRobots = $metaRobots ?? cx_seo_auto_noindex();
+$titleStandalone = !empty($titleStandalone);
 $app = cx_app_config();
 $user = $user ?? cx_current_user();
 $navNotifyCount = 0;
+$navMsgCount = 0;
 if ($user) {
     $cacheKey = 'cx_notify_count';
     $cacheTs = 'cx_notify_count_ts';
@@ -27,6 +38,24 @@ if ($user) {
             $navNotifyCount = 0;
         }
     }
+    if (cx_messages_enabled()) {
+        $msgCacheKey = 'cx_msg_count';
+        $msgCacheTs = 'cx_msg_count_ts';
+        $msgCached = \App\Helpers\Session::get($msgCacheKey);
+        $msgCachedTs = (int) \App\Helpers\Session::get($msgCacheTs, 0);
+        if (is_int($msgCached) && (time() - $msgCachedTs) < 60) {
+            $navMsgCount = $msgCached;
+        } else {
+            try {
+                require_once BASE_PATH . '/app/Services/MessageService.php';
+                $navMsgCount = (new \App\Services\MessageService())->unreadCount((int) $user['id']);
+                \App\Helpers\Session::set($msgCacheKey, $navMsgCount);
+                \App\Helpers\Session::set($msgCacheTs, time());
+            } catch (Throwable) {
+                $navMsgCount = 0;
+            }
+        }
+    }
 }
 $layout = $layout ?? 'app';
 $navActive = $navActive ?? 'home';
@@ -37,7 +66,22 @@ $bodyClass = $bodyClass ?? '';
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title><?= cx_e($title) ?> — <?= cx_e(cx_site_name()) ?></title>
+  <title><?= cx_e($titleStandalone ? $title : ($title . ' — ' . cx_site_name())) ?></title>
+  <?php if (!empty($metaDescription)): ?>
+  <meta name="description" content="<?= cx_e($metaDescription) ?>">
+  <?php endif; ?>
+  <?php if (!empty($metaRobots)): ?>
+  <meta name="robots" content="<?= cx_e($metaRobots) ?>">
+  <?php endif; ?>
+  <?php foreach (cx_seo_verification_metas() as $verify): ?>
+  <meta name="<?= cx_e($verify['name']) ?>" content="<?= cx_e($verify['content']) ?>">
+  <?php endforeach; ?>
+  <?php if (!empty($canonicalUrl)): ?>
+  <link rel="canonical" href="<?= cx_e($canonicalUrl) ?>">
+  <?php endif; ?>
+  <?php if (!empty($jsonLd)): ?>
+  <script type="application/ld+json"><?= $jsonLd ?></script>
+  <?php endif; ?>
   <script>
   (function () {
     try {
@@ -71,7 +115,7 @@ $bodyClass = $bodyClass ?? '';
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/style.css?v=20260816theme2">
+  <link rel="stylesheet" href="/assets/style.css?v=20260818mkt1">
   <style>
     body{margin:0;background:var(--bg);color:var(--ink);font-family:Montserrat,system-ui,sans-serif}
     a{color:var(--gold)}

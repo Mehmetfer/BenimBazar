@@ -762,6 +762,34 @@ function cx_whatsapp_share_url(array $item, int $listingId, int $listingNo, stri
     return 'https://wa.me/?text=' . rawurlencode(cx_whatsapp_share_text($item, $listingId, $listingNo, $siteUrl));
 }
 
+/** wa.me icin ulke kodlu rakam (0xxx → 90xxx). */
+function cx_phone_wa_digits(string $phone): string
+{
+    $digits = cx_phone_digits($phone);
+    if ($digits === '') {
+        return '';
+    }
+    if (str_starts_with($digits, '00')) {
+        $digits = substr($digits, 2);
+    }
+    if (str_starts_with($digits, '0')) {
+        $digits = '90' . substr($digits, 1);
+    }
+
+    return $digits;
+}
+
+function cx_whatsapp_seller_chat_url(string $phone, array $item, int $listingId, int $listingNo, string $siteUrl): string
+{
+    $digits = cx_phone_wa_digits($phone);
+    $text = cx_whatsapp_share_text($item, $listingId, $listingNo, $siteUrl);
+    if ($digits === '') {
+        return 'https://wa.me/?text=' . rawurlencode($text);
+    }
+
+    return 'https://wa.me/' . $digits . '?text=' . rawurlencode($text);
+}
+
 function cx_absolute_url(string $path, string $siteUrl): string
 {
     $path = trim($path);
@@ -943,6 +971,24 @@ function cx_is_production(): bool
 function cx_messages_enabled(): bool
 {
     return (bool) (cx_app_config()['messages_enabled'] ?? false);
+}
+
+function cx_message_listing_url(int $listingId): string
+{
+    if ($listingId <= 0) {
+        return '/messages.php';
+    }
+
+    return '/conversation.php?listing_id=' . $listingId;
+}
+
+function cx_message_seller_url(int $sellerId): string
+{
+    if ($sellerId <= 0) {
+        return '/messages.php';
+    }
+
+    return '/conversation.php?seller_id=' . $sellerId;
 }
 
 function cx_listing_is_public(string $status): bool
@@ -1269,6 +1315,69 @@ function cx_phone_match_key(string $phone): string
     return $digits;
 }
 
+/** @return array<string,mixed> */
+function cx_phone_verify_settings(): array
+{
+    $cfg = cx_app_config()['phone_verify'] ?? [];
+
+    return is_array($cfg) ? $cfg : [];
+}
+
+function cx_phone_verify_required(): bool
+{
+    return (bool) (cx_phone_verify_settings()['required'] ?? false);
+}
+
+function cx_phone_verify_debug_mode(): bool
+{
+    return strtolower(trim((string) (cx_phone_verify_settings()['mode'] ?? 'debug'))) === 'debug';
+}
+
+/** @return array<string,mixed> */
+function cx_sms_config(): array
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+    $path = BASE_PATH . '/config/sms.local.php';
+    $cache = is_file($path) ? (require $path) : [];
+
+    return is_array($cache) ? $cache : [];
+}
+
+/** @return array<string,mixed> */
+function cx_whatsapp_config(): array
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+    $path = BASE_PATH . '/config/whatsapp.local.php';
+    $cache = is_file($path) ? (require $path) : [];
+
+    return is_array($cache) ? $cache : [];
+}
+
+function cx_user_phone_verified(?array $user): bool
+{
+    if ($user === null) {
+        return false;
+    }
+
+    return ((float) ($user['phone_verified_at'] ?? 0)) > 0;
+}
+
+function cx_listing_owner_phone_verified(array $item): bool
+{
+    return ((float) ($item['owner_phone_verified_at'] ?? 0)) > 0;
+}
+
+function cx_phone_verified_badge_html(string $class = 'phone-verified-badge'): string
+{
+    return '<span class="' . cx_e($class) . '" title="Telefon numarasi dogrulandi">✓ Dogrulanmis telefon</span>';
+}
+
 /**
  * VIP üyelik özeti (panel / admin).
  *
@@ -1554,6 +1663,44 @@ function cx_region_from_request(?array $user = null): string
     return '';
 }
 
+/** KKTC sehir kodu: girne | magusa | lefkosa | guzelyurt | iskele | '' */
+function cx_kktc_city_from_request(): string
+{
+    if (cx_region_from_request() !== 'kktc') {
+        return '';
+    }
+    require_once __DIR__ . '/kktc-locations.php';
+    $raw = strtolower(trim((string) ($_GET['city'] ?? '')));
+
+    return cx_kktc_city_valid($raw) ? $raw : '';
+}
+
+/** @return array<string,string> region/city query params for links */
+function cx_region_query_params(?array $user = null): array
+{
+    $region = cx_region_from_request($user);
+    if ($region === 'kktc') {
+        $out = ['region' => 'kktc'];
+        $city = cx_kktc_city_from_request();
+        if ($city !== '') {
+            $out['city'] = $city;
+        }
+
+        return $out;
+    }
+    $explicit = strtolower(trim((string) ($_GET['region'] ?? '')));
+    if ($explicit === 'all' || $explicit === 'tr') {
+        return ['region' => 'all'];
+    }
+
+    return [];
+}
+
+function cx_kktc_region_clear_href(): string
+{
+    return '/index.php?region=all';
+}
+
 /** @return list<string> */
 function cx_kktc_location_needles(): array
 {
@@ -1589,25 +1736,38 @@ function cx_kktc_location_needles(): array
  * KKTC: Kıbrıs/Girne/Mağusa konumları VEYA sterlin (GBP) fiyat.
  * @return array{0:string,1:list<mixed>}
  */
-function cx_region_sql(string $region, string $alias = 'l'): array
+function cx_region_sql(string $region, string $alias = 'l', string $kktcCity = ''): array
 {
     if ($region !== 'kktc') {
         return ['', []];
     }
 
+    require_once __DIR__ . '/kktc-locations.php';
+
     $parts = [];
     $args = [];
-    foreach (cx_kktc_location_needles() as $needle) {
+    $needles = [];
+    if ($kktcCity !== '' && cx_kktc_city_valid($kktcCity)) {
+        $needles = cx_kktc_city_needles($kktcCity);
+    } else {
+        $needles = cx_kktc_location_needles();
+    }
+    foreach ($needles as $needle) {
         $parts[] = "LOWER({$alias}.location) LIKE ?";
         $args[] = '%' . mb_strtolower($needle, 'UTF-8') . '%';
     }
-    // attrs_json icinde currency GBP / STG
-    $parts[] = "UPPER(COALESCE({$alias}.attrs_json,'')) LIKE ?";
-    $args[] = '%"CURRENCY":"GBP"%';
-    $parts[] = "UPPER(COALESCE({$alias}.attrs_json,'')) LIKE ?";
-    $args[] = '%"CURRENCY": "GBP"%';
-    $parts[] = "UPPER(COALESCE({$alias}.attrs_json,'')) LIKE ?";
-    $args[] = '%"CURRENCY":"STG"%';
+    // Sehir seciliyken yalnizca konum; tum KKTC'de GBP/EUR fiyat da dahil
+    if ($kktcCity === '') {
+        $json = "LOWER(COALESCE({$alias}.attrs_json,''))";
+        $parts[] = "{$json} LIKE ?";
+        $args[] = '%"currency":"gbp"%';
+        $parts[] = "{$json} LIKE ?";
+        $args[] = '%"currency":"eur"%';
+    }
+
+    if ($parts === []) {
+        return ['', []];
+    }
 
     return [' AND (' . implode(' OR ', $parts) . ')', $args];
 }
@@ -1804,7 +1964,7 @@ function cx_listing_seller_public_nav(array $item): array
         'url' => $ownerId > 0
             ? ($isCorporate ? '/galeri.php?id=' . $ownerId : '/satici.php?id=' . $ownerId)
             : '',
-        'hint' => $isCorporate ? 'Galerisine bak' : 'Kullanıcının diğer ilanlarını gör',
+        'hint' => $isCorporate ? 'Mağazasına bak' : 'Kullanıcının diğer ilanlarını gör',
         'is_corporate' => $isCorporate,
     ];
 }

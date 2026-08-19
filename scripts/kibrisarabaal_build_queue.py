@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-kibrisarabaal.com -> ChangeX import kuyrugu.
-1 Haziran 2026 sonrasi ilanlari ilan tarihine gore eskiden yeniye siralar.
-Sterlin fiyatli ilanlarda yalnizca GBP saklanir (TL donusumu yok).
+kibrisarabaal.com -> BenimBazar import kuyrugu.
+Varsayilan: 1 Agustos 2026 — bugun, fiyatli ve tum ozellikleri dolu ilanlar.
 
 Kullanim:
   python scripts/kibrisarabaal_build_queue.py
-  python scripts/kibrisarabaal_build_queue.py --limit 5
+  python scripts/kibrisarabaal_build_queue.py --date-from 2026-08-01 --date-to 2026-08-19
+  python scripts/kibrisarabaal_build_queue.py --fresh --limit 5
   python scripts/kibrisarabaal_build_queue.py --download-only
 """
 
@@ -29,9 +29,10 @@ STATE_FILE = ROOT / "scripts" / ".kka-queue-meta.json"
 
 BASE = "https://kibrisarabaal.com"
 ARCHIVE = f"{BASE}/arac-kibris-2-el-araba/"
-CUTOFF = datetime(2026, 6, 1)
+CUTOFF = datetime(2026, 8, 1)
 DATE_FROM = CUTOFF
-DATE_TO: datetime | None = None
+DATE_TO: datetime | None = datetime.now()
+MIN_PHOTOS = 3
 UA = "Mozilla/5.0 (compatible; ChangeXImport/1.0)"
 
 TR_MONTHS = {
@@ -92,26 +93,45 @@ def in_date_range(listed_dt: datetime) -> bool:
     return True
 
 
+def extract_listing_paths(html: str) -> list[str]:
+    paths: list[str] = []
+    for m in re.finditer(
+        r'(?:href|window\.location\.href)\s*=\s*["\'](?:https://kibrisarabaal\.com)?(/ilan/\d+-[^"\']+)["\']',
+        html,
+        re.I,
+    ):
+        path = m.group(1).split("?")[0].rstrip("/") + "/"
+        if path not in paths:
+            paths.append(path)
+    return paths
+
+
 def crawl_listing_urls() -> list[str]:
     seen: set[str] = set()
     page = 1
+    stale_pages = 0
     while page <= 200:
         url = ARCHIVE if page == 1 else f"{ARCHIVE}?page={page}"
         try:
             html = fetch(url)
-        except urllib.error.HTTPError:
+        except Exception as ex:
+            print(f"  crawl page {page} hata: {ex}")
             break
-        ids = re.findall(r'href="(?:https://kibrisarabaal\.com)?(/ilan/(\d+)-[^"]+)"', html)
-        if not ids:
+        paths = extract_listing_paths(html)
+        if not paths:
             break
         new = 0
-        for path, _lid in ids:
-            full = path if path.startswith("http") else BASE + path
+        for path in paths:
+            full = BASE + path if path.startswith("/") else path
             if full not in seen:
                 seen.add(full)
                 new += 1
         if new == 0:
-            break
+            stale_pages += 1
+            if stale_pages >= 2:
+                break
+        else:
+            stale_pages = 0
         page += 1
         time.sleep(0.25)
     return sorted(seen, key=lambda u: int(re.search(r"/ilan/(\d+)-", u).group(1)) if re.search(r"/ilan/(\d+)-", u) else 0)
@@ -141,13 +161,16 @@ def parse_amount(raw: str) -> float:
 
 
 def parse_price(html: str) -> dict | None:
+    # Oncelik: sterlin (KKTC). Yalnizca TL varsa TRY.
     js = re.search(
         r"price\s*=\s*['\"]([\d.,]+)\s*(?:£|STG|Stg|stg)['\"]",
         html,
         re.I,
     )
     if js:
-        return {"currency": "GBP", "amount": parse_amount(js.group(1))}
+        amt = parse_amount(js.group(1))
+        if amt > 0:
+            return {"currency": "GBP", "amount": amt}
 
     for pat in [
         r"([\d.,]+)\s*(?:£|STG|Stg|stg)\b",
@@ -155,30 +178,121 @@ def parse_price(html: str) -> dict | None:
     ]:
         m = re.search(pat, html, re.I)
         if m:
-            return {"currency": "GBP", "amount": parse_amount(m.group(1))}
+            amt = parse_amount(m.group(1))
+            if amt > 0:
+                return {"currency": "GBP", "amount": amt}
 
-    tl = re.search(r"(?<!≈\s)(?<!\d)([\d.,]+)\s*₺", html)
-    if tl and not re.search(r"(?:£|STG|Stg|stg)", html, re.I):
-        return {"currency": "TRY", "amount": parse_amount(tl.group(1))}
+    # Saf TL ilani (sterlin yok, ≈ donusum satiri haric)
+    if not re.search(r"(?:£|STG|Stg|stg)", html, re.I):
+        for pat in [
+            r"([\d.,]+)\s*TL\b",
+            r"([\d.,]+)\s*₺",
+            r"([\d.,]+)\s*TRY\b",
+        ]:
+            m = re.search(pat, html, re.I)
+            if m:
+                amt = parse_amount(m.group(1))
+                if amt > 0:
+                    return {"currency": "TRY", "amount": amt}
     return None
 
 
 def parse_title_parts(title: str) -> tuple[str, str, str]:
     title = re.sub(r"\s+", " ", title.strip())
     m = re.match(
-        r"^(?:(\d{4})\s+Model\s+)?(?:(Otomatik|Manuel)\s+)?(.+)$",
+        r"^(?:(\d{4})\s+Model\s+)?(?:(Otomatik|Manuel|Düz|Yarı\s+Otomatik)\s+)?(.+)$",
         title,
         re.I,
     )
     if not m:
         return "", "", title
-    year, trans, rest = m.group(1) or "", m.group(2) or "", m.group(3).strip()
+    year = m.group(1) or ""
+    rest = (m.group(3) or "").strip()
     parts = rest.rsplit(" ", 1)
     if len(parts) == 2 and parts[0]:
         make, model = parts[0], parts[1]
     else:
         make, model = rest, ""
     return year, make, model
+
+
+def parse_corporate_seller(html: str, gallery_slug: str | None) -> dict:
+    out: dict = {
+        "seller_name": "",
+        "seller_type_label": "",
+        "seller_member_since": "",
+        "seller_member_date": "",
+        "seller_profile_url": "",
+        "gallery_about": "",
+    }
+    corp = re.search(
+        r"([^<\n]{3,120}?)\s+Kurumsal\s+(?:Üye|Uye)[^<\n]*?(?:Üyelik|Uyelik)\s*tarihi:\s*(\d{1,2}\s+[A-Za-zçğıöşüÇĞİÖŞÜ]+\s+\d{4})",
+        html,
+        re.I | re.S,
+    )
+    if corp:
+        out["seller_name"] = re.sub(r"\s+", " ", corp.group(1)).strip()
+        out["seller_type_label"] = "Kurumsal Galeri"
+        member_dt = parse_tr_date(corp.group(2))
+        if member_dt:
+            out["seller_member_since"] = str(member_dt.year)
+        out["seller_member_date"] = corp.group(2).strip()
+    if gallery_slug:
+        out["seller_profile_url"] = f"{BASE}/galeri/{gallery_slug}/"
+        if not out["seller_name"]:
+            out["seller_name"] = gallery_slug.replace("-", " ").title()
+    about = re.search(r"Galeri Hakkında[\s\S]{0,4000}?</h[^>]*>[\s\S]{0,2000}", html, re.I)
+    if about:
+        chunk = re.sub(r"<[^>]+>", " ", about.group(0))
+        chunk = re.sub(r"\s+", " ", chunk).strip()
+        chunk = re.sub(r"^Galeri Hakkında\s*", "", chunk, flags=re.I).strip()
+        if len(chunk) > 20:
+            out["gallery_about"] = chunk[:500]
+    return out
+
+
+def parse_equipment(html: str) -> list[str]:
+    items: list[str] = []
+    for label in ("Donanım", "Donanim", "Özellikler", "Ozellikler", "Ekstra"):
+        block = re.search(
+            rf"{re.escape(label)}[\s\S]{{0,3000}}?(?:</ul>|</div>)",
+            html,
+            re.I,
+        )
+        if not block:
+            continue
+        for li in re.findall(r"<li[^>]*>([^<]+)</li>", block.group(0), re.I):
+            text = re.sub(r"\s+", " ", li).strip()
+            if text and text not in items:
+                items.append(text)
+    return items[:40]
+
+
+def is_blank(value: object) -> bool:
+    if value is None:
+        return True
+    s = str(value).strip()
+    return s in ("", "-", "—", "0", "null", "None")
+
+
+def is_complete(payload: dict) -> bool:
+    price = payload.get("price") or {}
+    amount = float(price.get("amount") or 0)
+    if amount <= 0:
+        return False
+    photos = payload.get("photo_urls") or []
+    if len(photos) < MIN_PHOTOS:
+        return False
+    loc = str(payload.get("location") or "").strip()
+    if loc == "" or loc.lower() == "kktc":
+        return False
+    vehicle = payload.get("vehicle") or {}
+    # km ve renk esnetildi; yil + temel arac alanlari zorunlu
+    required = ("year", "fuel", "transmission", "body", "make", "model")
+    for key in required:
+        if is_blank(vehicle.get(key)):
+            return False
+    return True
 
 
 def parse_listing(url: str) -> dict | None:
@@ -217,17 +331,17 @@ def parse_listing(url: str) -> dict | None:
     )
 
     gallery = re.search(r'href="(?:https://kibrisarabaal\.com)?(/galeri/([^"/]+)/)"', html)
-    is_corporate = bool(re.search(r"Kurumsal", html, re.I))
+    gallery_slug = gallery.group(2) if gallery else None
+    is_corporate = bool(re.search(r"Kurumsal", html, re.I)) or gallery_slug is not None
+    corp = parse_corporate_seller(html, gallery_slug)
 
-    seller_key = gallery.group(2) if gallery else re.sub(
-        r"[^a-z0-9]+", "-", (spec_value(html, "İlan Numarası") or "bireysel").lower()
-    ).strip("-")
-    seller_name = gallery.group(2).replace("-", " ").title() if gallery else "Bireysel"
+    seller_key = gallery_slug if gallery_slug else f"bireysel-{source_id}"
+    seller_name = corp.get("seller_name") or (gallery_slug.replace("-", " ").title() if gallery_slug else "Bireysel")
 
     phone = None
-    pm = re.search(r"(?:İletişim|Tel|Telefon)[:\s]*([+]?\d[\d\s]{8,16})", html, re.I)
+    pm = re.search(r"(?:\+90|0)\s*[\d\s]{10,14}", html)
     if pm:
-        phone = pm.group(1).strip()
+        phone = re.sub(r"\s+", " ", pm.group(0)).strip()
 
     desc = ""
     dm = re.search(r'class="[^"]*listing-description[^"]*"[^>]*>(.*?)</div>\s*<', html, re.I | re.S)
@@ -264,10 +378,16 @@ def parse_listing(url: str) -> dict | None:
         "segment": "otomobil",
         "condition": spec_value(html, "Araç Durumu") or spec_value(html, "Arac Durumu") or "2.El",
         "photo_urls": photos,
-        "is_corporate": is_corporate or gallery is not None,
-        "seller_key": seller_key if gallery else f"bireysel-{source_id}",
+        "is_corporate": is_corporate,
+        "seller_key": seller_key,
         "seller_name": seller_name,
         "seller_phone": phone,
+        "seller_type_label": corp.get("seller_type_label") or ("Kurumsal Galeri" if is_corporate else "Sahibinden"),
+        "seller_member_since": corp.get("seller_member_since") or "",
+        "seller_member_date": corp.get("seller_member_date") or "",
+        "seller_profile_url": corp.get("seller_profile_url") or "",
+        "gallery_about": corp.get("gallery_about") or "",
+        "equipment": parse_equipment(html),
         "vehicle": {
             "year": year,
             "km": km,
@@ -276,12 +396,14 @@ def parse_listing(url: str) -> dict | None:
             "body": spec_value(html, "Kasa Tipi"),
             "engine_cc": re.sub(r"[^\d]", "", spec_value(html, "Motor Hacmi (cc)") or spec_value(html, "Motor Hacmi") or "") or None,
             "color": spec_value(html, "Renk"),
+            "drive": spec_value(html, "Direksiyon Tipi") or spec_value(html, "Direksiyon"),
             "make": make,
             "model": model,
         },
     }
-    # GBP disi TRY ilanlari da al ama GBP olanlarda TL gosterme
     if price["currency"] != "GBP" and price["currency"] != "TRY":
+        return None
+    if not is_complete(payload):
         return None
     return payload
 
@@ -315,16 +437,22 @@ def main() -> None:
     global DATE_FROM, DATE_TO
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=0, help="Max ilan (0=tumu)")
-    parser.add_argument("--date-from", default="2026-06-01", help="Baslangic (YYYY-MM-DD)")
-    parser.add_argument("--date-to", default="", help="Bitis (YYYY-MM-DD, bos=sinirsiz)")
+    parser.add_argument("--date-from", default="2026-08-01", help="Baslangic (YYYY-MM-DD)")
+    parser.add_argument("--date-to", default=datetime.now().strftime("%Y-%m-%d"), help="Bitis (YYYY-MM-DD)")
+    parser.add_argument("--fresh", action="store_true", help="Eski kuyruk dosyalarini sil")
     parser.add_argument("--skip-crawl", action="store_true")
     parser.add_argument("--download-only", action="store_true")
     args = parser.parse_args()
 
     DATE_FROM = parse_iso_date(args.date_from) or CUTOFF
-    DATE_TO = parse_iso_date(args.date_to) if args.date_to else None
+    DATE_TO = parse_iso_date(args.date_to) if args.date_to else datetime.now()
 
     QUEUE_DIR.mkdir(parents=True, exist_ok=True)
+
+    if args.fresh and not args.download_only:
+        for fp in QUEUE_DIR.glob("*.json"):
+            fp.unlink()
+        print("Eski kuyruk silindi.")
 
     if args.download_only:
         for fp in sorted(QUEUE_DIR.glob("*.json")):
@@ -371,8 +499,10 @@ def main() -> None:
         "date_to": DATE_TO.isoformat() if DATE_TO else "",
         "total": len(items),
         "sorted": "listed_at asc",
+        "filters": "price_required,gpb_or_try,year+fuel+trans+body+make+model,min_photos=" + str(MIN_PHOTOS),
     }
     STATE_FILE.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    (QUEUE_DIR / ".meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     print("Kuyruk hazir:", QUEUE_DIR)
 
 

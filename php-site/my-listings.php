@@ -13,7 +13,7 @@ use App\Services\SellerPublicService;
 
 cx_bootstrap();
 $user = cx_require_user();
-if (cx_is_vip_kurumsal($user)) {
+if (cx_is_corporate($user)) {
     cx_redirect('/gallery-panel.php');
 }
 $app = cx_app_config();
@@ -57,6 +57,14 @@ ob_start();
 ?>
 <h1 class="section-title">Ilanlarim</h1>
 <p class="section-sub">Durum, goruntulenme ve islemler.</p>
+<?php if (!cx_user_phone_verified($user)): ?>
+<div class="verify-banner">
+  <div class="verify-banner__text">
+    <strong>Telefonunuzu doğrulayın</strong> — güvenilir satıcı rozeti kazanın.
+  </div>
+  <a class="btn-sm verify-banner__btn" href="/verify-phone.php">Doğrula</a>
+</div>
+<?php endif; ?>
 <?php if ($isDealer): ?>
 <p class="admin-list-meta" style="margin-bottom:10px">
   <a class="link-gold" href="<?= cx_e($publicGalleryUrl) ?>">Herkese açık galeri sayfanız →</a>
@@ -116,7 +124,13 @@ ob_start();
       <div class="mine-row__status"><?= cx_listing_status_emoji($st) ?> <?= cx_e(cx_listing_status_label($st)) ?></div>
       <h3 class="mine-row__title"><a href="/listing.php?id=<?= (int) $item['id'] ?>"><?= cx_e($item['title']) ?></a></h3>
       <div class="mine-row__meta">#<?= $no ?> · 👁 <?= (int) ($item['view_count'] ?? 0) ?> · ❤️ <?= (int) ($item['favorite_count'] ?? 0) ?> · 📅 <?= (int) ($item['days_live'] ?? 0) ?> gün</div>
+      <?php if (!cx_listing_can_adjust_price($item)): ?>
       <div class="mine-row__price"><?= cx_e(cx_listing_price_line($item)) ?></div>
+      <?php endif; ?>
+      <?php
+        $back = '/my-listings.php';
+        require __DIR__ . '/views/partials/price-adjust.php';
+      ?>
       <?php if ($expired): ?>
         <div class="mine-row__alert">⚠️ Bu ilanın süresi doldu.</div>
       <?php endif; ?>

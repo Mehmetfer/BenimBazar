@@ -1,0 +1,54 @@
+{
+  "source": "kibrisarabaal.com",
+  "source_id": 1242,
+  "source_url": "https://kibrisarabaal.com/ilan/1242-2014-model-otomatik-renault-clio-830f77/",
+  "title": "2014 Model Otomatik Renault Clio",
+  "description": "Vade Olur, Takaslanabilir",
+  "location": "Girne ,  Karaoğlanoğlu",
+  "listed_at": "16 Ağustos 2026",
+  "listed_at_iso": "2026-08-16",
+  "price": {
+    "currency": "GBP",
+    "amount": 5999.0
+  },
+  "price_negotiable": true,
+  "subcategory": "Otomobil",
+  "segment": "otomobil",
+  "condition": "2.El",
+  "photo_urls": [
+    "https://kibrisarabaal.com/uploads/listings/1242/img_6a8203d4c966c0.36464322.webp",
+    "https://kibrisarabaal.com/uploads/listings/1242/img_6a8203d61b2361.66000532.webp",
+    "https://kibrisarabaal.com/uploads/listings/1242/img_6a8203d7652010.66396309.webp",
+    "https://kibrisarabaal.com/uploads/listings/1242/img_6a8203d8b9bc83.49467266.webp",
+    "https://kibrisarabaal.com/uploads/listings/1242/img_6a8203da1a8d54.76819192.webp"
+  ],
+  "is_corporate": true,
+  "seller_key": "4x4-ozbek-motors",
+  "seller_name": "4X4 Ozbek Motors",
+  "seller_phone": "00",
+  "seller_type_label": "Kurumsal Galeri",
+  "seller_member_since": "",
+  "seller_member_date": "",
+  "seller_profile_url": "https://kibrisarabaal.com/galeri/4x4-ozbek-motors/",
+  "gallery_about": "",
+  "equipment": [],
+  "vehicle": {
+    "year": "2014",
+    "km": null,
+    "fuel": "Benzin",
+    "transmission": "Otomatik",
+    "body": "Hatchback 5 kapı",
+    "engine_cc": null,
+    "color": "Siyah",
+    "drive": "Sağ Direksiyon",
+    "make": "Renault",
+    "model": "Clio"
+  },
+  "local_photos": [
+    "kka_1242_0.webp",
+    "kka_1242_1.webp",
+    "kka_1242_2.webp",
+    "kka_1242_3.webp",
+    "kka_1242_4.webp"
+  ]
+}

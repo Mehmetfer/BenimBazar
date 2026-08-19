@@ -432,6 +432,8 @@ final class AdminListingService
 
         if (in_array($status, ['APPROVED', 'ACTIVE'], true)) {
             (new ListingLifecycleService())->renewAfterApproval($id);
+            require_once __DIR__ . '/PriceDropAlertService.php';
+            (new PriceDropAlertService())->flushPendingForListing($id);
             $ownerId = (int) ($row['owner_id'] ?? 0);
             if ($ownerId > 0) {
                 $listingTitle = (string) ($row['title'] ?? '');
@@ -465,6 +467,14 @@ final class AdminListingService
                     true
                 );
             }
+        } elseif (in_array($status, ['CANCELLED', 'SOLD'], true) && cx_listing_is_public($old)) {
+            require_once __DIR__ . '/PriceDropAlertService.php';
+            (new PriceDropAlertService())->notifyListingGone(
+                $id,
+                $status === 'SOLD' ? 'sold' : 'removed',
+                (string) ($row['title'] ?? ''),
+                (int) ($row['owner_id'] ?? 0)
+            );
         }
 
         cx_audit_log((int) $actor['id'], 'listing.set_status', 'trade_listing', $id, [
@@ -480,6 +490,11 @@ final class AdminListingService
      */
     public function update(int $id, array $data, array $actor): void
     {
+        $oldRow = $this->find($id);
+        if ($oldRow === null) {
+            throw new \RuntimeException('Ilan bulunamadi.');
+        }
+
         $subcatSlug = trim((string) ($data['listing_subcat'] ?? ''));
         $resolved = cx_resolve_listing_category($subcatSlug);
         if ($resolved === null) {
@@ -548,6 +563,10 @@ final class AdminListingService
         }
 
         $mode = strtoupper(trim((string) ($data['listing_mode'] ?? 'TRADE')));
+        $descErr = cx_listing_description_error((string) ($data['description'] ?? ''));
+        if ($descErr !== null) {
+            throw new \RuntimeException($descErr);
+        }
         $price = $mode === 'SALE' ? (float) ($data['price_tl'] ?? 0) : null;
         if ($mode === 'SALE' && ($price === null || $price <= 0)) {
             throw new \RuntimeException('Satilik ilan icin fiyat girin.');
@@ -652,8 +671,19 @@ final class AdminListingService
             'status' => $fields['status'],
         ]);
 
+        $newStmt = $this->pdo->prepare('SELECT * FROM trade_listings WHERE id = ? LIMIT 1');
+        $newStmt->execute([$id]);
+        $newRow = $newStmt->fetch(\PDO::FETCH_ASSOC);
+        if (is_array($newRow)) {
+            require_once __DIR__ . '/PriceDropAlertService.php';
+            $defer = !in_array(strtoupper((string) ($newRow['status'] ?? '')), ['APPROVED', 'ACTIVE'], true);
+            (new PriceDropAlertService())->handleListingPriceChange($id, $oldRow, $newRow, $defer);
+        }
+
         if (in_array($fields['status'], ['APPROVED', 'ACTIVE'], true)) {
             (new ListingLifecycleService())->renewAfterApproval($id);
+            require_once __DIR__ . '/PriceDropAlertService.php';
+            (new PriceDropAlertService())->flushPendingForListing($id);
         }
     }
 

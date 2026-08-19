@@ -9,8 +9,8 @@ return [
     'debug' => false,
     /** Canli sunucuda true; yerel gelistirmede false yapin (kurulum.php / test.php acilir). */
     'production' => true,
-    /** Mesajlasma tamamlaninca true yapin. */
-    'messages_enabled' => false,
+    /** Mesajlaşma (Aşama 2). */
+    'messages_enabled' => true,
     /** true yapinca superadmin icin bilinen zayif sifreler (14531453 vb.) engellenir. */
     'block_weak_superadmin_password' => false,
     'session_name' => 'changex_session',
@@ -52,5 +52,68 @@ return [
         'opacity_thumb' => 0,
         'blur_px' => 0,
         'rotate_deg' => 0,
+    ],
+    /** Telefon dogrulama (Asama 4). mode=debug: kod ekranda; live: SMS/WhatsApp API. */
+    'phone_verify' => [
+        'required' => false,
+        'mode' => 'debug',
+        'default_channel' => 'whatsapp',
+        'code_ttl_seconds' => 300,
+        'max_send_per_hour' => 5,
+        'max_attempts' => 5,
+    ],
+    /** Ilan kalitesi (Asama 5). */
+    'listing_quality' => [
+        'enabled' => true,
+        'min_photos' => 3,
+        'min_description_chars' => 80,
+        'min_title_chars' => 10,
+        'require_price_on_sale' => true,
+        'feed_require_vehicle_attrs' => true,
+        'feed_min_photos' => 1,
+        'min_score_submit' => 0,
+    ],
+    /** Benzer ilanlar — detay sayfasi (Asama 6). */
+    'similar_listings' => [
+        'enabled' => true,
+        'limit' => 6,
+    ],
+    /** Ilan siralama — ana feed (Asama 7). */
+    'listing_sort' => [
+        'enabled' => true,
+        'default' => 'date_desc',
+    ],
+    /** SEO landing — sehir / marka (Asama 8). */
+    'seo_landing' => [
+        'enabled' => true,
+        'popular_brands_per_segment' => 15,
+    ],
+    /** Galeri kesfi (Asama 9). */
+    'gallery_discovery' => [
+        'enabled' => true,
+        'featured_vip' => 6,
+        'featured_dealer' => 6,
+        'per_page' => 24,
+    ],
+    /** Fiyat dusus alarmlari. */
+    'price_drop_alerts' => [
+        'enabled' => true,
+        'dedup_seconds' => 86400,
+        'email' => true,
+    ],
+    /** Kibris piyasa karsilastirmasi (Asama 11). */
+    'market_compare' => [
+        'enabled' => true,
+        'min_samples' => 4,
+        'max_fetch' => 200,
+        'year_tolerance' => 2,
+        'avg_band_pct' => 8.0,
+        'segments' => ['otomobil', 'motosiklet', 'ticari', 'antika-arac'],
+    ],
+    /** SEO varsayilanlari — admin panelinden storage/seo-settings.json ile genisletilir. */
+    'seo' => [
+        'default_title' => 'BenimBazar | Türkiye ve KKTC Araç İlanları',
+        'default_description' => 'BenimBazar ile Türkiye ve KKTC\'de otomobil, motosiklet, bisiklet ve ticari araç ilanlarını keşfedin. Araç ilanı verin, satın veya takas seçeneklerini değerlendirin.',
+        'search_url_template' => '/index.php?q={search_term_string}',
     ],
 ];

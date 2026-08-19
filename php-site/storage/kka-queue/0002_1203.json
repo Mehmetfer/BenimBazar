@@ -1,0 +1,54 @@
+{
+  "source": "kibrisarabaal.com",
+  "source_id": 1203,
+  "source_url": "https://kibrisarabaal.com/ilan/1203-2002-model-otomatik-honda-fit-822c4c/",
+  "title": "2002 Model Otomatik Honda Fit",
+  "description": "-",
+  "location": "Lefkoşa ,  Hamitköy",
+  "listed_at": "16 Ağustos 2026",
+  "listed_at_iso": "2026-08-16",
+  "price": {
+    "currency": "GBP",
+    "amount": 3300.0
+  },
+  "price_negotiable": false,
+  "subcategory": "Otomobil",
+  "segment": "otomobil",
+  "condition": "2.El",
+  "photo_urls": [
+    "https://kibrisarabaal.com/uploads/listings/1203/img_6a82008a94e5d4.58755623.webp",
+    "https://kibrisarabaal.com/uploads/listings/1203/img_6a82008be1a370.77391526.webp",
+    "https://kibrisarabaal.com/uploads/listings/1203/img_6a82008d386555.21813317.webp",
+    "https://kibrisarabaal.com/uploads/listings/1203/img_6a82008e7c9b72.68260946.webp",
+    "https://kibrisarabaal.com/uploads/listings/1203/img_6a82008fc6e816.91388414.webp"
+  ],
+  "is_corporate": true,
+  "seller_key": "daksi-autos",
+  "seller_name": "Daksi Autos",
+  "seller_phone": "00",
+  "seller_type_label": "Kurumsal Galeri",
+  "seller_member_since": "",
+  "seller_member_date": "",
+  "seller_profile_url": "https://kibrisarabaal.com/galeri/daksi-autos/",
+  "gallery_about": "",
+  "equipment": [],
+  "vehicle": {
+    "year": "2002",
+    "km": null,
+    "fuel": "Benzin",
+    "transmission": "Otomatik",
+    "body": "Hatchback 5 kapı",
+    "engine_cc": "1300",
+    "color": "Mavi-Açık",
+    "drive": "Sağ Direksiyon",
+    "make": "Honda",
+    "model": "Fit"
+  },
+  "local_photos": [
+    "kka_1203_0.webp",
+    "kka_1203_1.webp",
+    "kka_1203_2.webp",
+    "kka_1203_3.webp",
+    "kka_1203_4.webp"
+  ]
+}

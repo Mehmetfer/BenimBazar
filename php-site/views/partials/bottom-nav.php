@@ -42,6 +42,9 @@ $user = $user ?? cx_current_user();
     <a class="bottom-nav__item<?= $navActive === 'messages' ? ' active' : '' ?>" href="/messages.php">
 
       <span>💬</span> Mesajlar
+      <?php if (cx_messages_enabled() && ($navMsgCount ?? 0) > 0): ?>
+        <span class="bottom-nav__badge"><?= (int) $navMsgCount ?></span>
+      <?php endif; ?>
 
     </a>
 
@@ -49,9 +52,9 @@ $user = $user ?? cx_current_user();
 
     <?php if ($user): ?>
 
-    <?php if (cx_is_vip_kurumsal($user)): ?>
+    <?php if (cx_is_corporate($user)): ?>
     <a class="bottom-nav__item<?= $navActive === 'gallery' ? ' active' : '' ?>" href="/gallery-panel.php">
-      <span>🏢</span> Panel
+      <span>🏢</span> Mağaza
     </a>
     <?php else: ?>
     <a class="bottom-nav__item<?= $navActive === 'mine' ? ' active' : '' ?>" href="/my-listings.php">

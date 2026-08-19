@@ -139,7 +139,25 @@ function cx_home_icon_categories(): array
             'veh' => $row['veh'],
         ];
     }
+    if (function_exists('cx_gallery_discovery_enabled') && cx_gallery_discovery_enabled()) {
+        $out[] = [
+            'slug' => 'galeriler',
+            'label' => 'Galeriler',
+            'icon' => '🏪',
+            'cat' => '',
+            'veh' => null,
+            'href' => '/galeriler',
+        ];
+    }
+
     return $out;
+}
+
+function cx_home_galleries_nav_active(): bool
+{
+    $script = strtolower(basename((string) ($_SERVER['SCRIPT_NAME'] ?? '')));
+
+    return $script === 'galeriler.php';
 }
 
 function cx_home_category_href(
@@ -154,10 +172,10 @@ function cx_home_category_href(
             $veh = $row['veh'];
         }
     }
-    $params = array_filter([
+    $params = array_merge(cx_region_query_params(), array_filter([
         'veh' => $veh,
         'q' => $q !== '' ? $q : null,
-    ], static fn ($v) => $v !== null && $v !== '');
+    ], static fn ($v) => $v !== null && $v !== ''));
     return '/index.php' . ($params !== [] ? '?' . http_build_query($params, '', '&', PHP_QUERY_RFC3986) : '');
 }
 

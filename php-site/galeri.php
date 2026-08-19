@@ -45,17 +45,22 @@ if ($bannerRaw !== '') {
 }
 
 $phone = trim((string) ($owner['phone'] ?? ''));
-$phoneDigits = preg_replace('/\D+/', '', $phone) ?? '';
+$phoneDigits = cx_phone_digits($phone);
+$waDigits = $phoneDigits !== '' ? cx_phone_wa_digits($phone) : '';
 $city = trim((string) ($owner['city'] ?? ''));
 $website = trim((string) ($owner['website'] ?? ''));
 $about = trim((string) ($owner['about'] ?? ''));
 $email = trim((string) ($owner['email'] ?? ''));
+$hours = is_array($owner['gallery_hours'] ?? null) ? $owner['gallery_hours'] : cx_gallery_hours_normalize($owner['gallery_hours'] ?? '');
+$hoursGroups = cx_gallery_hours_groups($hours);
+$hoursStatus = cx_gallery_hours_status($hours);
+$verified = cx_gallery_is_verified($owner);
 $isOwnGallery = $user && (int) $user['id'] === $ownerId;
 $storeUrl = ($siteUrl !== '' ? $siteUrl : '') . '/galeri.php?id=' . $ownerId;
 $shareText = $displayName . ' — BenimBazar mağazası' . "\n" . $storeUrl;
 $waShare = 'https://wa.me/?text=' . rawurlencode($shareText);
-$waChat = $phoneDigits !== '' ? 'https://wa.me/' . $phoneDigits : $waShare;
-$messagesHref = cx_messages_enabled() ? '/messages.php' : '';
+$waChat = $waDigits !== '' ? ('https://wa.me/' . $waDigits) : $waShare;
+$messagesHref = cx_messages_enabled() ? cx_message_seller_url($ownerId) : '';
 $favBack = '/galeri.php?id=' . $ownerId;
 $vehicleBrowse = true;
 
@@ -165,7 +170,7 @@ ob_start();
   <nav class="store-page__crumbs" aria-label="Sayfa yolu">
     <a href="/index.php">Ana sayfa</a>
     <span>›</span>
-    <span>Mağazalar</span>
+    <a href="/galeriler.php">Mağazalar</a>
     <span>›</span>
     <span><?= cx_e($displayName) ?></span>
   </nav>
@@ -201,23 +206,37 @@ ob_start();
           <span class="store-hero__mono"><?= cx_e(mb_strtoupper(mb_substr($displayName, 0, 1))) ?></span>
           <span class="store-hero__mono-name"><?= cx_e(mb_strtoupper($displayName)) ?></span>
         <?php endif; ?>
-        <span class="store-hero__badge"><?= $isVip ? 'VIP Kurumsal' : 'Kurumsal Üye' ?></span>
+        <span class="store-hero__badge"><?= $verified ? 'Doğrulanmış' : 'Kurumsal' ?></span>
       </div>
 
       <div class="store-hero__info">
         <h1 class="store-hero__name">
           <?= cx_e($displayName) ?>
-          <?php if ($isVip): ?><span class="store-hero__verified" title="Doğrulanmış">✓</span><?php endif; ?>
+          <?php if ($verified): ?><span class="store-hero__verified" title="Doğrulanmış Galeri">✓</span><?php endif; ?>
+          <?php if ($isVip): ?><span class="store-hero__vip-pill">VIP</span><?php endif; ?>
+          <?php if (cx_user_phone_verified($owner)): ?>
+          <?= cx_phone_verified_badge_html('phone-verified-badge phone-verified-badge--hero') ?>
+          <?php endif; ?>
         </h1>
+        <?php if ($verified): ?>
+        <p class="store-hero__verified-line">✓ Doğrulanmış Galeri</p>
+        <?php endif; ?>
         <?php if ($city !== ''): ?>
         <p class="store-hero__loc"><span aria-hidden="true">📍</span> <?= cx_e($city) ?></p>
+        <?php endif; ?>
+        <?php if ($hoursStatus['label'] !== ''): ?>
+        <p class="store-hero__hours<?= $hoursStatus['open'] ? ' is-open' : '' ?>"><?= cx_e($hoursStatus['label']) ?></p>
         <?php endif; ?>
         <p class="store-hero__about"><?= cx_e($aboutText) ?></p>
 
         <div class="store-hero__stats" aria-label="Mağaza istatistikleri">
           <div class="store-hero__stat">
             <span class="store-hero__stat-ico" aria-hidden="true">🚗</span>
-            <div><strong><?= cx_e($fmtInt((int) $stats['listings'])) ?></strong><span>İlan</span></div>
+            <div><strong><?= cx_e($fmtInt((int) $stats['active'])) ?></strong><span>aktif araç</span></div>
+          </div>
+          <div class="store-hero__stat">
+            <span class="store-hero__stat-ico" aria-hidden="true">🆕</span>
+            <div><strong><?= cx_e($fmtInt((int) ($stats['new_last_30'] ?? 0))) ?></strong><span>son 30 günde yeni</span></div>
           </div>
           <div class="store-hero__stat">
             <span class="store-hero__stat-ico" aria-hidden="true">♥</span>
@@ -227,10 +246,6 @@ ob_start();
             <span class="store-hero__stat-ico" aria-hidden="true">👁</span>
             <div><strong><?= cx_e($fmtInt((int) $stats['views'])) ?></strong><span>Görüntülenme</span></div>
           </div>
-          <div class="store-hero__stat">
-            <span class="store-hero__stat-ico" aria-hidden="true">📅</span>
-            <div><strong><?= (int) $stats['member_year'] ?></strong><span>Üyelik Tarihi</span></div>
-          </div>
         </div>
 
         <div class="store-hero__actions">
@@ -238,11 +253,11 @@ ob_start();
             $msgHref = '';
             if (!$isOwnGallery) {
                 if (cx_messages_enabled()) {
-                    $msgHref = $user ? '/messages.php' : cx_login_url($favBack, 'Mesaj için giriş yapın');
+                    $msgHref = $user ? cx_message_seller_url($ownerId) : cx_login_url(cx_message_seller_url($ownerId), 'Mesaj için giriş yapın');
                 } elseif ($email !== '') {
                     $msgHref = 'mailto:' . $email;
                 } else {
-                    $msgHref = $user ? '/messages.php' : cx_login_url($favBack, 'Mesaj için giriş yapın');
+                    $msgHref = $user ? cx_message_seller_url($ownerId) : cx_login_url($favBack, 'Mesaj için giriş yapın');
                 }
             }
           ?>
@@ -258,43 +273,76 @@ ob_start();
           <a class="store-hero__btn" href="<?= cx_e($waShare) ?>" target="_blank" rel="noopener">Mağazayı Paylaş</a>
         </div>
 
-        <?php if ($isOwnGallery && $isVip): ?>
+        <?php if ($isOwnGallery): ?>
         <p class="store-hero__owner-edit"><a href="/gallery-panel.php?tab=info">Mağaza bilgilerini düzenle →</a></p>
         <?php endif; ?>
       </div>
     </div>
   </header>
 
-  <div class="store-trust" aria-label="Güven unsurları">
-    <div class="store-trust__item">
-      <span class="store-trust__ico" aria-hidden="true">🛡️</span>
-      <div>
-        <strong>Güvenilir Satıcı</strong>
-        <span>Doğrulanmış Mağaza</span>
-      </div>
+  <section class="store-profile" aria-label="Mağaza bilgileri">
+    <div class="store-profile__id">
+      <h2 class="store-profile__name"><?= cx_e($displayName) ?></h2>
+      <?php if ($verified): ?>
+      <p class="store-profile__verified">✓ Doğrulanmış Galeri</p>
+      <?php else: ?>
+      <p class="store-profile__role">Kurumsal galeri</p>
+      <?php endif; ?>
+      <?php if ($city !== ''): ?>
+      <p class="store-profile__city"><?= cx_e($city) ?></p>
+      <?php endif; ?>
+      <p class="store-profile__kpis">
+        <strong><?= cx_e($fmtInt((int) $stats['active'])) ?></strong> aktif araç
+        · Son 30 günde <strong><?= cx_e($fmtInt((int) ($stats['new_last_30'] ?? 0))) ?></strong> yeni ilan
+      </p>
     </div>
-    <div class="store-trust__item">
-      <span class="store-trust__ico" aria-hidden="true">⭐</span>
+
+    <dl class="store-profile__facts">
+      <?php if ($about !== ''): ?>
       <div>
-        <strong>Müşteri Memnuniyeti</strong>
-        <span>%98 Olumlu Geri Bildirim</span>
+        <dt>Hakkında</dt>
+        <dd><?= nl2br(cx_e($about), false) ?></dd>
       </div>
-    </div>
-    <div class="store-trust__item">
-      <span class="store-trust__ico" aria-hidden="true">🎧</span>
+      <?php endif; ?>
+      <?php if ($city !== ''): ?>
       <div>
-        <strong>Hızlı İletişim</strong>
-        <span>7/24 Destek</span>
+        <dt>Konum</dt>
+        <dd><?= cx_e($city) ?></dd>
       </div>
-    </div>
-    <div class="store-trust__item">
-      <span class="store-trust__ico" aria-hidden="true">🚙</span>
+      <?php endif; ?>
+      <?php if ($phone !== ''): ?>
       <div>
-        <strong>Geniş Araç Portföyü</strong>
-        <span>Farklı Marka ve Modeller</span>
+        <dt>Telefon</dt>
+        <dd><a href="tel:<?= cx_e($phoneDigits !== '' ? $phoneDigits : $phone) ?>"><?= cx_e($phone) ?></a></dd>
       </div>
-    </div>
-  </div>
+      <div>
+        <dt>WhatsApp</dt>
+        <dd><a href="<?= cx_e($waChat) ?>" target="_blank" rel="noopener">Sohbet başlat</a></dd>
+      </div>
+      <?php endif; ?>
+      <?php if ($website !== ''): ?>
+      <div>
+        <dt>Web</dt>
+        <dd><a href="<?= cx_e($website) ?>" target="_blank" rel="noopener"><?= cx_e($website) ?></a></dd>
+      </div>
+      <?php endif; ?>
+      <?php if (cx_gallery_hours_has_any($hours)): ?>
+      <div class="store-profile__hours">
+        <dt>Çalışma saatleri</dt>
+        <dd>
+          <?php if ($hoursStatus['label'] !== ''): ?>
+          <p class="store-profile__hours-now<?= $hoursStatus['open'] ? ' is-open' : '' ?>"><?= cx_e($hoursStatus['label']) ?></p>
+          <?php endif; ?>
+          <ul>
+            <?php foreach ($hoursGroups as $g): ?>
+            <li><span><?= cx_e($g['label']) ?></span><strong><?= cx_e($g['range']) ?></strong></li>
+            <?php endforeach; ?>
+          </ul>
+        </dd>
+      </div>
+      <?php endif; ?>
+    </dl>
+  </section>
 
   <form class="store-filters" method="get" action="/galeri.php">
     <input type="hidden" name="id" value="<?= $ownerId ?>">
@@ -348,8 +396,8 @@ ob_start();
   </form>
 
   <div class="store-page__list-head">
-    <h2 class="store-page__list-title">Mağaza ilanları</h2>
-    <p class="store-page__list-count"><?= count($items) ?> ilan</p>
+    <h2 class="store-page__list-title">Araçlar</h2>
+    <p class="store-page__list-count"><?= count($items) ?> ilan · <?= (int) $stats['active'] ?> aktif</p>
   </div>
 
   <?php
@@ -358,7 +406,10 @@ ob_start();
 </section>
 <?php
 $content = ob_get_clean();
-$title = $displayName . ' — Mağaza';
+$title = $displayName . ($city !== '' ? ' — ' . $city : '') . ' Mağazası';
+$metaDescription = trim((string) ($about !== '' ? mb_substr($about, 0, 160) : ((int) ($stats['listings'] ?? 0) . ' yayındaki ilan · BenimBazar kurumsal mağaza')));
+$canonicalUrl = ($siteUrl !== '' ? $siteUrl : '') . '/galeri.php?id=' . $ownerId;
+$ogMeta = cx_gallery_open_graph($owner, $stats);
 $layout = 'app';
 $navActive = 'home';
 $bodyClass = 'page-store' . ($isVip ? ' page-store--vip' : '');

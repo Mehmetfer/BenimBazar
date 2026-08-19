@@ -103,9 +103,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $token = Auth::newSession($uid);
     Auth::setTokenCookie($token);
     cx_flash('ok', $country === 'kktc'
-        ? 'Hesap olusturuldu. KKTC / sterlin ilanlari acildi.'
-        : 'Hesap olusturuldu.');
-    cx_redirect($country === 'kktc' ? '/index.php?region=kktc' : '/index.php?region=all');
+        ? 'Hesap olusturuldu. Simdi telefonunuzu dogrulayin.'
+        : 'Hesap olusturuldu. Simdi telefonunuzu dogrulayin.');
+    cx_redirect('/verify-phone.php');
 }
 
 $googleOn = cx_google_enabled();
@@ -167,7 +167,7 @@ ob_start();
 
   <label>GSM *</label>
   <input name="phone" type="tel" required autocomplete="tel" placeholder="0533 123 45 67" inputmode="tel">
-  <p class="auth-hint" style="margin-top:-8px">Ileride SMS dogrulama icin kullanilacak.</p>
+  <p class="auth-hint" style="margin-top:-8px">Kayit sonrasi SMS veya WhatsApp ile dogrulama yapilir.</p>
 
   <label>Konum / sehir *</label>
   <input name="city" required autocomplete="address-level2" placeholder="<?= $preCountry === 'kktc' ? 'Girne / Mağusa / Lefkoşa' : 'İstanbul / Ankara' ?>" id="register_city">

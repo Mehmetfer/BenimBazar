@@ -7,6 +7,7 @@ require_once __DIR__ . '/app/Services/SocialService.php';
 require_once __DIR__ . '/app/Services/ListingService.php';
 
 use App\Services\ListingService;
+use App\Services\MarketCompareService;
 
 cx_bootstrap();
 
@@ -22,8 +23,17 @@ $svc = new ListingService($base);
 $item = $svc->findById($id, $user ? (int) $user['id'] : null);
 
 if ($item === null || !cx_can_view_listing($user, $item)) {
-    cx_flash('error', 'İlan bulunamadı.');
-    cx_redirect('/index.php');
+    http_response_code(404);
+    $metaRobots = cx_seo_robots_noindex();
+    $title = 'İlan bulunamadı';
+    $metaDescription = 'Aradığınız ilan yayından kaldırılmış veya mevcut değil.';
+    $layout = 'app';
+    $bodyClass = 'page-not-found';
+    ob_start();
+    echo '<section class="not-found"><h1>Aradığınız ilan bulunamadı</h1><p>Bu ilan silinmiş, satılmış veya moderasyon nedeniyle görüntülenemiyor olabilir.</p><p><a class="btn" href="/">Ana sayfaya dön</a> · <a href="/index.php?veh=otomobil">Araç ilanları</a></p></section>';
+    $mainContent = ob_get_clean();
+    require __DIR__ . '/views/layout.php';
+    exit;
 }
 
 try {
@@ -53,11 +63,38 @@ $waSharePayload = [
 ];
 $ownerId = (int) ($item['owner_id'] ?? 0);
 
+$similarItems = $svc->findSimilarPublic($item, $user ? (int) $user['id'] : null);
+$similarAttrs = cx_listing_attrs($item);
+$similarAttrs['_title'] = (string) ($item['title'] ?? '');
+$similarContext = cx_listing_similar_context_label($similarAttrs);
+
+$marketCompare = null;
+try {
+    $marketCompare = (new MarketCompareService())->analyze($item);
+} catch (Throwable) {
+    $marketCompare = null;
+}
+
+$priceHistorySummary = ['points' => []];
+try {
+    $priceHistorySummary = cx_price_history_summarize(
+        (new \App\Services\PriceHistoryService())->forListing($id)
+    );
+} catch (Throwable) {
+    $priceHistorySummary = ['points' => []];
+}
+
 ob_start();
 require __DIR__ . '/views/partials/listing-detail.php';
 $mainContent = ob_get_clean();
 
-$title = (string) $item['title'];
+$listingSeo = cx_listing_seo_meta($item, $id, $no);
+$title = $listingSeo['title'];
+$titleStandalone = true;
+$metaDescription = $listingSeo['description'];
+$canonicalUrl = $listingSeo['canonical'];
+$jsonLd = $listingSeo['json_ld'];
+$listingBreadcrumbs = $listingSeo['breadcrumbs'];
 $layout = 'app';
 $navActive = 'home';
 $bodyClass = 'page-listing-detail';

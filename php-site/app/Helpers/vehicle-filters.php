@@ -161,7 +161,7 @@ function cx_vehicle_browse_has_wizard(string $veh): bool
 function cx_vehicle_filter_href(string $veh, string $q = '', array $filters = [], array $overrides = []): string
 {
     $merged = array_merge($filters, $overrides);
-    $params = ['veh' => $veh];
+    $params = array_merge(cx_region_query_params(), ['veh' => $veh]);
     if ($q !== '') {
         $params['q'] = $q;
     }

@@ -6,6 +6,10 @@ declare(strict_types=1);
 
 /** @var string $q */
 
+/** @var string $region */
+
+/** @var string $kktcCity */
+
 /** @var array<string,mixed> $filters */
 
 
@@ -13,6 +17,10 @@ declare(strict_types=1);
 $veh = $veh ?? 'otomobil';
 
 $q = $q ?? '';
+
+$region = $region ?? cx_region_from_request(null);
+
+$kktcCity = $kktcCity ?? cx_kktc_city_from_request();
 
 $filters = $filters ?? cx_vehicle_filters_from_request($veh);
 
@@ -99,10 +107,21 @@ $showDetailFilters = !$hasWizard || $browseStep === 'listings';
 
     <input type="hidden" name="veh" value="<?= cx_e($veh) ?>">
 
+    <?php foreach (cx_region_query_params() as $rk => $rv): ?>
+      <input type="hidden" name="<?= cx_e($rk) ?>" value="<?= cx_e($rv) ?>">
+    <?php endforeach; ?>
+
     <?php if ($q !== ''): ?>
 
       <input type="hidden" name="q" value="<?= cx_e($q) ?>">
 
+    <?php endif; ?>
+
+    <?php
+      $feedSort = cx_listing_sort_from_request();
+      if (!cx_listing_sort_is_default($feedSort)):
+    ?>
+      <input type="hidden" name="sort" value="<?= cx_e($feedSort) ?>">
     <?php endif; ?>
 
 

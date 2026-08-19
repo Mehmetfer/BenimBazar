@@ -117,11 +117,20 @@ $showMessages = cx_messages_enabled() && $user && !$isOwner && $isPublicListing;
 $showFavorite = $user && $isPublicListing;
 $showShare = $isPublicListing;
 
+$priceHistorySummary = is_array($priceHistorySummary ?? null) ? $priceHistorySummary : ['points' => []];
+
 $favForm = $showFavorite
     ? cx_favorite_toggle_form($id, '/listing.php?id=' . $id, $isFav, 'listing-action--icon' . ($isFav ? ' is-on' : ''))
     : '';
 
-$messagesHref = '/messages.php';
+$priceAlertEnabled = false;
+if ($showFavorite && $isFav && cx_price_drop_alerts_enabled()) {
+    require_once __DIR__ . '/../../app/Services/PriceDropAlertService.php';
+    $priceAlertEnabled = (new \App\Services\PriceDropAlertService())->isAlertEnabled((int) $user['id'], $id);
+}
+$alertForm = cx_price_alert_toggle_form($id, '/listing.php?id=' . $id, $priceAlertEnabled, $isFav);
+
+$messagesHref = cx_message_listing_url($id);
 
 $sellerType = trim((string) ($sellerMeta['type'] ?? ''));
 
@@ -142,7 +151,16 @@ $photoSiteUrl = (string) (cx_app_config()['url'] ?? '');
 
 $photoUploadsUrl = (string) (cx_app_config()['uploads_url'] ?? '/uploads');
 
+$listingBreadcrumbs = $listingBreadcrumbs ?? [];
+
 ?>
+
+<?php if ($listingBreadcrumbs !== []): ?>
+  <?php
+    $breadcrumbs = $listingBreadcrumbs;
+    require __DIR__ . '/seo-breadcrumbs.php';
+  ?>
+<?php endif; ?>
 
 <div class="listing-detail<?= $isVehicle ? ' listing-detail--vehicle' : '' ?>">
 
@@ -157,7 +175,7 @@ $photoUploadsUrl = (string) (cx_app_config()['uploads_url'] ?? '/uploads');
 
       <div class="listing-gallery" data-gallery>
 
-        <div class="listing-gallery__stage">
+        <div class="listing-gallery__stage" data-gallery-stage>
 
           <?php if ($photos !== []): ?>
 
@@ -209,7 +227,7 @@ $photoUploadsUrl = (string) (cx_app_config()['uploads_url'] ?? '/uploads');
 
       </div>
 
-
+      <div class="listing-detail__body">
 
       <?php if ($isVehicle): ?>
 
@@ -431,6 +449,8 @@ $photoUploadsUrl = (string) (cx_app_config()['uploads_url'] ?? '/uploads');
 
       </div>
 
+      </div>
+
     </div>
 
 
@@ -494,7 +514,24 @@ $photoUploadsUrl = (string) (cx_app_config()['uploads_url'] ?? '/uploads');
 
         <?php if ($isSale): ?>
 
+          <?php if ($canEditOwn): ?>
+            <?php
+              $priceAdjustBack = '/listing.php?id=' . $id;
+              require __DIR__ . '/price-adjust.php';
+              unset($priceAdjustBack);
+            ?>
+          <?php else: ?>
           <div class="listing-price-block__amount"><?= cx_e(cx_listing_price_line($item)) ?></div>
+          <?php endif; ?>
+
+          <?php
+            $priceDelta = trim((string) ($priceHistorySummary['delta_label'] ?? ''));
+            if ($priceDelta !== '' && !empty($priceHistorySummary['dropped'])):
+          ?>
+            <div class="listing-price-block__drop"><?= cx_e($priceDelta) ?></div>
+          <?php elseif ($priceDelta !== '' && !empty($priceHistorySummary['rose'])): ?>
+            <div class="listing-price-block__drop listing-price-block__drop--up"><?= cx_e($priceDelta) ?></div>
+          <?php endif; ?>
 
           <?php if (!empty($item['price_negotiable'])): ?>
 
@@ -514,9 +551,11 @@ $photoUploadsUrl = (string) (cx_app_config()['uploads_url'] ?? '/uploads');
 
         <?php endif; ?>
 
+        <?php require __DIR__ . '/price-history.php'; ?>
+
       </div>
 
-
+      <?php require __DIR__ . '/market-compare.php'; ?>
 
       <?php if ($isVehicle && $quickSpecs !== []): ?>
 
@@ -571,8 +610,12 @@ $photoUploadsUrl = (string) (cx_app_config()['uploads_url'] ?? '/uploads');
 
         <?php if ($showFavorite): ?>
         <?= $favForm ?>
+        <?= $alertForm ?>
         <?php endif; ?>
 
+        <?php if (is_array($marketCompare ?? null)): ?>
+        <a class="listing-action listing-action--icon" href="#piyasa" title="Piyasa" aria-label="Bu araç piyasada nasıl?">⚖</a>
+        <?php endif; ?>
         <?php if ($showShare): ?>
         <a class="listing-action listing-action--icon" href="/share.php?id=<?= $id ?>" title="Paylaş">↗</a>
         <?php endif; ?>
@@ -599,6 +642,10 @@ $photoUploadsUrl = (string) (cx_app_config()['uploads_url'] ?? '/uploads');
         <?php endif; ?>
 
         <div class="listing-seller__loc">📍 <?= cx_e(cx_listing_location_line($item)) ?></div>
+
+        <?php if (cx_listing_owner_phone_verified($item)): ?>
+        <div class="listing-seller__verified"><?= cx_phone_verified_badge_html() ?></div>
+        <?php endif; ?>
 
         <?php if ($score > 0): ?>
 
@@ -629,7 +676,7 @@ $photoUploadsUrl = (string) (cx_app_config()['uploads_url'] ?? '/uploads');
         <?php if ($sellerPublicUrl !== ''): ?>
         <div class="listing-seller__more">
           <a class="listing-seller__more-link" href="<?= cx_e($sellerPublicUrl) ?>">
-            <?= $sellerIsCorporate ? 'Galerisine bak →' : 'Diğer ilanlarını gör →' ?>
+            <?= $sellerIsCorporate ? 'Mağazasına bak →' : 'Diğer ilanlarını gör →' ?>
           </a>
         </div>
         <?php endif; ?>
@@ -637,7 +684,12 @@ $photoUploadsUrl = (string) (cx_app_config()['uploads_url'] ?? '/uploads');
         <div class="listing-seller__actions">
 
           <?php if ($showMessages): ?>
-          <a class="listing-seller__btn listing-seller__btn--msg" href="<?= cx_e($messagesHref) ?>">💬 Mesaj</a>
+          <a class="listing-seller__btn listing-seller__btn--msg" href="<?= cx_e($messagesHref) ?>">💬 <?= $isSale ? 'Mesaj' : 'Takas teklifi' ?></a>
+          <?php endif; ?>
+
+          <?php if (!$isOwner && $isPublicListing && $sellerPhone !== ''): ?>
+          <a class="listing-seller__btn listing-seller__btn--tel" href="tel:<?= cx_e(cx_phone_digits($sellerPhone)) ?>">📞 Ara</a>
+          <a class="listing-seller__btn listing-seller__btn--wa" href="<?= cx_e(cx_whatsapp_seller_chat_url($sellerPhone, $item, $id, $no, $photoSiteUrl)) ?>" target="_blank" rel="noopener">WhatsApp</a>
           <?php endif; ?>
 
           <?php if ($user && $ownerId > 0 && (int) $user['id'] !== $ownerId && $isPublicListing): ?>
@@ -704,7 +756,13 @@ $photoUploadsUrl = (string) (cx_app_config()['uploads_url'] ?? '/uploads');
 
   </div>
 
+  <?php require __DIR__ . '/listing-mobile-dock.php'; ?>
+
 </div>
+
+<?php if ($similarItems !== []): ?>
+  <?php require __DIR__ . '/similar-listings-public.php'; ?>
+<?php endif; ?>
 
 
 
@@ -753,6 +811,22 @@ $photoUploadsUrl = (string) (cx_app_config()['uploads_url'] ?? '/uploads');
         t.addEventListener('click', function () { show(parseInt(t.getAttribute('data-gallery-index'), 10)); });
 
       });
+
+      var stage = root.querySelector('[data-gallery-stage]') || hero;
+      var touchX = 0;
+      var touchY = 0;
+      stage.addEventListener('touchstart', function (e) {
+        if (!e.changedTouches || !e.changedTouches[0]) return;
+        touchX = e.changedTouches[0].clientX;
+        touchY = e.changedTouches[0].clientY;
+      }, { passive: true });
+      stage.addEventListener('touchend', function (e) {
+        if (!e.changedTouches || !e.changedTouches[0]) return;
+        var dx = e.changedTouches[0].clientX - touchX;
+        var dy = e.changedTouches[0].clientY - touchY;
+        if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+        show(idx + (dx < 0 ? 1 : -1));
+      }, { passive: true });
 
     }
 

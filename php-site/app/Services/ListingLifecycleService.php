@@ -34,7 +34,7 @@ final class ListingLifecycleService
     /** Sahip: satildi isaretle. */
     public function markSold(int $listingId, int $ownerId): void
     {
-        $stmt = $this->pdo->prepare('SELECT owner_id, status FROM trade_listings WHERE id = ? LIMIT 1');
+        $stmt = $this->pdo->prepare('SELECT owner_id, status, title FROM trade_listings WHERE id = ? LIMIT 1');
         $stmt->execute([$listingId]);
         $row = $stmt->fetch();
         if (!$row || (int) $row['owner_id'] !== $ownerId) {
@@ -48,6 +48,13 @@ final class ListingLifecycleService
         $this->pdo->prepare(
             'UPDATE trade_listings SET status = ?, sold_at = ?, updated_at = ? WHERE id = ?'
         )->execute(['SOLD', $now, $now, $listingId]);
+        require_once __DIR__ . '/PriceDropAlertService.php';
+        (new PriceDropAlertService())->notifyListingGone(
+            $listingId,
+            'sold',
+            (string) ($row['title'] ?? ''),
+            $ownerId
+        );
     }
 
     /** Sahip: suresi dolan ilani yeniden moderasyona gonder. */

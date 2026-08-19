@@ -13,8 +13,8 @@ use App\Services\SellerPublicService;
 cx_bootstrap();
 $user = cx_require_user();
 
-if (!cx_is_vip_kurumsal($user)) {
-    cx_flash('error', 'VIP Kurumsal paneli yalnızca VIP Kurumsal hesaplar içindir.');
+if (!cx_is_corporate($user)) {
+    cx_flash('error', 'Mağaza paneli yalnızca kurumsal galeri hesapları içindir.');
     cx_redirect('/my-listings.php');
 }
 
@@ -43,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'email' => (string) ($_POST['email'] ?? ''),
             'website' => (string) ($_POST['website'] ?? ''),
             'about' => (string) ($_POST['about'] ?? ''),
+            'gallery_hours' => cx_gallery_hours_from_post($_POST),
         ]);
         $logoOk = true;
         $logoMsg = '';
@@ -65,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $bannerMsg = $bannerOk ? ' Vitrin güncellendi.' : '';
         }
         if ($okProfile && $logoOk && $bannerOk) {
-            cx_flash('ok', 'Galeri bilgileri kaydedildi.' . $logoMsg . $bannerMsg);
+            cx_flash('ok', 'Mağaza bilgileri kaydedildi.' . $logoMsg . $bannerMsg);
         } elseif (!$okProfile) {
             cx_flash('error', 'Profil kaydedilemedi. E-posta / web sitesini kontrol edin.');
         } elseif (!$logoOk) {
@@ -138,6 +139,8 @@ $filtered = array_values(array_filter($rows, static function (array $item) use (
     return true;
 }));
 
+$isVip = cx_is_vip_kurumsal($user);
+$galleryHours = cx_gallery_hours_normalize($ownerProfile['gallery_hours'] ?? []);
 $galleryName = (string) ($ownerProfile['gallery_name'] ?? '');
 if ($galleryName === '') {
     $galleryName = (string) ($ownerProfile['display_name'] ?? $user['username'] ?? '');
@@ -149,22 +152,23 @@ ob_start();
 <div class="vip-panel">
   <header class="vip-panel__head">
     <div>
-      <p class="vip-panel__eyebrow">VIP Kurumsal</p>
-      <h1 class="section-title">Galeri yönetim paneli</h1>
-      <p class="section-sub">Galeri bilgileri, logo ve ilanlarınızı buradan yönetin.</p>
+      <p class="vip-panel__eyebrow"><?= $isVip ? 'VIP Kurumsal' : 'Kurumsal galeri' ?></p>
+      <h1 class="section-title">Mağaza paneli</h1>
+      <p class="section-sub">Mağaza sayfanız, logo, iletişim, çalışma saatleri ve araç ilanlarını buradan yönetin.</p>
     </div>
     <div class="vip-panel__head-actions">
-      <a class="btn-primary vip-panel__cta" href="<?= cx_e($publicGalleryUrl) ?>" target="_blank" rel="noopener">Galerimi aç</a>
+      <a class="btn-primary vip-panel__cta" href="<?= cx_e($publicGalleryUrl) ?>" target="_blank" rel="noopener">Mağazamı aç</a>
       <a class="btn-sm btn-sm--gold vip-panel__cta-secondary" href="/create-listing.php">+ Yeni ilan</a>
     </div>
   </header>
 
   <nav class="vip-panel__tabs" aria-label="Panel sekmeleri">
-    <a class="vip-panel__tab<?= $tab === 'info' ? ' is-active' : '' ?>" href="?tab=info">Galeri bilgileri</a>
+    <a class="vip-panel__tab<?= $tab === 'info' ? ' is-active' : '' ?>" href="?tab=info">Mağaza bilgileri</a>
     <a class="vip-panel__tab<?= $tab === 'listings' ? ' is-active' : '' ?>" href="?tab=listings">İlanlarım</a>
   </nav>
 
   <?php if ($tab === 'info'): ?>
+  <?php if ($isVip): ?>
   <section class="vip-panel__membership<?= $vipMembership['expired'] ? ' is-expired' : ($vipMembership['active'] ? ' is-active' : '') ?>" aria-label="VIP üyelik">
     <h2 class="vip-panel__section-title">VIP üyelik süresi</h2>
     <p class="vip-panel__section-sub">Başlangıç ve bitiş tarihleri yalnızca yönetim tarafından belirlenir; siz değiştiremezsiniz.</p>
@@ -183,10 +187,11 @@ ob_start();
       </div>
     </dl>
   </section>
+  <?php endif; ?>
 
   <section class="vip-panel__profile" id="galeri-bilgileri">
-    <h2 class="vip-panel__section-title">Galeri bilgileri, logo ve vitrin</h2>
-    <p class="vip-panel__section-sub">Herkese açık galeri sayfanızda görünen ad, iletişim, logo ve arka plan vitrin görseli. Kaydettikten sonra “Galerimi aç” ile kontrol edin.</p>
+    <h2 class="vip-panel__section-title">Mağaza kimliği, logo ve vitrin</h2>
+    <p class="vip-panel__section-sub">Herkese açık mağaza sayfanızda görünen ad, iletişim, çalışma saatleri, logo ve vitrin. Kaydettikten sonra “Mağazamı aç” ile kontrol edin.</p>
 
     <form class="vip-panel__profile-form" method="post" enctype="multipart/form-data">
       <?= cx_csrf_field() ?>
@@ -225,7 +230,7 @@ ob_start();
           <?php endif; ?>
         </div>
         <div class="vip-panel__logo-fields">
-          <p class="vip-panel__logo-title">Galeri logosu</p>
+          <p class="vip-panel__logo-title">Mağaza logosu</p>
           <label class="vip-panel__logo-btn" for="gallery_logo">
             <?= $logoSrc !== '' ? 'Logoyu değiştir' : 'Logo ekle' ?>
             <input id="gallery_logo" type="file" name="gallery_logo" accept="image/jpeg,image/png,image/webp">
@@ -242,7 +247,7 @@ ob_start();
 
       <div class="vip-panel__profile-grid">
         <label class="vip-panel__field">
-          <span>Galeri adı</span>
+          <span>Mağaza adı</span>
           <input class="create-input" type="text" name="gallery_name" maxlength="128" required
                  value="<?= cx_e($galleryName) ?>" placeholder="Örn. Fer Motors">
         </label>
@@ -267,15 +272,39 @@ ob_start();
                  value="<?= cx_e((string) ($ownerProfile['website'] ?? '')) ?>" placeholder="https://">
         </label>
         <label class="vip-panel__field vip-panel__field--wide">
-          <span>Kısa tanıtım</span>
+          <span>Kısa tanıtım (Hakkında)</span>
           <textarea class="create-input" name="about" rows="3" maxlength="500"
                     placeholder="Galeriniz hakkında kısa bilgi"><?= cx_e((string) ($ownerProfile['about'] ?? '')) ?></textarea>
         </label>
       </div>
 
+      <fieldset class="vip-panel__hours">
+        <legend>Çalışma saatleri</legend>
+        <p class="vip-panel__hint">Mağaza sayfasında görünür. Kapalı günleri işaretleyin.</p>
+        <div class="vip-panel__hours-grid">
+          <?php foreach (cx_gallery_hour_days() as $dayKey => $dayLabel):
+              $slot = is_array($galleryHours[$dayKey] ?? null) ? $galleryHours[$dayKey] : null;
+              $closed = $slot === null;
+              $openVal = $slot['open'] ?? '09:00';
+              $closeVal = $slot['close'] ?? '18:00';
+          ?>
+          <div class="vip-panel__hours-row">
+            <span class="vip-panel__hours-day"><?= cx_e($dayLabel) ?></span>
+            <label class="vip-panel__check">
+              <input type="checkbox" name="hours[<?= cx_e($dayKey) ?>][closed]" value="1"<?= $closed ? ' checked' : '' ?>>
+              Kapalı
+            </label>
+            <input class="create-input" type="time" name="hours[<?= cx_e($dayKey) ?>][open]" value="<?= cx_e($openVal) ?>">
+            <span class="vip-panel__hours-sep">–</span>
+            <input class="create-input" type="time" name="hours[<?= cx_e($dayKey) ?>][close]" value="<?= cx_e($closeVal) ?>">
+          </div>
+          <?php endforeach; ?>
+        </div>
+      </fieldset>
+
       <div class="vip-panel__profile-actions">
-        <button class="btn-primary" type="submit">Galeri bilgilerini kaydet</button>
-        <a class="link-gold" href="<?= cx_e($publicGalleryUrl) ?>" target="_blank" rel="noopener">Galeriyi önizle →</a>
+        <button class="btn-primary" type="submit">Mağaza bilgilerini kaydet</button>
+        <a class="link-gold" href="<?= cx_e($publicGalleryUrl) ?>" target="_blank" rel="noopener">Mağazayı önizle →</a>
       </div>
     </form>
   </section>
@@ -323,7 +352,14 @@ ob_start();
         <div class="mine-row__status"><?= cx_listing_status_emoji($st) ?> <?= cx_e(cx_listing_status_label($st)) ?></div>
         <h3 class="mine-row__title"><a href="/listing.php?id=<?= (int) $item['id'] ?>"><?= cx_e($item['title']) ?></a></h3>
         <div class="mine-row__meta">#<?= $no ?> · 👁 <?= (int) ($item['view_count'] ?? 0) ?> · ❤️ <?= (int) ($item['favorite_count'] ?? 0) ?> · 📅 <?= (int) ($item['days_live'] ?? 0) ?> gün</div>
+        <?php if (!cx_listing_can_adjust_price($item)): ?>
         <div class="mine-row__price"><?= cx_e(cx_listing_price_line($item)) ?></div>
+        <?php endif; ?>
+        <?php
+          $priceAdjustBack = '/gallery-panel.php?tab=listings';
+          require __DIR__ . '/views/partials/price-adjust.php';
+          unset($priceAdjustBack);
+        ?>
         <?php if ($expired): ?>
           <div class="mine-row__alert">⚠️ Bu ilanın süresi doldu.</div>
         <?php endif; ?>
@@ -367,7 +403,7 @@ ob_start();
 </div>
 <?php
 $content = ob_get_clean();
-$title = 'VIP Kurumsal Panel';
+$title = 'Mağaza paneli';
 $layout = 'app';
 $navActive = 'gallery';
 require __DIR__ . '/views/layout.php';

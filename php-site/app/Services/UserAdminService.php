@@ -512,4 +512,112 @@ final class UserAdminService
             // audit_logs yoksa devam
         }
     }
+
+    /**
+     * Superadmin: uye ve bagli verileri kalici siler (superadmin ve kendisi haric).
+     *
+     * @return array{username:string,listings_deleted:int}
+     */
+    public static function deleteUser(int $targetId, int $actorId): array
+    {
+        if ($targetId <= 0) {
+            throw new \RuntimeException('Gecersiz kullanici.');
+        }
+        if ($targetId === $actorId) {
+            throw new \RuntimeException('Kendi hesabinizi silemezsiniz.');
+        }
+
+        $pdo = Database::pdo();
+        ListingSchemaService::ensureUserColumns();
+        $stmt = $pdo->prepare('SELECT id, username, role FROM users WHERE id = ? LIMIT 1');
+        $stmt->execute([$targetId]);
+        $target = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$target) {
+            throw new \RuntimeException('Kullanici bulunamadi.');
+        }
+        if ((string) ($target['role'] ?? '') === 'superadmin') {
+            throw new \RuntimeException('Superadmin silinemez.');
+        }
+
+        $username = (string) ($target['username'] ?? '');
+        $listStmt = $pdo->prepare('SELECT id FROM trade_listings WHERE owner_id = ?');
+        $listStmt->execute([$targetId]);
+        $listingIds = array_values(array_filter(array_map(
+            static fn ($v): int => (int) $v,
+            $listStmt->fetchAll(PDO::FETCH_COLUMN) ?: []
+        ), static fn (int $id): bool => $id > 0));
+
+        $pdo->beginTransaction();
+        try {
+            if ($listingIds !== []) {
+                $placeholders = implode(',', array_fill(0, count($listingIds), '?'));
+                foreach ([
+                    "DELETE FROM listing_favorites WHERE listing_id IN ($placeholders)",
+                    "DELETE FROM listing_price_drop_pending WHERE listing_id IN ($placeholders)",
+                    "DELETE FROM listing_price_history WHERE listing_id IN ($placeholders)",
+                    "DELETE FROM listing_views WHERE listing_id IN ($placeholders)",
+                ] as $sql) {
+                    self::tryExecute($pdo, $sql, $listingIds);
+                }
+            }
+
+            self::tryExecute($pdo, 'DELETE FROM trade_listings WHERE owner_id = ?', [$targetId]);
+            self::tryExecute($pdo, 'DELETE FROM messages WHERE sender_id = ?', [$targetId]);
+            self::tryExecute($pdo, 'DELETE FROM message_participants WHERE user_id = ?', [$targetId]);
+            self::tryExecute($pdo, 'DELETE FROM listing_favorites WHERE user_id = ?', [$targetId]);
+            self::tryExecute($pdo, 'DELETE FROM user_notifications WHERE user_id = ?', [$targetId]);
+            self::tryExecute($pdo, 'DELETE FROM phone_verifications WHERE user_id = ?', [$targetId]);
+            self::tryExecute($pdo, 'DELETE FROM user_follows WHERE follower_id = ? OR following_id = ?', [$targetId, $targetId]);
+            self::tryExecute($pdo, 'DELETE FROM sessions WHERE user_id = ?', [$targetId]);
+
+            $del = $pdo->prepare('DELETE FROM users WHERE id = ?');
+            $del->execute([$targetId]);
+            if ($del->rowCount() < 1) {
+                throw new \RuntimeException('Kullanici kaydi silinemedi.');
+            }
+
+            $pdo->commit();
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw new \RuntimeException('Uye silinemedi: ' . $e->getMessage(), 0, $e);
+        }
+
+        try {
+            $pdo->prepare(
+                'INSERT INTO audit_logs (actor_id, action, entity, entity_id, detail, created_at)
+                 VALUES (?,?,?,?,?,?)'
+            )->execute([
+                $actorId,
+                'admin.delete_user',
+                'user',
+                $targetId,
+                json_encode([
+                    'username' => $username,
+                    'role' => $target['role'] ?? '',
+                    'listings_deleted' => count($listingIds),
+                ], JSON_UNESCAPED_UNICODE),
+                microtime(true),
+            ]);
+        } catch (\Throwable) {
+            // audit_logs yoksa devam
+        }
+
+        return [
+            'username' => $username,
+            'listings_deleted' => count($listingIds),
+        ];
+    }
+
+    /** @param list<int|string> $args */
+    private static function tryExecute(PDO $pdo, string $sql, array $args = []): void
+    {
+        try {
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($args);
+        } catch (\Throwable) {
+            // tablo yok / yetki — kritik silme adimlarinda ust katman hata verir
+        }
+    }
 }

@@ -33,6 +33,18 @@ try {
     } elseif ($action === 'republish') {
         $writer->republish($listingId, (int) $user['id']);
         cx_flash('ok', 'Ilan yeniden moderasyona gonderildi.');
+    } elseif ($action === 'adjust_price') {
+        $op = strtolower(trim((string) ($_POST['op'] ?? '')));
+        $exact = (float) ($_POST['price_amount'] ?? 0);
+        $result = $writer->adjustPriceForOwner($listingId, (int) $user['id'], $op, $exact);
+        $newLine = cx_listing_price_format($result['new']);
+        if ($op === 'down' || ($result['old'] !== null && cx_listing_price_dropped($result['old'], $result['new']))) {
+            cx_flash('ok', 'Fiyat düşürüldü: ' . $newLine);
+        } elseif ($op === 'up') {
+            cx_flash('ok', 'Fiyat yükseltildi: ' . $newLine);
+        } else {
+            cx_flash('ok', 'Fiyat güncellendi: ' . $newLine);
+        }
     } else {
         throw new RuntimeException('Gecersiz islem.');
     }

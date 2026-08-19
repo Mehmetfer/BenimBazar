@@ -28,6 +28,8 @@ SKIP_UPLOAD = {
     "config/google.local.php",
     "config/deploy.local.php",
     "config/setup.local.php",
+    "config/sms.local.php",
+    "config/whatsapp.local.php",
 }
 
 SITE_URL = "http://changex.mehmetfer.com.tr"

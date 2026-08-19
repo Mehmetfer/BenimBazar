@@ -14,13 +14,23 @@ $vehicleBrowse = $vehicleBrowse ?? true;
 $siteUrl = (string) ($app['url'] ?? '');
 $uploadsUrl = (string) ($app['uploads_url'] ?? '/uploads');
 $favBack = (string) ($favBack ?? ($_SERVER['REQUEST_URI'] ?? '/index.php'));
-
 if ($items === []):
 ?>
 <p class="empty-state">Yayında ilan yok.</p>
 <?php
     return;
 endif;
+
+$priceHistoryById = [];
+try {
+    $histIds = [];
+    foreach ($items as $it) {
+        $histIds[] = (int) ($it['id'] ?? 0);
+    }
+    $priceHistoryById = (new \App\Services\PriceHistoryService())->summariesForIds($histIds);
+} catch (Throwable) {
+    $priceHistoryById = [];
+}
 ?>
 <div class="home-market__grid seller-public__grid">
 <?php foreach ($items as $item):
@@ -34,6 +44,11 @@ endif;
     $favFormCard = $user
         ? cx_favorite_toggle_form($lid, $favBack, !empty($item['is_favorited']), 'market-card__fav-link')
         : '';
+    $hist = is_array($priceHistoryById[$lid] ?? null) ? $priceHistoryById[$lid] : null;
+    $wasPrice = '';
+    if (!$isSold && $hist && !empty($hist['dropped']) && is_array($hist['first'] ?? null)) {
+        $wasPrice = cx_listing_price_format($hist['first']);
+    }
 ?>
   <article class="market-card<?= $vehicleBrowse ? ' market-card--vehicle' : '' ?><?= $isSold ? ' market-card--sold' : '' ?>">
     <a class="market-card__media" href="/listing.php?id=<?= $lid ?>">
@@ -60,6 +75,9 @@ endif;
       <a class="market-card__fav-link" href="<?= cx_e(cx_login_url('/listing.php?id=' . $lid, 'Favori icin giris yapin')) ?>" aria-label="Favorilere ekle">♥</a>
     <?php endif; ?>
     <div class="market-card__body">
+      <?php if ($wasPrice !== ''): ?>
+      <div class="market-card__price-was"><?= cx_e($wasPrice) ?></div>
+      <?php endif; ?>
       <div class="market-card__price"><?= cx_e(cx_listing_price_line($item)) ?></div>
       <div class="market-card__meta">
         <span><?= cx_e(cx_listing_card_stats_line($item)) ?></span>
