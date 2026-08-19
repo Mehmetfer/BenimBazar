@@ -37,20 +37,24 @@ jobs:
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
           sed -i 's/android:label="[^"]*"/android:label="BenimBazaar"/' "$MANIFEST"
+          sed -i 's/android:usesCleartextTraffic="false"/android:usesCleartextTraffic="true"/' "$MANIFEST"
+          if ! grep -q 'usesCleartextTraffic' "$MANIFEST"; then
+            sed -i 's|<application|<application android:usesCleartextTraffic="true"|' "$MANIFEST"
+          fi
           if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
             sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.CALL_PHONE"/>\n    <application|' "$MANIFEST"
           fi
 
-      - name: Bağımlılıkları yükle
+      - name: Bagimliliklari yukle
         run: flutter pub get
 
-      - name: Launcher ikonları oluştur
+      - name: Launcher ikonlari olustur
         run: dart run flutter_launcher_icons
 
       - name: APK build et
         run: flutter build apk --release --no-shrink
 
-      - name: APK'yı artifact olarak yükle
+      - name: APK'yi artifact olarak yukle
         uses: actions/upload-artifact@v4
         with:
           name: BenimBazaar-APK

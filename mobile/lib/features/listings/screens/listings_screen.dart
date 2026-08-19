@@ -21,6 +21,7 @@ class _ListingsScreenState extends State<ListingsScreen> {
   int _page = 1;
   String _sort = 'new';
   String _region = 'all';
+  String? _error;
 
   @override
   void initState() {
@@ -69,6 +70,7 @@ class _ListingsScreenState extends State<ListingsScreen> {
     setState(() {
       _loading = false;
       if (resp.ok && resp.data != null) {
+        _error = null;
         final data = resp.data as Map<String, dynamic>;
         final newItems = (data['items'] as List)
             .map((e) => Listing.fromJson(e as Map<String, dynamic>))
@@ -79,6 +81,9 @@ class _ListingsScreenState extends State<ListingsScreen> {
           _items.addAll(newItems);
         }
         _hasMore = _page < (data['pages'] as int? ?? 1);
+      } else {
+        _error = resp.error ?? 'Ilanlar yuklenemedi.';
+        if (reset) _items = [];
       }
     });
   }
@@ -155,9 +160,44 @@ class _ListingsScreenState extends State<ListingsScreen> {
           Expanded(
             child: RefreshIndicator(
               onRefresh: () => _load(),
-              child: _items.isEmpty && !_loading
-                  ? const Center(child: Text('İlan bulunamadı.'))
-                  : GridView.builder(
+              child: _loading && _items.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null && _items.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            const SizedBox(height: 80),
+                            Icon(Icons.cloud_off_outlined,
+                                size: 56, color: Colors.grey.shade500),
+                            const SizedBox(height: 12),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 24),
+                              child: Text(
+                                _error!,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.grey.shade700),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Center(
+                              child: FilledButton.icon(
+                                onPressed: _load,
+                                icon: const Icon(Icons.refresh),
+                                label: const Text('Tekrar dene'),
+                              ),
+                            ),
+                          ],
+                        )
+                  : _items.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: const [
+                            SizedBox(height: 80),
+                            Center(child: Text('Ilan bulunamadi.')),
+                          ],
+                        )
+                      : GridView.builder(
                       controller: _scrollCtrl,
                       padding: const EdgeInsets.all(10),
                       gridDelegate:
