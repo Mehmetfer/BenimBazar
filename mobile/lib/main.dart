@@ -22,7 +22,7 @@ class BenimBazarApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'BenimBazar',
+      title: 'BenimBazaar',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       home: const HomeScreen(),

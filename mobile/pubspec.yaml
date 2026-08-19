@@ -1,5 +1,5 @@
-name: benimbazar
-description: BenimBazar — İlan, al-sat uygulaması
+name: benimbazaar
+description: BenimBazaar — İlan, al-sat uygulaması
 
 publish_to: 'none'
 version: 1.0.0+1
@@ -29,10 +29,20 @@ dependencies:
   image_picker: ^1.1.2
   flutter_svg: ^2.0.10+1
 
+  flutter_launcher_icons: ^0.14.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/icon.png"
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "assets/images/icon.png"
+  min_sdk_android: 21
 
 flutter:
   uses-material-design: true

@@ -29,6 +29,9 @@ jobs:
       - name: Bağımlılıkları yükle
         run: flutter pub get
 
+      - name: Launcher ikonları oluştur
+        run: flutter pub run flutter_launcher_icons
+
       - name: APK build et
         run: flutter build apk --release --no-shrink
 

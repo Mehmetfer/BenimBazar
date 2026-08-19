@@ -50,28 +50,15 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 16),
-                // Logo / Marka
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'BB',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF002F34),
-                      ),
-                    ),
-                  ),
+                // Logo
+                Image.asset(
+                  'assets/images/logo.png',
+                  height: 80,
+                  fit: BoxFit.contain,
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'BenimBazar',
+                  'BenimBazaar',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 26,

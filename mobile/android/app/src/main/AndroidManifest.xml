@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.CALL_PHONE"/>
 
     <application
-        android:label="BenimBazar"
+        android:label="BenimBazaar"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="false">
