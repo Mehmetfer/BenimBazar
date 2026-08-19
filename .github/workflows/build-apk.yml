@@ -30,11 +30,22 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Android platform dosyalarini olustur
+        run: flutter create . --platforms=android --org com.benimbazaar --project-name benimbazaar
+
+      - name: AndroidManifest guncelle
+        run: |
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          sed -i 's/android:label="[^"]*"/android:label="BenimBazaar"/' "$MANIFEST"
+          if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
+            sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.CALL_PHONE"/>\n    <application|' "$MANIFEST"
+          fi
+
       - name: Bağımlılıkları yükle
         run: flutter pub get
 
       - name: Launcher ikonları oluştur
-        run: flutter pub run flutter_launcher_icons
+        run: dart run flutter_launcher_icons
 
       - name: APK build et
         run: flutter build apk --release --no-shrink
