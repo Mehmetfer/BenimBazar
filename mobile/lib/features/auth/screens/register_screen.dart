@@ -39,10 +39,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
       city: _cityCtrl.text.trim(),
       country: _country,
     );
-    if (err != null && mounted) {
+    if (!mounted) return;
+    if (err != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(err), backgroundColor: Colors.red.shade700),
       );
+      return;
+    }
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
     }
   }
 
