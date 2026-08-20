@@ -1,0 +1,54 @@
+{
+  "source": "kibrisarabaal.com",
+  "source_id": 1235,
+  "source_url": "https://kibrisarabaal.com/ilan/1235-2013-model-otomatik-mercedes-benz-b-serisi-829cce/",
+  "title": "2013 Model Otomatik Mercedes-Benz B Serisi",
+  "description": "-",
+  "location": "Girne ,  Karaoğlanoğlu",
+  "listed_at": "16 Ağustos 2026",
+  "listed_at_iso": "2026-08-16",
+  "price": {
+    "currency": "GBP",
+    "amount": 9999.0
+  },
+  "price_negotiable": false,
+  "subcategory": "Otomobil",
+  "segment": "otomobil",
+  "condition": "2.El",
+  "photo_urls": [
+    "https://kibrisarabaal.com/uploads/listings/1235/img_6a8203a8364522.05820588.webp",
+    "https://kibrisarabaal.com/uploads/listings/1235/img_6a8203a969bad1.04515501.webp",
+    "https://kibrisarabaal.com/uploads/listings/1235/img_6a8203aa976aa8.95926270.webp",
+    "https://kibrisarabaal.com/uploads/listings/1235/img_6a8203abc31b78.27448853.webp",
+    "https://kibrisarabaal.com/uploads/listings/1235/img_6a8203acc71cc3.63547152.webp"
+  ],
+  "is_corporate": true,
+  "seller_key": "4x4-ozbek-motors",
+  "seller_name": "4X4 Ozbek Motors",
+  "seller_phone": "00",
+  "seller_type_label": "Kurumsal Galeri",
+  "seller_member_since": "",
+  "seller_member_date": "",
+  "seller_profile_url": "https://kibrisarabaal.com/galeri/4x4-ozbek-motors/",
+  "gallery_about": "",
+  "equipment": [],
+  "vehicle": {
+    "year": "2013",
+    "km": null,
+    "fuel": "Benzin",
+    "transmission": "Otomatik",
+    "body": "Hatchback 5 kapı",
+    "engine_cc": null,
+    "color": "Beyaz",
+    "drive": "Sağ Direksiyon",
+    "make": "Mercedes-Benz B",
+    "model": "Serisi"
+  },
+  "local_photos": [
+    "kka_1235_0.webp",
+    "kka_1235_1.webp",
+    "kka_1235_2.webp",
+    "kka_1235_3.webp",
+    "kka_1235_4.webp"
+  ]
+}

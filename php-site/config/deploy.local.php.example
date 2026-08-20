@@ -1,0 +1,6 @@
+<?php
+// Canli HTTP deploy secret — deploy-hook.php icin
+// Bu dosyayi config/deploy.local.php olarak kaydedin (git'e koymayin)
+return [
+    'secret' => 'BURAYA_RASTGELE_UZUN_ANAHTAR_YAZIN',
+];

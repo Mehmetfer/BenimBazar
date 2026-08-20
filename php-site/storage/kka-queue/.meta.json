@@ -1,0 +1,8 @@
+{
+  "built_at": "2026-08-19T12:28:47.562354",
+  "cutoff": "2026-08-01T00:00:00",
+  "date_to": "2026-08-19T00:00:00",
+  "total": 28,
+  "sorted": "listed_at asc",
+  "filters": "price_required,gpb_or_try,year+fuel+trans+body+make+model,min_photos=3"
+}

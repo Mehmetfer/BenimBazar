@@ -1,0 +1,7 @@
+<?php
+declare(strict_types=1);
+// Kurulum arayuzu anahtari — config/setup.local.php olarak kopyalayin (git disi).
+// Ornek: setup_key = bin2hex(random_bytes(16))
+return [
+    'setup_key' => 'BURAYA_RASTGELE_UZUN_ANAHTAR_YAZIN',
+];

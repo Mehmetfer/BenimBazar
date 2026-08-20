@@ -1,0 +1,54 @@
+{
+  "source": "kibrisarabaal.com",
+  "source_id": 1220,
+  "source_url": "https://kibrisarabaal.com/ilan/1220-2010-model-otomatik-land-rover-range-rover-sport-fee3be/",
+  "title": "2010 Model Otomatik Land Rover Range Rover Sport",
+  "description": "Vade Olur, Takaslanabilir",
+  "location": "Girne ,  Karaoğlanoğlu",
+  "listed_at": "16 Ağustos 2026",
+  "listed_at_iso": "2026-08-16",
+  "price": {
+    "currency": "GBP",
+    "amount": 19000.0
+  },
+  "price_negotiable": true,
+  "subcategory": "Otomobil",
+  "segment": "otomobil",
+  "condition": "2.El (Plakasız)",
+  "photo_urls": [
+    "https://kibrisarabaal.com/uploads/listings/1220/img_6a82032b055ef6.80823939.webp",
+    "https://kibrisarabaal.com/uploads/listings/1220/img_6a82032c30fb41.89352051.webp",
+    "https://kibrisarabaal.com/uploads/listings/1220/img_6a82032d69a5c2.53283634.webp",
+    "https://kibrisarabaal.com/uploads/listings/1220/img_6a82032e951686.20688609.webp",
+    "https://kibrisarabaal.com/uploads/listings/1220/img_6a82032fc8a9f7.68721621.webp"
+  ],
+  "is_corporate": true,
+  "seller_key": "4x4-ozbek-motors",
+  "seller_name": "4X4 Ozbek Motors",
+  "seller_phone": "00",
+  "seller_type_label": "Kurumsal Galeri",
+  "seller_member_since": "",
+  "seller_member_date": "",
+  "seller_profile_url": "https://kibrisarabaal.com/galeri/4x4-ozbek-motors/",
+  "gallery_about": "",
+  "equipment": [],
+  "vehicle": {
+    "year": "2010",
+    "km": null,
+    "fuel": "Dizel",
+    "transmission": "Otomatik",
+    "body": "Arazi Aracı",
+    "engine_cc": "3000",
+    "color": "Siyah",
+    "drive": "Sağ Direksiyon",
+    "make": "Land Rover Range Rover",
+    "model": "Sport"
+  },
+  "local_photos": [
+    "kka_1220_0.webp",
+    "kka_1220_1.webp",
+    "kka_1220_2.webp",
+    "kka_1220_3.webp",
+    "kka_1220_4.webp"
+  ]
+}

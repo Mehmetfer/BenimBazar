@@ -1,0 +1,343 @@
+.share-card-page {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 20px 16px 40px;
+}
+
+.share-card-page h1 {
+  font-size: 1.35rem;
+  font-weight: 800;
+  margin: 0 0 6px;
+}
+
+.share-card-page__lead {
+  color: #9aa3b2;
+  font-size: 0.9rem;
+  margin: 0 0 18px;
+  line-height: 1.5;
+}
+
+.share-card-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.share-card-toolbar .btn {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.share-card-toolbar .btn-gold {
+  background: linear-gradient(135deg, #d4af37, #b8922a);
+  color: #111;
+}
+
+.share-card-toolbar .btn-dark {
+  background: #1e2430;
+  color: #f5f5f5;
+  border: 1px solid #2f3748;
+}
+
+.share-card-toolbar .btn-outline {
+  background: transparent;
+  color: #d4af37;
+  border: 1px solid #4a4030;
+}
+
+.share-card-format {
+  display: inline-flex;
+  background: #151922;
+  border-radius: 10px;
+  padding: 3px;
+  margin-bottom: 16px;
+}
+
+.share-card-format a {
+  color: #9aa3b2;
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.share-card-format a.is-active {
+  background: #d4af37;
+  color: #111;
+}
+
+.share-card-preview-wrap {
+  position: relative;
+  margin: 0 auto 20px;
+  overflow: hidden;
+}
+
+.share-card-preview-wrap--square {
+  width: min(100%, 420px);
+  max-width: 420px;
+}
+
+.share-card-preview-wrap--story {
+  width: min(100%, 280px);
+  max-width: 280px;
+}
+
+.share-card-preview-scaler {
+  transform-origin: top left;
+  width: 1080px;
+}
+
+/* —— KKTC / kibrisarabaal tarzi kart —— */
+.ig-share-card {
+  display: flex;
+  flex-direction: column;
+  width: 1080px;
+  height: 1080px;
+  overflow: hidden;
+  background: #000;
+  font-family: Montserrat, Arial, sans-serif;
+  color: #fff;
+  box-sizing: border-box;
+}
+
+.ig-share-card--story {
+  height: 1920px;
+}
+
+.ig-share-card__photo-wrap {
+  flex: 0 0 63%;
+  width: 100%;
+  overflow: hidden;
+  background: #111;
+}
+
+.ig-share-card--story .ig-share-card__photo-wrap {
+  flex-basis: 64.5%;
+}
+
+.ig-share-card__photo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.ig-share-card__photo-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(160deg, #2a3140 0%, #111 100%);
+}
+
+.ig-share-card__panel {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+  background: #050505;
+  border-top: 6px solid #c9a227;
+  border-left: 5px solid #c9a227;
+  border-right: 5px solid #c9a227;
+  border-bottom: 5px solid #c9a227;
+  box-sizing: border-box;
+}
+
+.ig-share-card__brand-col {
+  position: relative;
+  flex: 0 0 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 18px;
+  box-sizing: border-box;
+}
+
+.ig-share-card__brand-logo {
+  max-width: 150px;
+  max-height: 150px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  filter: brightness(0) invert(1) drop-shadow(0 0 12px rgba(201, 162, 39, 0.35));
+}
+
+.ig-share-card__brand-mark {
+  width: 150px;
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ig-share-card__mark-car {
+  width: 130px;
+  height: 130px;
+}
+
+.ig-share-card__brand-slash {
+  position: absolute;
+  top: 0;
+  right: -18px;
+  width: 36px;
+  height: 100%;
+  background: linear-gradient(118deg, transparent 42%, #c9a227 42%, #c9a227 58%, transparent 58%);
+  pointer-events: none;
+}
+
+.ig-share-card__info {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 28px 34px 24px 42px;
+  box-sizing: border-box;
+}
+
+.ig-share-card__title {
+  margin: 0 0 18px;
+  font-size: 46px;
+  line-height: 1.05;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: #fff;
+  display: block;
+  word-break: break-word;
+}
+
+.ig-share-card--story .ig-share-card__title {
+  font-size: 52px;
+}
+
+.ig-share-card__meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 28px 36px;
+  margin-bottom: 16px;
+}
+
+.ig-share-card__meta-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.ig-share-card__meta-item--price {
+  margin-left: auto;
+}
+
+.ig-share-card__icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  color: #c9a227;
+}
+
+.ig-share-card__icon--sm {
+  width: 28px;
+  height: 28px;
+  flex-basis: 28px;
+}
+
+.ig-share-card__divider {
+  height: 3px;
+  background: #fff;
+  margin-bottom: 3px;
+  box-shadow: 0 3px 0 0 #c9a227;
+}
+
+.ig-share-card__footer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 22px;
+  padding-top: 14px;
+}
+
+.ig-share-card__footer-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.ig-share-card__footer-item--loc {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ig-share-card__footer-item--loc span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 360px;
+  display: inline-block;
+}
+
+.ig-share-card__footer-item--ref {
+  margin-left: auto;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.ig-share-card--story .ig-share-card__meta-item {
+  font-size: 32px;
+}
+
+.ig-share-card--story .ig-share-card__footer-item {
+  font-size: 24px;
+}
+
+.share-card-capture-host {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.share-card-caption-box {
+  background: #151922;
+  border: 1px solid #2a3140;
+  border-radius: 12px;
+  padding: 14px;
+  margin-top: 8px;
+}
+
+.share-card-caption-box pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: 0.82rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #d7dce4;
+}
+
+.share-card-hint {
+  margin-top: 14px;
+  font-size: 0.82rem;
+  color: #7f8794;
+  line-height: 1.5;
+}

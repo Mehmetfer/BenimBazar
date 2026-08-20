@@ -1,0 +1,22 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /login.php
+Disallow: /register.php
+Disallow: /forgot-password.php
+Disallow: /messages.php
+Disallow: /conversation.php
+Disallow: /notifications.php
+Disallow: /favorites.php
+Disallow: /my-listings.php
+Disallow: /create-listing.php
+Disallow: /edit-listing.php
+Disallow: /gallery-panel.php
+Disallow: /kurulum.php
+Disallow: /test.php
+Disallow: /share.php
+Disallow: /share-card.php
+Disallow: /share-og.php
+
+Sitemap: https://changex.mehmetfer.com.tr/sitemap.php
+Sitemap: https://changex.mehmetfer.com.tr/sitemap-listings.php

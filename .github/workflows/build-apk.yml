@@ -1,0 +1,62 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main, master, cursor/listing-delete-a857 ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Kodu al
+        uses: actions/checkout@v4
+
+      - name: Java kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Flutter kur
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.4'
+          channel: 'stable'
+          cache: true
+
+      - name: Android platform dosyalarini olustur
+        run: flutter create . --platforms=android --org com.benimbazaar --project-name benimbazaar
+
+      - name: AndroidManifest guncelle
+        run: |
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          sed -i 's/android:label="[^"]*"/android:label="BenimBazaar"/' "$MANIFEST"
+          sed -i 's/android:usesCleartextTraffic="false"/android:usesCleartextTraffic="true"/' "$MANIFEST"
+          if ! grep -q 'usesCleartextTraffic' "$MANIFEST"; then
+            sed -i 's|<application|<application android:usesCleartextTraffic="true"|' "$MANIFEST"
+          fi
+          if ! grep -q 'android.permission.INTERNET' "$MANIFEST"; then
+            sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.CALL_PHONE"/>\n    <application|' "$MANIFEST"
+          fi
+
+      - name: Bagimliliklari yukle
+        run: flutter pub get
+
+      - name: Launcher ikonlari olustur
+        run: dart run flutter_launcher_icons
+
+      - name: APK build et
+        run: flutter build apk --release --no-shrink
+
+      - name: APK'yi artifact olarak yukle
+        uses: actions/upload-artifact@v4
+        with:
+          name: BenimBazaar-APK
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30

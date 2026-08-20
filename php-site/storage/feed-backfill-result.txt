@@ -1,0 +1,65 @@
+=== Feed kalite backfill (Asama 5) ===
+Mod: RUN
+Taranan: 123
+Guncellenecek aday: 54
+Guncellenen: 54
+Atlanan (arac disi): 1
+Atlanan (diger): 0
+
+id=2 · Decathlon Dag Bisikleti → category→Araçlar, subcategory→Bisiklet, attrs_json dolduruldu, foto→3 adet, aciklama uzatildi
+SKIP id=4 (arac_disı) Satilik — PS5 Disk Surumu
+id=16 · Kawasaki Ninja 650 2020 → attrs_json dolduruldu, aciklama uzatildi
+id=22 · Bianchi Sprint 105 Yol Bisikleti → attrs_json dolduruldu, aciklama uzatildi
+id=23 · Cube Reaction Pro Elektrikli MTB → attrs_json dolduruldu, aciklama uzatildi
+id=25 · Mercedes-Benz Sprinter 316 CDI 2019 → attrs_json dolduruldu, aciklama uzatildi
+id=66 · Aprilia RS 660 2023 → attrs_json dolduruldu, aciklama uzatildi
+id=162 · 2010 Model Otomatik Mazda Demio → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=163 · 2023 Model Otomatik Volkswagen Golf → category→Araçlar, attrs_json dolduruldu
+id=164 · 2013 Model Otomatik Mercedes-Benz C Serisi → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=165 · 2003 Model Otomatik Mitsubishi Colt → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=166 · 2016 Model Otomatik Mercedes - Benz GLC → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=167 · 2004 Model Otomatik Mercedes-Benz E Serisi → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=168 · 2016 Model Otomatik Audi A3 → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=169 · 2020 Model Otomatik Mazda 2 → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=170 · 2015 Model Otomatik Audi A5 → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=171 · 2013 Model Otomatik Nissan Note → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=172 · 2009 Model Otomatik Suzuki Splash → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=173 · 2007 Model Otomatik Honda Civic → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=174 · 2009 Model Otomatik Mercedes-Benz C Serisi → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=175 · 2023 Model Otomatik Toyota Hilux → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=176 · 2016 Model Otomatik Audi A3 → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=178 · 2010 Model Otomatik MINI Cooper → category→Araçlar, attrs_json dolduruldu
+id=179 · 2017 Model Otomatik Mercedes-Benz A Serisi → category→Araçlar, attrs_json dolduruldu
+id=180 · 2022 Model Otomatik Suzuki Swift → category→Araçlar, attrs_json dolduruldu, foto→3 adet
+id=181 · 2019 Model Otomatik Suzuki Swift → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=182 · 2017 Model Otomatik Suzuki Swift → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=183 · 2010 Model Otomatik Toyota Auris → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=184 · 2016 Model Otomatik Honda Fit → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=185 · 2020 Model Otomatik Toyota Corolla → category→Araçlar, attrs_json dolduruldu
+id=186 · 2024 Model Otomatik Honda ZR-V → category→Araçlar, attrs_json dolduruldu
+id=187 · 2022 Model Otomatik Mazda CX-5 → category→Araçlar, attrs_json dolduruldu
+id=188 · 2026 Model Otomatik Honda ZR-V → category→Araçlar, attrs_json dolduruldu
+id=189 · 2013 Model Otomatik Mercedes-Benz C Serisi → category→Araçlar, attrs_json dolduruldu
+id=190 · 2010 Volkswagen Scirocco 1.4 TSI Euro 5 3dr → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=191 · 2016 Model Land Rover Range Rover Evoque 2.0 TD4 SE Te… → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=192 · SUV 2018 Ford EcoSport 1.5 EcoBlue ST-Line Euro 6 Önde… → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=193 · 2006 Model Gümüş Renk Temiz Bakılmış Vauxhall Corsa Ha… → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=194 · 2023 Model Otomatik Mercedes - Benz GLC Coupe → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=195 · 2021 Model Otomatik Jeep Gladiator → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=196 · 2023 Model Otomatik Volkswagen Polo → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=197 · Adanın en temiz en uygunu → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=198 · 2024 Model Otomatik Volkswagen Golf → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=199 · 2020 Model Otomatik Mercedes-Benz E Serisi → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=200 · 2019 Model Otomatik BMW 5 Serisi → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=201 · 2022 Model Otomatik Honda Fit → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=202 · 2019 Model Otomatik Audi A7 → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=203 · 2021 Model Otomatik Volkswagen T-Cross → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=204 · 2019 Model Otomatik BMW 7 Serisi → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=205 · 2020 Model Otomatik Mitsubishi L 200 → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=206 · 2023 Model Otomatik Kia Sportage → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=207 · 2021 Model Otomatik Nissan Note → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=208 · 2021 Model Otomatik Nissan Note → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=209 · 2008 Model Otomatik Toyota Auris → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+id=210 · 2003 Model Otomatik Mitsubishi Outlander → category→Araçlar, attrs_json dolduruldu, aciklama uzatildi
+
+Bitti.

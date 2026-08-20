@@ -1,0 +1,19 @@
+<?php
+declare(strict_types=1);
+// Google OAuth — config/google.local.php olarak kopyalayin (deploy ile gitmez)
+return [
+    'client_id' => '591768912856-xxxx.apps.googleusercontent.com',
+    'client_secret' => 'GOCSPX-xxxx',
+    // redirect_uri otomatik: config/app.php url + /auth/google-callback.php
+    //
+    // Google Cloud Console -> Credentials -> Web application (BenimBazar Web):
+    // https://console.cloud.google.com/apis/credentials?project=enduring-honor-435820-v7
+    //
+    // Authorized JavaScript origins (TAM):
+    //   http://changex.mehmetfer.com.tr
+    //
+    // Authorized redirect URIs (TAM — sadece domain yetmez, path sart):
+    //   http://changex.mehmetfer.com.tr/auth/google-callback.php
+    //
+    // OAuth consent Testing modundaysa Test users listesine Gmail ekleyin.
+];

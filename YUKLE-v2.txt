@@ -1,0 +1,17 @@
+# CANLI GUNCELLEME (File Manager)
+
+Test OK — MySQL calisiyor. Ama canli site ESKI dosyalar (FTP docroot uyumsuz).
+
+## Zip
+D:\changex\changex-php-YAYIN-20260814-1246.zip
+
+cPanel → changex.mehmetfer.com.tr → Upload → Extract
+
+## Kurulum
+https://changex.mehmetfer.com.tr/kurulum.php  Anahtar: CHANGEX2026
+1) v2 migration
+2) Ornek ilanlari yukle
+
+## Beklenen
+test.php → HTML (FTP Deploy Test)
+index.php → 6 ornek ilan

@@ -1,0 +1,54 @@
+{
+  "source": "kibrisarabaal.com",
+  "source_id": 1214,
+  "source_url": "https://kibrisarabaal.com/ilan/1214-2016-model-otomatik-mercedes-benz-c-serisi-d60cd5/",
+  "title": "2016 Model Otomatik Mercedes-Benz C Serisi",
+  "description": "Tek şahıs\n\t\t\t\t\t\t\t\t\t\tVade Olur, Takaslanabilir",
+  "location": "Girne ,  Karaoğlanoğlu",
+  "listed_at": "16 Ağustos 2026",
+  "listed_at_iso": "2026-08-16",
+  "price": {
+    "currency": "GBP",
+    "amount": 18999.0
+  },
+  "price_negotiable": true,
+  "subcategory": "Otomobil",
+  "segment": "otomobil",
+  "condition": "2.El",
+  "photo_urls": [
+    "https://kibrisarabaal.com/uploads/listings/1214/img_6a8202e00f4526.78860681.webp",
+    "https://kibrisarabaal.com/uploads/listings/1214/img_6a8202e35f81b7.93770067.webp",
+    "https://kibrisarabaal.com/uploads/listings/1214/img_6a8202e5eb4939.02332026.webp",
+    "https://kibrisarabaal.com/uploads/listings/1214/img_6a8202e8d6d356.69216746.webp",
+    "https://kibrisarabaal.com/uploads/listings/1214/img_6a8202eb0eee07.12004943.webp"
+  ],
+  "is_corporate": true,
+  "seller_key": "4x4-ozbek-motors",
+  "seller_name": "4X4 Ozbek Motors",
+  "seller_phone": "00",
+  "seller_type_label": "Kurumsal Galeri",
+  "seller_member_since": "",
+  "seller_member_date": "",
+  "seller_profile_url": "https://kibrisarabaal.com/galeri/4x4-ozbek-motors/",
+  "gallery_about": "",
+  "equipment": [],
+  "vehicle": {
+    "year": "2016",
+    "km": "143087",
+    "fuel": "Benzin",
+    "transmission": "Otomatik",
+    "body": "Sedan",
+    "engine_cc": "1600",
+    "color": "Beyaz",
+    "drive": "Sağ Direksiyon",
+    "make": "Mercedes-Benz C",
+    "model": "Serisi"
+  },
+  "local_photos": [
+    "kka_1214_0.webp",
+    "kka_1214_1.webp",
+    "kka_1214_2.webp",
+    "kka_1214_3.webp",
+    "kka_1214_4.webp"
+  ]
+}

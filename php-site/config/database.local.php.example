@@ -1,0 +1,6 @@
+<?php
+// Sunucuda: bu dosyayi database.local.php olarak kopyalayin, sifreyi yazin.
+// Zip guncellemeleri database.local.php dosyasini EZMEZ.
+return [
+    'password' => 'MYSQL_SIFRENIZ_BURAYA',
+];

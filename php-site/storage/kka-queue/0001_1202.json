@@ -1,0 +1,54 @@
+{
+  "source": "kibrisarabaal.com",
+  "source_id": 1202,
+  "source_url": "https://kibrisarabaal.com/ilan/1202-2023-model-duz-toyota-gr-yaris-fae07e/",
+  "title": "2023 Model Düz Toyota GR Yaris",
+  "description": "-",
+  "location": "Lefkoşa ,  Hamitköy",
+  "listed_at": "16 Ağustos 2026",
+  "listed_at_iso": "2026-08-16",
+  "price": {
+    "currency": "GBP",
+    "amount": 37900.0
+  },
+  "price_negotiable": false,
+  "subcategory": "Otomobil",
+  "segment": "otomobil",
+  "condition": "2.El",
+  "photo_urls": [
+    "https://kibrisarabaal.com/uploads/listings/1202/img_6a82005ed74024.25854559.webp",
+    "https://kibrisarabaal.com/uploads/listings/1202/img_6a8200603ae796.46938234.webp",
+    "https://kibrisarabaal.com/uploads/listings/1202/img_6a820061943399.08124592.webp",
+    "https://kibrisarabaal.com/uploads/listings/1202/img_6a820062c8bf88.11732696.webp",
+    "https://kibrisarabaal.com/uploads/listings/1202/img_6a8200641acd98.63507976.webp"
+  ],
+  "is_corporate": true,
+  "seller_key": "daksi-autos",
+  "seller_name": "Daksi Autos",
+  "seller_phone": "00",
+  "seller_type_label": "Kurumsal Galeri",
+  "seller_member_since": "",
+  "seller_member_date": "",
+  "seller_profile_url": "https://kibrisarabaal.com/galeri/daksi-autos/",
+  "gallery_about": "",
+  "equipment": [],
+  "vehicle": {
+    "year": "2023",
+    "km": "18000",
+    "fuel": "Benzin",
+    "transmission": "Düz",
+    "body": "Hatchback 3 kapı",
+    "engine_cc": "1600",
+    "color": "Beyaz",
+    "drive": "Sağ Direksiyon",
+    "make": "Toyota GR",
+    "model": "Yaris"
+  },
+  "local_photos": [
+    "kka_1202_0.webp",
+    "kka_1202_1.webp",
+    "kka_1202_2.webp",
+    "kka_1202_3.webp",
+    "kka_1202_4.webp"
+  ]
+}

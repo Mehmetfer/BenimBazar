@@ -1,0 +1,31 @@
+# BenimBazar — cPanel / Natro kurulum
+
+Stack: PHP 8.1+ + MySQL. Flutter ve ayri REST API kullanilmaz.
+
+## Dosya yukleme
+
+1. `php-site/` icerigini subdomain kokune yukleyin (document root).
+2. Zip acinca ic klasor gelirse dosyalari bir ust klasore tasiyin — kokte `index.php` olmali.
+3. `config/database.php` sunucuda olusturulur (repoda yok); MySQL bilgilerinizi yazin.
+
+## Veritabani
+
+phpMyAdmin -> Import -> `database/schema.sql` (+ gerekirse `migrate-v2.sql` … `migrate-v4.sql`)
+
+Alternatif: `kurulum.php` (production disi veya gecici acilir; sonra silin).
+
+## Test
+
+1. `https://SITE/info.php` — yerel / production=false iken: `BenimBazar OK`
+2. `https://SITE/` — PHP ana sayfa (BenimBazar basligi)
+3. `login.php` — admin girisi
+
+Eski Flutter yollari (`/main.dart.js`, `/api/`) 410 Gone donmeli (.htaccess).
+
+## Kurulumdan sonra silin
+
+`test.php`, `kurulum.php`, `install.php`, `info.php` (canlida zaten 404)
+
+## Sorun giderme
+
+Yanlis klasor / 404: `404-FIX.txt`

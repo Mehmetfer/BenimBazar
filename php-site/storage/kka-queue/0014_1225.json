@@ -1,0 +1,54 @@
+{
+  "source": "kibrisarabaal.com",
+  "source_id": 1225,
+  "source_url": "https://kibrisarabaal.com/ilan/1225-2013-model-otomatik-nissan-note-f60202/",
+  "title": "2013 Model Otomatik Nissan Note",
+  "description": "Vade Olur, Takaslanabilir",
+  "location": "Girne ,  Karaoğlanoğlu",
+  "listed_at": "16 Ağustos 2026",
+  "listed_at_iso": "2026-08-16",
+  "price": {
+    "currency": "GBP",
+    "amount": 6999.0
+  },
+  "price_negotiable": true,
+  "subcategory": "Otomobil",
+  "segment": "otomobil",
+  "condition": "2.El",
+  "photo_urls": [
+    "https://kibrisarabaal.com/uploads/listings/1225/img_6a82034fbe9990.82410552.webp",
+    "https://kibrisarabaal.com/uploads/listings/1225/img_6a8203510222e9.10784841.webp",
+    "https://kibrisarabaal.com/uploads/listings/1225/img_6a820353403b98.15749555.webp",
+    "https://kibrisarabaal.com/uploads/listings/1225/img_6a8203557a9ae7.58953145.webp",
+    "https://kibrisarabaal.com/uploads/listings/1225/img_6a8203567ebe19.83301466.webp"
+  ],
+  "is_corporate": true,
+  "seller_key": "4x4-ozbek-motors",
+  "seller_name": "4X4 Ozbek Motors",
+  "seller_phone": "00",
+  "seller_type_label": "Kurumsal Galeri",
+  "seller_member_since": "",
+  "seller_member_date": "",
+  "seller_profile_url": "https://kibrisarabaal.com/galeri/4x4-ozbek-motors/",
+  "gallery_about": "",
+  "equipment": [],
+  "vehicle": {
+    "year": "2013",
+    "km": null,
+    "fuel": "Benzin",
+    "transmission": "Otomatik",
+    "body": "Hatchback 5 kapı",
+    "engine_cc": null,
+    "color": "Atlas Grisi",
+    "drive": "Sağ Direksiyon",
+    "make": "Nissan",
+    "model": "Note"
+  },
+  "local_photos": [
+    "kka_1225_0.webp",
+    "kka_1225_1.webp",
+    "kka_1225_2.webp",
+    "kka_1225_3.webp",
+    "kka_1225_4.webp"
+  ]
+}

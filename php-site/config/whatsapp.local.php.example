@@ -1,0 +1,10 @@
+<?php
+declare(strict_types=1);
+// WhatsApp Cloud API — config/whatsapp.local.php olarak kopyalayin (deploy ile gitmez)
+return [
+    'access_token' => '',
+    'phone_number_id' => '',
+    'template_name' => 'benimbazar_dogrulama',
+    'template_language' => 'tr',
+    'graph_version' => 'v21.0',
+];

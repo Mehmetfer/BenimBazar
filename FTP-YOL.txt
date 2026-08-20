@@ -1,0 +1,32 @@
+# CANLI OTOMATIK DEPLOY
+
+## Sorun (Natro)
+FTP hesabi `mehmetfer@changex.mehmetfer.com.tr` baska klasore yazar.
+Site klasoru: changex.mehmetfer.com.tr (File Manager / zip)
+
+## Cozum A — FTP docroot eslestir (en iyi, tek sefer)
+cPanel:
+1. Alt Alan Adlari -> changex.mehmetfer.com.tr -> Document Root yolunu not al
+2. FTP Hesaplari -> mehmetfer@changex.mehmetfer.com.tr -> Dizin = AYNI yol
+Sonra: python scripts\deploy_live_php.py  -> CANLI OK (FTP)
+
+## Cozum B — HTTP deploy-hook (docroot duzeltmeden)
+Tek sefer cPanel File Manager:
+1. deploy-hook.php -> site kokune yukle (php-site/deploy-hook.php)
+2. config/deploy.local.php olustur (ornek: config/deploy.local.php.example)
+3. scripts/ftp-credentials.local.json -> deploy_secret ayni anahtar
+
+Sonra her deploy:
+  python D:\changex\scripts\deploy_live_php.py
+  veya:  D:\changex\deploy.ps1
+
+Script once FTP dener, canli dogrulamazsa HTTP ile gunceller.
+
+## Canlidan yerel cekme (FTP docroot uyumsuzsa)
+Canli degisiklikleri yerel php-site ile esitlemek icin:
+  python scripts\pull_live_http.py
+(kurulum.php icinde deployget gerekir; tek sefer deploy: python scripts\deploy_files.py kurulum.php)
+
+## Dogrulama
+deploy-ping.txt canlida duz metin olmali (HTML degil).
+Ana sayfada yesil bant tag degisir.

@@ -1,0 +1,54 @@
+{
+  "source": "kibrisarabaal.com",
+  "source_id": 1228,
+  "source_url": "https://kibrisarabaal.com/ilan/1228-2019-model-otomatik-land-rover-range-rover-velar-ce244c/",
+  "title": "2019 Model Otomatik Land Rover Range Rover Velar",
+  "description": "Vade Olur, Takaslanabilir",
+  "location": "Girne ,  Karaoğlanoğlu",
+  "listed_at": "16 Ağustos 2026",
+  "listed_at_iso": "2026-08-16",
+  "price": {
+    "currency": "GBP",
+    "amount": 39000.0
+  },
+  "price_negotiable": true,
+  "subcategory": "Otomobil",
+  "segment": "otomobil",
+  "condition": "2.El (Plakasız)",
+  "photo_urls": [
+    "https://kibrisarabaal.com/uploads/listings/1228/img_6a82035f64b3f8.37369780.webp",
+    "https://kibrisarabaal.com/uploads/listings/1228/img_6a820360d01171.23947008.webp",
+    "https://kibrisarabaal.com/uploads/listings/1228/img_6a820362216208.11372959.webp",
+    "https://kibrisarabaal.com/uploads/listings/1228/img_6a8203635247d7.64009511.webp",
+    "https://kibrisarabaal.com/uploads/listings/1228/img_6a820364628012.13533211.webp"
+  ],
+  "is_corporate": true,
+  "seller_key": "4x4-ozbek-motors",
+  "seller_name": "4X4 Ozbek Motors",
+  "seller_phone": "00",
+  "seller_type_label": "Kurumsal Galeri",
+  "seller_member_since": "",
+  "seller_member_date": "",
+  "seller_profile_url": "https://kibrisarabaal.com/galeri/4x4-ozbek-motors/",
+  "gallery_about": "",
+  "equipment": [],
+  "vehicle": {
+    "year": "2019",
+    "km": null,
+    "fuel": "Dizel",
+    "transmission": "Otomatik",
+    "body": "Arazi Aracı",
+    "engine_cc": "2000",
+    "color": "Beyaz",
+    "drive": "Sağ Direksiyon",
+    "make": "Land Rover Range Rover",
+    "model": "Velar"
+  },
+  "local_photos": [
+    "kka_1228_0.webp",
+    "kka_1228_1.webp",
+    "kka_1228_2.webp",
+    "kka_1228_3.webp",
+    "kka_1228_4.webp"
+  ]
+}

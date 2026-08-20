@@ -1,0 +1,10 @@
+<?php
+declare(strict_types=1);
+// SMS — config/sms.local.php olarak kopyalayin (deploy ile gitmez)
+return [
+    'provider' => 'netgsm',
+    'usercode' => '',
+    'password' => '',
+    'header' => 'BENIMBAZAR',
+    'api_url' => 'https://api.netgsm.com.tr/sms/send/get/',
+];

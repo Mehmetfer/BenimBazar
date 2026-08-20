@@ -1,0 +1,54 @@
+{
+  "source": "kibrisarabaal.com",
+  "source_id": 1212,
+  "source_url": "https://kibrisarabaal.com/ilan/1212-2022-model-otomatik-mercedes-benz-gls-9a07a8/",
+  "title": "2022 Model Otomatik Mercedes - Benz GLS",
+  "description": "-",
+  "location": "Lefkoşa ,  Hamitköy",
+  "listed_at": "16 Ağustos 2026",
+  "listed_at_iso": "2026-08-16",
+  "price": {
+    "currency": "GBP",
+    "amount": 77900.0
+  },
+  "price_negotiable": false,
+  "subcategory": "Otomobil",
+  "segment": "otomobil",
+  "condition": "2.El (Plakasız)",
+  "photo_urls": [
+    "https://kibrisarabaal.com/uploads/listings/1212/img_6a82016f0558d0.26295322.webp",
+    "https://kibrisarabaal.com/uploads/listings/1212/img_6a820170340024.51045341.webp",
+    "https://kibrisarabaal.com/uploads/listings/1212/img_6a8201717ddbd9.90828244.webp",
+    "https://kibrisarabaal.com/uploads/listings/1212/img_6a820172ad15d8.09491714.webp",
+    "https://kibrisarabaal.com/uploads/listings/1212/img_6a820173dee5e4.42819764.webp"
+  ],
+  "is_corporate": true,
+  "seller_key": "daksi-autos",
+  "seller_name": "Daksi Autos",
+  "seller_phone": "0986123904440",
+  "seller_type_label": "Kurumsal Galeri",
+  "seller_member_since": "",
+  "seller_member_date": "",
+  "seller_profile_url": "https://kibrisarabaal.com/galeri/daksi-autos/",
+  "gallery_about": "",
+  "equipment": [],
+  "vehicle": {
+    "year": "2022",
+    "km": null,
+    "fuel": "Dizel",
+    "transmission": "Otomatik",
+    "body": "Suv",
+    "engine_cc": "3000",
+    "color": "Siyah",
+    "drive": "Sağ Direksiyon",
+    "make": "Mercedes - Benz",
+    "model": "GLS"
+  },
+  "local_photos": [
+    "kka_1212_0.webp",
+    "kka_1212_1.webp",
+    "kka_1212_2.webp",
+    "kka_1212_3.webp",
+    "kka_1212_4.webp"
+  ]
+}
