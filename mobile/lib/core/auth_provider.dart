@@ -30,22 +30,37 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    final resp = await ApiClient.post('/auth/login', {
-      'username': username,
-      'password': password,
-    });
+    try {
+      final resp = await ApiClient.post('/auth/login', {
+        'username': username,
+        'password': password,
+      });
 
-    _loading = false;
-    if (resp.ok && resp.data != null) {
-      final data = resp.data as Map<String, dynamic>;
-      await ApiClient.saveToken(data['token'] as String);
-      _user = User.fromJson(data['user'] as Map<String, dynamic>);
+      if (resp.ok && resp.data != null) {
+        final data = Map<String, dynamic>.from(resp.data as Map);
+        final token = data['token']?.toString();
+        if (token == null || token.isEmpty) {
+          _error = 'Giris yaniti gecersiz.';
+          return _error;
+        }
+        await ApiClient.saveToken(token);
+        final userMap = data['user'];
+        _user = User.fromJson(
+          userMap is Map
+              ? Map<String, dynamic>.from(userMap)
+              : <String, dynamic>{},
+        );
+        return null;
+      }
+      _error = resp.error ?? 'Giris basarisiz.';
+      return _error;
+    } catch (e) {
+      _error = 'Giris sirasinda hata olustu.';
+      return _error;
+    } finally {
+      _loading = false;
       notifyListeners();
-      return null; // başarı
     }
-    _error = resp.error ?? 'Giriş başarısız.';
-    notifyListeners();
-    return _error;
   }
 
   Future<String?> register({
@@ -60,26 +75,41 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    final resp = await ApiClient.post('/auth/register', {
-      'username': username,
-      'password': password,
-      'email': email,
-      'phone': phone,
-      'city': city,
-      'country': country,
-    });
+    try {
+      final resp = await ApiClient.post('/auth/register', {
+        'username': username,
+        'password': password,
+        'email': email,
+        'phone': phone,
+        'city': city,
+        'country': country,
+      });
 
-    _loading = false;
-    if (resp.ok && resp.data != null) {
-      final data = resp.data as Map<String, dynamic>;
-      await ApiClient.saveToken(data['token'] as String);
-      _user = User.fromJson(data['user'] as Map<String, dynamic>);
+      if (resp.ok && resp.data != null) {
+        final data = Map<String, dynamic>.from(resp.data as Map);
+        final token = data['token']?.toString();
+        if (token == null || token.isEmpty) {
+          _error = 'Kayit yaniti gecersiz.';
+          return _error;
+        }
+        await ApiClient.saveToken(token);
+        final userMap = data['user'];
+        _user = User.fromJson(
+          userMap is Map
+              ? Map<String, dynamic>.from(userMap)
+              : <String, dynamic>{},
+        );
+        return null;
+      }
+      _error = resp.error ?? 'Kayit basarisiz.';
+      return _error;
+    } catch (_) {
+      _error = 'Kayit sirasinda hata olustu.';
+      return _error;
+    } finally {
+      _loading = false;
       notifyListeners();
-      return null;
     }
-    _error = resp.error ?? 'Kayıt başarısız.';
-    notifyListeners();
-    return _error;
   }
 
   Future<void> logout() async {

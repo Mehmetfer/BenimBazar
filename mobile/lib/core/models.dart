@@ -1,3 +1,22 @@
+// ─── Güvenli JSON yardımcıları ────────────────────────────────────
+int _asInt(dynamic v, [int fallback = 0]) {
+  if (v == null) return fallback;
+  if (v is int) return v;
+  if (v is num) return v.toInt();
+  return int.tryParse(v.toString()) ?? fallback;
+}
+
+double? _asDoubleOrNull(dynamic v) {
+  if (v == null || v == '') return null;
+  if (v is num) return v.toDouble();
+  return double.tryParse(v.toString());
+}
+
+String _asString(dynamic v, [String fallback = '']) {
+  if (v == null) return fallback;
+  return v.toString();
+}
+
 // ─── Kullanıcı ────────────────────────────────────────────────────
 class User {
   final int id;
@@ -21,14 +40,14 @@ class User {
   });
 
   factory User.fromJson(Map<String, dynamic> j) => User(
-        id: j['id'] as int,
-        username: j['username'] as String,
-        role: j['role'] as String? ?? 'user',
-        country: j['country'] as String? ?? 'tr',
-        score: j['score'] as int? ?? 0,
-        email: j['email'] as String?,
-        phone: j['phone'] as String?,
-        city: j['city'] as String?,
+        id: _asInt(j['id']),
+        username: _asString(j['username']),
+        role: _asString(j['role'], 'user'),
+        country: _asString(j['country'], 'tr'),
+        score: _asInt(j['score']),
+        email: j['email']?.toString(),
+        phone: j['phone']?.toString(),
+        city: j['city']?.toString(),
       );
 }
 
@@ -75,29 +94,57 @@ class Listing {
   });
 
   factory Listing.fromJson(Map<String, dynamic> j) => Listing(
-        id: j['id'] as int,
-        no: j['no'] as int? ?? j['id'] as int,
-        title: j['title'] as String? ?? '',
-        price: j['price'] != null ? (j['price'] as num).toDouble() : null,
-        currency: j['currency'] as String? ?? 'TRY',
-        status: j['status'] as String? ?? 'active',
-        category: j['category'] as String? ?? '',
-        city: j['city'] as String? ?? '',
-        country: j['country'] as String? ?? 'tr',
+        id: _asInt(j['id']),
+        no: _asInt(j['no'], _asInt(j['id'])),
+        title: _asString(j['title']),
+        price: _asDoubleOrNull(j['price']),
+        currency: _asString(j['currency'], 'TRY'),
+        status: _asString(j['status'], 'active'),
+        category: _asString(j['category']),
+        city: _asString(j['city']),
+        country: _asString(j['country'], 'tr'),
         photos: (j['photos'] as List?)?.map((e) => e.toString()).toList() ?? [],
-        thumb: j['thumb'] as String?,
-        description: j['description'] as String?,
-        attributes: j['attributes'] as Map<String, dynamic>?,
-        viewCount: j['view_count'] as int? ?? 0,
-        isFavorite: j['is_favorite'] as bool? ?? false,
-        owner: ListingOwner.fromJson(
-          j['owner'] as Map<String, dynamic>? ?? {},
-        ),
-        url: j['url'] as String?,
-        createdAt: j['created_at'] != null
-            ? (j['created_at'] as num).toDouble()
+        thumb: j['thumb']?.toString(),
+        description: j['description']?.toString(),
+        attributes: j['attributes'] is Map
+            ? Map<String, dynamic>.from(j['attributes'] as Map)
             : null,
+        viewCount: _asInt(j['view_count']),
+        isFavorite: j['is_favorite'] == true,
+        owner: ListingOwner.fromJson(
+          j['owner'] is Map
+              ? Map<String, dynamic>.from(j['owner'] as Map)
+              : const {},
+        ),
+        url: j['url']?.toString(),
+        createdAt: _asDoubleOrNull(j['created_at']),
       );
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'no': no,
+        'title': title,
+        'price': price,
+        'currency': currency,
+        'status': status,
+        'category': category,
+        'city': city,
+        'country': country,
+        'photos': photos,
+        'thumb': thumb,
+        'description': description,
+        'attributes': attributes,
+        'view_count': viewCount,
+        'is_favorite': isFavorite,
+        'owner': {
+          'id': owner.id,
+          'username': owner.username,
+          'phone': owner.phone,
+          'city': owner.city,
+        },
+        'url': url,
+        'created_at': createdAt,
+      };
 
   String get priceFormatted {
     if (price == null) return 'Fiyat sorulur';
@@ -132,10 +179,10 @@ class ListingOwner {
   });
 
   factory ListingOwner.fromJson(Map<String, dynamic> j) => ListingOwner(
-        id: j['id'] as int? ?? 0,
-        username: j['username'] as String? ?? '',
-        phone: j['phone'] as String?,
-        city: j['city'] as String?,
+        id: _asInt(j['id']),
+        username: _asString(j['username']),
+        phone: j['phone']?.toString(),
+        city: j['city']?.toString(),
       );
 }
 
@@ -156,13 +203,11 @@ class Conversation {
   });
 
   factory Conversation.fromJson(Map<String, dynamic> j) => Conversation(
-        id: j['id'] as int,
-        listingId: j['listing_id'] as int?,
-        listingTitle: j['listing_title'] as String?,
-        unread: j['unread'] as int? ?? 0,
-        updatedAt: j['updated_at'] != null
-            ? (j['updated_at'] as num).toDouble()
-            : null,
+        id: _asInt(j['id']),
+        listingId: j['listing_id'] == null ? null : _asInt(j['listing_id']),
+        listingTitle: j['listing_title']?.toString(),
+        unread: _asInt(j['unread']),
+        updatedAt: _asDoubleOrNull(j['updated_at']),
       );
 }
 
@@ -184,12 +229,12 @@ class Message {
   });
 
   factory Message.fromJson(Map<String, dynamic> j) => Message(
-        id: j['id'] as int,
-        senderId: j['sender_id'] as int,
-        senderUsername: j['sender_username'] as String? ?? '',
-        body: j['body'] as String? ?? '',
-        createdAt: (j['created_at'] as num).toDouble(),
-        isMine: j['is_mine'] as bool? ?? false,
+        id: _asInt(j['id']),
+        senderId: _asInt(j['sender_id']),
+        senderUsername: _asString(j['sender_username']),
+        body: _asString(j['body']),
+        createdAt: _asDoubleOrNull(j['created_at']) ?? 0,
+        isMine: j['is_mine'] == true,
       );
 }
 
@@ -212,11 +257,11 @@ class AppNotification {
   });
 
   factory AppNotification.fromJson(Map<String, dynamic> j) => AppNotification(
-        id: j['id'] as int,
-        type: j['type'] as String? ?? 'info',
-        title: j['title'] as String? ?? '',
-        body: j['body'] as String? ?? '',
-        link: j['link'] as String?,
-        read: j['read'] as bool? ?? false,
+        id: _asInt(j['id']),
+        type: _asString(j['type'], 'info'),
+        title: _asString(j['title']),
+        body: _asString(j['body']),
+        link: j['link']?.toString(),
+        read: j['read'] == true,
       );
 }

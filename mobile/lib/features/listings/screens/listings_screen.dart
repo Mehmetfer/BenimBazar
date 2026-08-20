@@ -67,25 +67,36 @@ class _ListingsScreenState extends State<ListingsScreen> {
     });
 
     if (!mounted) return;
-    setState(() {
-      _loading = false;
-      if (resp.ok && resp.data != null) {
-        _error = null;
-        final data = resp.data as Map<String, dynamic>;
-        final newItems = (data['items'] as List)
-            .map((e) => Listing.fromJson(e as Map<String, dynamic>))
-            .toList();
-        if (reset) {
-          _items = newItems;
+    try {
+      setState(() {
+        _loading = false;
+        if (resp.ok && resp.data != null) {
+          _error = null;
+          final data = Map<String, dynamic>.from(resp.data as Map);
+          final rawItems = (data['items'] as List?) ?? const [];
+          final newItems = rawItems
+              .map((e) => Listing.fromJson(Map<String, dynamic>.from(e as Map)))
+              .toList();
+          if (reset) {
+            _items = newItems;
+          } else {
+            _items.addAll(newItems);
+          }
+          final pages = int.tryParse('${data['pages'] ?? 1}') ?? 1;
+          _hasMore = _page < pages;
         } else {
-          _items.addAll(newItems);
+          _error = resp.error ?? 'Ilanlar yuklenemedi.';
+          if (reset) _items = [];
         }
-        _hasMore = _page < (data['pages'] as int? ?? 1);
-      } else {
-        _error = resp.error ?? 'Ilanlar yuklenemedi.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Ilanlar okunamadi. Lutfen tekrar deneyin.';
         if (reset) _items = [];
-      }
-    });
+      });
+    }
   }
 
   Future<void> _loadMore() async {

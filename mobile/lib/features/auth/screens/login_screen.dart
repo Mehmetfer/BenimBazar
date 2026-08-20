@@ -30,10 +30,16 @@ class _LoginScreenState extends State<LoginScreen> {
       _usernameCtrl.text.trim(),
       _passwordCtrl.text,
     );
-    if (err != null && mounted) {
+    if (!mounted) return;
+    if (err != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(err), backgroundColor: Colors.red.shade700),
       );
+      return;
+    }
+    // Basarili giris — login ekranindan ana ekrana don
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
     }
   }
 
